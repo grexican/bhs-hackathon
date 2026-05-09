@@ -26,9 +26,12 @@ const IdParamSchema = z.object({
 // --- Routes ---
 
 // GET /api/todos — list all todos, newest first.
+// Tiebreak on id because datetime('now') only has 1-second precision —
+// two rows inserted in the same second would otherwise come back in an
+// undefined order.
 router.get("/", (_req: Request, res: Response) => {
   const todos = db
-    .prepare("SELECT id, text, done, created_at FROM todos ORDER BY created_at DESC")
+    .prepare("SELECT id, text, done, created_at FROM todos ORDER BY created_at DESC, id DESC")
     .all() as Todo[];
   res.json({ ok: true, data: todos });
 });

@@ -35,10 +35,9 @@ export function buildApp(): Express {
   return app;
 }
 
-// Start the server only when this file is the entry point — keeps it out of
-// the way of tests, which import buildApp() and use supertest instead.
-const isEntry = import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}`;
-if (isEntry) {
+// Boot the server unless we're running under vitest (tests import buildApp()
+// directly via supertest and don't want the port bound).
+if (!process.env.VITEST) {
   const app = buildApp();
   app.listen(env.PORT, () => {
     console.log(`API listening at http://localhost:${env.PORT}`);
