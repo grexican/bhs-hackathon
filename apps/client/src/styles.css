@@ -1,0 +1,166 @@
+/* Plain CSS — no framework, no Tailwind. Edit freely.
+ * Class names follow a relaxed BEM-ish convention so they're easy to find:
+ *   .block            — top-level component
+ *   .block__element   — a piece inside the component
+ *   .block--modifier  — a state of the component
+ */
+
+:root {
+  --bg: #f7f6f3;
+  --fg: #1a1a1a;
+  --muted: #6b6b6b;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --danger: #b91c1c;
+  --card-bg: #ffffff;
+  --border: #e5e5e5;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+}
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+.page__header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.75rem;
+}
+
+.page__header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.page__footer {
+  margin-top: 2rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.page__footer code {
+  background: var(--border);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.card h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.error {
+  background: #fee2e2;
+  color: var(--danger);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+}
+
+.todo-form {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.todo-form input {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.todo-form input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.todo-form button {
+  padding: 0.55rem 1rem;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: 0;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.todo-form button:hover {
+  filter: brightness(0.95);
+}
+
+.todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.todo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.todo:last-child {
+  border-bottom: 0;
+}
+
+.todo label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.todo--done span {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.todo__delete {
+  background: transparent;
+  color: var(--danger);
+  border: 0;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  border-radius: 4px;
+}
+
+.todo__delete:hover {
+  background: #fef2f2;
+}

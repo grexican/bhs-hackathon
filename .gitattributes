@@ -1,0 +1,21 @@
+# Normalize line endings to LF in git history. Windows checkouts can still
+# render with CRLF locally, but what's stored in git stays consistent across
+# Mac / Windows / Linux students.
+
+* text=auto eol=lf
+
+# Forced LF (these files behave badly with CRLF in some toolchains).
+*.sh    text eol=lf
+*.mjs   text eol=lf
+
+# Treat lockfiles as binary so cross-OS line-ending noise doesn't blow them up.
+package-lock.json -text
+
+# Binary assets — never touch.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.svg   text
+*.db    binary

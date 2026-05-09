@@ -1,0 +1,20 @@
+{
+  "recommendations": [
+    "anthropic.claude-code",
+    "biomejs.biome",
+    "usernamehw.errorlens",
+    "yoavbls.pretty-ts-errors",
+    "streetsidesoftware.code-spell-checker",
+    "eamodio.gitlens",
+    "vscode-icons-team.vscode-icons",
+    "qwtel.sqlite-viewer",
+    "bradlc.vscode-tailwindcss",
+    "wayou.vscode-todo-highlight",
+    "github.github-vscode-theme"
+  ],
+  "unwantedRecommendations": [
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "ms-vscode.vscode-typescript-next"
+  ]
+}

@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# SQLite databases (gitignored — your data, not anyone else's)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Env files (NEVER commit secrets — keep .env.example up to date instead)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Editor / OS junk
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
+
+# VS Code — commit only shared settings
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Claude Code — commit only shared rules; per-machine state stays local
+.claude/settings.local.json
+.claude/projects/
+.claude/.cache/
+.claude/worktrees/
+
+# Coverage / test artifacts
+coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Scratch / temporary working space.
+# `tmp/` is the agreed scratch dir for Claude — see AGENTS.md. Commit only
+# the placeholder so the dir exists after a fresh clone; ignore everything
+# inside it.
+tmp/*
+!tmp/.gitkeep
+temp/
