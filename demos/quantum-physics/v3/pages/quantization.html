@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quantization — QUANTUM//LAB</title>
+  <meta name="description" content="Energy comes in rungs, not ramps. Explore 3D hydrogen orbitals and click the hydrogen spectrum to fire electron jumps that glow in their real wavelength colors." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div id="nav-mount"></div>
+
+  <section class="topic-hero wrap">
+    <span class="eyebrow" data-reveal>Lab 05 // rungs, not ramps</span>
+    <h1 data-reveal>Energy comes in steps.<br>The in-between is forbidden.</h1>
+    <p class="lede" data-reveal>An electron bound to an atom cannot have just any energy. It is stuck on a ladder of
+      allowed rungs. To move up it must absorb exactly the right amount of light, and when it drops back down it
+      spits that energy out as a photon of one precise color. That is why each element glows in its own fixed set
+      of lines, a barcode written in light. Click the bars below and watch the jump that makes each one.</p>
+  </section>
+
+  <section class="bigviz wrap">
+    <div class="lab">
+      <div class="stage" id="qz-stage">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <span class="stage__tag">HYDROGEN ORBITAL // n-shell probability cloud</span>
+        <canvas id="qz-canvas"></canvas>
+      </div>
+      <aside class="panel">
+        <div class="panel__title">Energy ladder</div>
+        <div class="ctrl">
+          <label>Principal level n <span class="val" id="qz-n-v">1</span></label>
+          <input type="range" id="qz-n" min="1" max="5" value="1" />
+        </div>
+        <div class="readout">
+          <div class="row"><span class="k">Energy (eV)</span><span class="v" id="qz-e">-13.60</span></div>
+          <div class="row"><span class="k">Shell radius</span><span class="v amber" id="qz-r">1 a₀</span></div>
+          <div class="row"><span class="k">Cloud size</span><span class="v" id="qz-size">tight</span></div>
+        </div>
+        <p class="flow-note" style="margin-top:14px">Higher n means a bigger, fuzzier, higher-energy cloud, and the
+          rungs bunch up as they climb toward the escape line at 0 eV.</p>
+      </aside>
+    </div>
+  </section>
+
+  <!-- clickable real-color hydrogen spectrum -->
+  <section class="wrap" style="padding-bottom:6vh">
+    <div class="tabs" id="qz-tabs">
+      <button class="is-on" data-pane="spec">Emission spectrum</button>
+      <button data-pane="ladder">The energy ladder</button>
+    </div>
+    <div class="tabpane is-on" data-pane="spec">
+      <p data-reveal style="margin-bottom:16px">The visible Balmer lines of hydrogen, at their true wavelengths.
+        Click any line to fire that exact electron jump.</p>
+      <div class="spectrum" id="qz-spectrum"></div>
+      <div class="readout" style="margin-top:18px; grid-template-columns:repeat(3,1fr); display:grid; gap:24px">
+        <div class="row"><span class="k">Jump</span><span class="v" id="qz-jump">—</span></div>
+        <div class="row"><span class="k">Wavelength</span><span class="v amber" id="qz-wl">—</span></div>
+        <div class="row"><span class="k">Color</span><span class="v" id="qz-cn">—</span></div>
+      </div>
+    </div>
+    <div class="tabpane" data-pane="ladder">
+      <div class="stage" style="min-height:320px" id="qz-ladder"><span class="stage__tag">ENERGY RUNGS // -13.6 eV up to 0</span></div>
+    </div>
+  </section>
+
+  <section class="facts wrap">
+    <div class="fact" data-reveal><b>1913</b><span>Bohr's model</span></div>
+    <div class="fact" data-reveal><b>656nm</b><span>the famous red line</span></div>
+    <div class="fact" data-reveal><b>-13.6</b><span>ground state energy (eV)</span></div>
+    <div class="fact" data-reveal><b>E=hf</b><span>photon energy law</span></div>
+  </section>
+
+  <section class="prose wrap">
+    <p class="big" data-reveal>The word "quantum" is born right here: a fixed, smallest chunk.</p>
+    <p data-reveal>Max Planck found in 1900 that light energy only comes in discrete packets, and Bohr realized
+      the same was true of electron orbits. The whole field is named after this one fact. The colors a neon sign
+      glows, the light a star throws across the galaxy, the way a laser holds one pure tone, all of it is electrons
+      hopping between fixed rungs and paying the difference in photons.</p>
+  </section>
+
+  <nav class="pager wrap" id="pager-mount"></nav>
+  <footer class="wrap foot"><span>QUANTUM//LAB</span><span>LAB 05 // QUANTIZATION</span></footer>
+
+  <script>window.__ACTIVE_TOPIC = "quantization";</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="../app.js"></script>
+  <script>
+  // wavelength (nm) -> approximate RGB, classic algorithm
+  function wlToRGB(wl){
+    let r=0,g=0,b=0;
+    if(wl>=380&&wl<440){r=-(wl-440)/60;b=1;}
+    else if(wl<490){g=(wl-440)/50;b=1;}
+    else if(wl<510){g=1;b=-(wl-510)/20;}
+    else if(wl<580){r=(wl-510)/70;g=1;}
+    else if(wl<645){r=1;g=-(wl-645)/65;}
+    else if(wl<=780){r=1;}
+    let f=1; if(wl>700)f=0.3+0.7*(780-wl)/80; else if(wl<420)f=0.3+0.7*(wl-380)/40;
+    const C=v=>Math.round(Math.pow(Math.max(0,v)*f,0.8)*255);
+    return [C(r),C(g),C(b)];
+  }
+
+  // ---- 3D orbital cloud (probability points; size grows with n) ----
+  (function(){
+    const stage=document.getElementById("qz-stage"); const cv=document.getElementById("qz-canvas");
+    const scene=new THREE.Scene();
+    const cam=new THREE.PerspectiveCamera(50,1,0.1,200); cam.position.set(0,0,30);
+    const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+    QUANTUM.fitRenderer(renderer,cam,stage);
+    // nucleus
+    const nuc=new THREE.Mesh(new THREE.SphereGeometry(0.6,16,16), new THREE.MeshBasicMaterial({color:0xff8a1e}));
+    scene.add(nuc);
+    const N=4000; const pos=new Float32Array(N*3);
+    const geo=new THREE.BufferGeometry(); geo.setAttribute("position",new THREE.BufferAttribute(pos,3));
+    const pts=new THREE.Points(geo, new THREE.PointsMaterial({color:0x41e0d6,size:0.18,transparent:true,
+      opacity:0.7,blending:THREE.AdditiveBlending,depthWrite:false}));
+    scene.add(pts);
+    function buildCloud(n){
+      const rng=QUANTUM.makeRNG(n*1234+7);
+      const radius=n*n*1.6; // ~ n^2 like Bohr
+      cam.position.z = Math.max(28, radius*2.2 + 10); // dolly back so big shells stay in frame
+      for(let i=0;i<N;i++){
+        // shell-ish with radial spread; outer shells fuzzier
+        const u=rng()*2-1, th=rng()*Math.PI*2, s=Math.sqrt(1-u*u);
+        const r=radius*(0.5+rng()*0.8) * (0.6+0.4*Math.sin(rng()*Math.PI*n));
+        pos[i*3]=r*s*Math.cos(th); pos[i*3+1]=r*u; pos[i*3+2]=r*s*Math.sin(th);
+      }
+      geo.attributes.position.needsUpdate=true;
+    }
+    buildCloud(1);
+    QUANTUM.loop(()=>{ pts.rotation.y+=0.0025; pts.rotation.x+=0.001; renderer.render(scene,cam); });
+
+    const nEl=document.getElementById("qz-n");
+    nEl.addEventListener("input", ()=>{
+      const n=+nEl.value; buildCloud(n);
+      document.getElementById("qz-n-v").textContent=n;
+      document.getElementById("qz-e").textContent=(-13.6/(n*n)).toFixed(2);
+      document.getElementById("qz-r").textContent=(n*n)+" a₀";
+      document.getElementById("qz-size").textContent= n>=4?"sprawling":n>=2?"loose":"tight";
+      if(typeof gsap!=="undefined" && !QUANTUM.REDUCED) gsap.fromTo(pts.scale,{x:0.6,y:0.6,z

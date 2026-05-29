@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tunneling — QUANTUM//LAB</title>
+  <meta name="description" content="Throw a particle at a wall too tall to climb and sometimes it appears on the far side. Adjust the barrier and watch the live transmission probability." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div id="nav-mount"></div>
+
+  <section class="topic-hero wrap">
+    <span class="eyebrow" data-reveal>Lab 07 // through the wall</span>
+    <h1 data-reveal>It crosses a wall it<br>could never climb.</h1>
+    <p class="lede" data-reveal>Roll a marble at a hill too steep to crest and it always rolls back. A quantum particle
+      doesn't always. Because its wave leaks a little way into the forbidden barrier, there is a real chance it simply
+      appears on the other side without ever having enough energy to go over the top. Thin the barrier and the odds
+      climb fast. This is how the Sun shines and how a USB stick remembers.</p>
+  </section>
+
+  <section class="bigviz wrap">
+    <div class="lab">
+      <div class="stage" id="tn-stage">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <span class="stage__tag">BARRIER // wave amplitude decaying inside</span>
+        <canvas id="tn-canvas"></canvas>
+      </div>
+      <aside class="panel">
+        <div class="panel__title">Barrier controls</div>
+        <div class="ctrl">
+          <label>Barrier width <span class="val" id="tn-w-v">medium</span></label>
+          <input type="range" id="tn-w" min="10" max="120" value="50" />
+        </div>
+        <div class="ctrl">
+          <label>Barrier height <span class="val" id="tn-h-v">medium</span></label>
+          <input type="range" id="tn-h" min="20" max="100" value="55" />
+        </div>
+        <div class="readout">
+          <div class="row"><span class="k">Transmission</span><span class="v amber" id="tn-T">12%</span></div>
+          <div class="row"><span class="k">Reflection</span><span class="v" id="tn-R">88%</span></div>
+          <div class="row"><span class="k">Shots through</span><span class="v" id="tn-hits">0 / 0</span></div>
+        </div>
+        <div class="ctrl" style="margin-top:16px">
+          <button class="btn" id="tn-fire" style="width:100%; justify-content:center">Fire a particle</button>
+        </div>
+      </aside>
+    </div>
+    <p class="flow-note" data-reveal>The probability drops off exponentially with width, so a barrier twice as thick is
+      far more than twice as hard to cross. Tiny changes in width swing the odds enormously.</p>
+  </section>
+
+  <section class="subs wrap">
+    <article class="sub">
+      <div>
+        <h2 data-reveal>Why the Sun burns at all</h2>
+        <p data-reveal>Two protons in the Sun's core repel each other fiercely and, by classical physics, almost
+          never have enough energy to touch and fuse. The Sun should be cold. Tunneling lets them slip through that
+          electric wall often enough to keep fusion running for billions of years. You are warm right now because of
+          a quantum loophole.</p>
+      </div>
+      <div class="sub__viz stage" id="tn-mini1"><span class="stage__tag">FUSION LOOPHOLE</span></div>
+    </article>
+
+    <article class="sub">
+      <div>
+        <h2 data-reveal>The microscope that feels atoms</h2>
+        <p data-reveal>A scanning tunneling microscope holds a needle a few atoms above a surface and measures the
+          tunneling current jumping the gap. Because that current is exponentially sensitive to distance, it can map
+          individual atoms. The same exponential sensitivity makes flash memory work: electrons tunnel onto a gate to
+          store a bit.</p>
+      </div>
+      <div class="sub__viz stage" id="tn-mini2"><span class="stage__tag">EXPONENTIAL DECAY</span></div>
+    </article>
+  </section>
+
+  <section class="facts wrap">
+    <div class="fact" data-reveal><b>1928</b><span>Gamow explains alpha decay</span></div>
+    <div class="fact" data-reveal><b>e⁻ᵏᵈ</b><span>odds drop with width</span></div>
+    <div class="fact" data-reveal><b>10⁹ yr</b><span>the Sun keeps burning</span></div>
+    <div class="fact" data-reveal><b>1981</b><span>tunneling microscope</span></div>
+  </section>
+
+  <section class="prose wrap">
+    <p class="big" data-reveal>The wall is real. The particle just doesn't fully respect it.</p>
+    <p data-reveal>Energy is still conserved; nothing here is free. The particle never has more energy than it started
+      with, and it is never caught sitting inside the forbidden zone. It is simply that the wave description assigns a
+      nonzero amplitude to "already on the far side," so sometimes that is where you find it. Solid walls are a
+      classical approximation that quantum mechanics quietly ignores.</p>
+  </section>
+
+  <nav class="pager wrap" id="pager-mount"></nav>
+  <footer class="wrap foot"><span>QUANTUM//LAB</span><span>LAB 07 // TUNNELING</span></footer>
+
+  <script>window.__ACTIVE_TOPIC = "tunneling";</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="../app.js"></script>
+  <script>
+  // ---- main barrier: wave packet hits barrier, amplitude decays inside, partial transmit ----
+  (function(){
+    const host=document.getElementById("tn-stage"); const cv=document.getElementById("tn-canvas");
+    const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    let bw=50, bh=55, T=0.12, fired=0, through=0;
+    function calcT(){
+      // toy model: T ~ exp(-k * width * sqrt(height)), normalized
+      const k=0.00045; const val=Math.exp(-k*bw*Math.sqrt(bh)*1.0);
+      T=Math.max(0.001, Math.min(0.98, val));
+      document.getElementById("tn-T").textContent=Math.round(T*100)+"%";
+      document.getElementById("tn-R").textContent=Math.round((1-T)*100)+"%";
+    }
+    calcT();
+
+    // animated demo packet riding back and forth, with amplitude decay drawn in barrier
+    let particle=null; // {x, dir, transmitted}
+    QUANTUM.loop((t)=>{
+      ctx.clearRect(0,0,W,H);
+      const y0 = H*0.5;                         // wave + particle ride this centerline
+      const bwidth = 60 + bw*2.2;               // barrier band width (px), grows with "width"
+      const bx0 = W*0.5 - bwidth/2, bx1 = W*0.5 + bwidth/2;
+      const A0 = 16;                            // incoming amplitude
+      const Aout = Math.max(A0*Math.sqrt(T), 0.6);   // transmitted amplitude, always <= A0
+      const kappa = -Math.log(Aout/A0)/bwidth;  // decay rate so the wave meets Aout exactly at the far edge
+      const s

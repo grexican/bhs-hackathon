@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Measurement &amp; Collapse — QUANTUM//LAB</title>
+  <meta name="description" content="Watch a 3D probability cloud freeze into a single point the instant you measure it. The idea hiding under every other quantum lab." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div id="nav-mount"></div>
+
+  <section class="topic-hero wrap">
+    <span class="eyebrow" data-reveal>Lab 09 // where it all points</span>
+    <h1 data-reveal>A fog of maybe, frozen<br>into one fact.</h1>
+    <p class="lede" data-reveal>This is the idea hiding under every other lab. Until you look, a quantum object isn't
+      at any single place; it is a cloud of probabilities, a wavefunction spread across all its possibilities. Measure
+      it and the entire cloud collapses, instantly, into one definite outcome. Click the cloud below and watch the fog
+      snap to a point. Then ask the question nobody has fully answered: why?</p>
+  </section>
+
+  <section class="bigviz wrap">
+    <div class="lab">
+      <div class="stage" id="me-stage">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <span class="stage__tag">WAVEFUNCTION // click anywhere to measure</span>
+        <canvas id="me-canvas"></canvas>
+      </div>
+      <aside class="panel">
+        <div class="panel__title">Observation</div>
+        <div class="ctrl">
+          <label>Cloud spread <span class="val" id="me-sp-v">wide</span></label>
+          <input type="range" id="me-sp" min="20" max="160" value="100" />
+        </div>
+        <div class="readout">
+          <div class="row"><span class="k">State</span><span class="v" id="me-state">superposed cloud</span></div>
+          <div class="row"><span class="k">Outcomes possible</span><span class="v amber" id="me-poss">many</span></div>
+          <div class="row"><span class="k">Found at</span><span class="v" id="me-at">—</span></div>
+        </div>
+        <div class="ctrl" style="margin-top:16px">
+          <button class="btn" id="me-measure" style="width:100%; justify-content:center">Measure now</button>
+        </div>
+        <div class="ctrl">
+          <button class="btn btn--ghost" id="me-reset" style="width:100%; justify-content:center">Let it spread again</button>
+        </div>
+      </aside>
+    </div>
+    <p class="flow-note" data-reveal>Before the click: a glowing 3D probability cloud, everywhere at once. After: a
+      single bright point, and the cloud is gone. Reset and the fog re-forms, ready to be collapsed somewhere new.</p>
+  </section>
+
+  <section class="subs wrap">
+    <article class="sub">
+      <div>
+        <h2 data-reveal>The Schrodinger's cat trap</h2>
+        <p data-reveal>Schrodinger's famous cat was not a prediction, it was a complaint. If a single atom can be in
+          a superposition, and the atom's decay would trigger a poison, then the cat is formally both alive and dead
+          until observed, which is absurd. He used it to show that taking the math literally leads somewhere strange.
+          Where exactly the quantum fog becomes a definite cat is the heart of the puzzle.</p>
+      </div>
+      <div class="sub__viz stage" id="me-mini1"><span class="stage__tag">SUPERPOSED → DECIDED</span></div>
+    </article>
+
+    <article class="sub">
+      <div>
+        <h2 data-reveal>So what counts as "measuring"?</h2>
+        <p data-reveal>Does it need a conscious observer, or just any interaction with the wider world? Most physicists
+          now favor decoherence: the moment a quantum system entangles with its messy environment, the delicate
+          interference washes out and it behaves classically. No human required. But whether that fully explains the
+          single definite outcome we see is still genuinely open, with several competing interpretations.</p>
+      </div>
+      <div class="sub__viz stage" id="me-mini2"><span class="stage__tag">DECOHERENCE BLUR</span></div>
+    </article>
+  </section>
+
+  <section class="facts wrap">
+    <div class="fact" data-reveal><b>1935</b><span>Schrodinger's cat</span></div>
+    <div class="fact" data-reveal><b>|&psi;|²</b><span>Born's probability rule</span></div>
+    <div class="fact" data-reveal><b>5+</b><span>competing interpretations</span></div>
+    <div class="fact" data-reveal><b>1</b><span>outcome you ever see</span></div>
+  </section>
+
+  <section class="prose wrap">
+    <p class="big" data-reveal>The math predicts the odds perfectly. The reason behind the single result is still argued.</p>
+    <p data-reveal>This is the honest edge of the subject. The equations never miss: they tell you the exact probability
+      of every outcome, verified to staggering precision. What they don't settle is why, out of all those weighted
+      possibilities, you only ever experience one. Copenhagen, many-worlds, pilot-wave, and others all reproduce the
+      same numbers while telling wildly different stories. Nobody has won the argument. That open question is a feature
+      of quantum physics, not a flaw in your understanding.</p>
+  </section>
+
+  <nav class="pager wrap" id="pager-mount"></nav>
+  <footer class="wrap foot"><span>QUANTUM//LAB</span><span>LAB 09 // MEASUREMENT &amp; COLLAPSE</span></footer>
+
+  <script>window.__ACTIVE_TOPIC = "measurement";</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="../app.js"></script>
+  <script>
+  // ---- 3D probability cloud that collapses to one point on measure ----
+  (function(){
+    const stage=document.getElementById("me-stage"); const cv=document.getElementById("me-canvas");
+    const scene=new THREE.Scene();
+    const cam=new THREE.PerspectiveCamera(50,1,0.1,200); cam.position.set(0,0,30);
+    const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+    QUANTUM.fitRenderer(renderer,cam,stage);
+
+    const N=5000; const pos=new Float32Array(N*3); const home=new Float32Array(N*3);
+    const rng=QUANTUM.makeRNG(314159);
+    let spread=10;
+    function seedCloud(){
+      for(let i=0;i<N;i++){
+        // gaussian-ish blob with a couple of lobes
+        const a=rng()*Math.PI*2, u=rng()*2-1, s=Math.sqrt(1-u*u);
+        const r=(Math.abs(rng()+rng()+rng()-1.5))*spread + Math.sin(a*2)*1.5;
+        home[i*3]=r*s*Math.cos(a); home[i*3+1]=r*u*1.0; home[i*3+2]=r*s*Math.sin(a);
+        pos[i*3]=home[i*3]; pos[i*3+1]=home[i*3+1]; pos[i*3+2]=home[i*3+2];
+      }
+      geo.attributes.position.needsUpdate=true;
+    }
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos,3));
+    const cloud=new THREE.Points(geo, new THREE.PointsMaterial({color:0x41e0d6,size:0.16,transparent:true,
+      opacity:0.6, blending:THREE.AdditiveBlending, depthWrite:false}));
+    scene.add(cloud);
+    seedCloud();
+
+    let collapsed=false, target=new THREE.Vector3(), tt=0;
+    QUANTUM.loop((t)=>{
+      cloud.rotation.y+=0.0025;
+      const arr=geo.attributes.position.array;
+      if(collapsed){
+        tt=Math.min(1, tt+0.04);
+        for(let i=0;i<N;i++){
+          arr[i*3]   += (target.x-arr[i*3])*0.12;
+          arr[i*3+1] += (target.y-arr[i*3+1])*0.12;
+          arr[i*3+2] += (target.z-arr[i*3+2])*0.12;
+        }
+        geo.attributes.position.needsUpdate=true;
+        cloud.material.color.set(0xffb33e);
+        cloud.material.opacity=0.9;
+      }
+      renderer.render(scene,cam);
+    });
+
+    function measure(){
+      collapsed=true; tt=0;
+      // sample a point per |psi|^2 (pick one of the existing clo

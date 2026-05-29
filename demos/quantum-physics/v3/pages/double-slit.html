@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Double Slit — QUANTUM//LAB</title>
+  <meta name="description" content="Fire quantum particles one at a time and watch an interference pattern build from nothing. Toggle a which-path detector and watch the pattern die." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div id="nav-mount"></div>
+
+  <section class="topic-hero wrap">
+    <span class="eyebrow" data-reveal>Lab 03 // the famous one</span>
+    <h1 data-reveal>One particle, going through<br>both slits at once.</h1>
+    <p class="lede" data-reveal>Send single electrons at a wall with two gaps. Each one lands as a single dot,
+      like a particle. But fire thousands and the dots stack into stripes, the signature of a wave. Each particle
+      somehow went through both slits and interfered with itself. Then watch what happens when you peek.</p>
+  </section>
+
+  <!-- ===== BIG SIGNATURE VISUALIZATION ===== -->
+  <section class="bigviz wrap">
+    <div class="lab">
+      <div class="stage" id="ds-stage">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <span class="stage__tag">DETECTOR SCREEN // single-particle accumulation</span>
+        <canvas id="ds-canvas"></canvas>
+      </div>
+      <aside class="panel">
+        <div class="panel__title">Beam controls</div>
+        <div class="ctrl">
+          <label>Fire rate <span class="val" id="ds-rate-v">12 / s</span></label>
+          <input type="range" id="ds-rate" min="1" max="60" value="12" />
+        </div>
+        <div class="ctrl">
+          <label>Slit separation <span class="val" id="ds-sep-v">medium</span></label>
+          <input type="range" id="ds-sep" min="20" max="120" value="60" />
+        </div>
+        <div class="ctrl">
+          <label>Which-path detector</label>
+          <div class="seg" id="ds-which">
+            <button class="is-on" data-v="off">Off &middot; wave</button>
+            <button data-v="on">On &middot; particle</button>
+          </div>
+        </div>
+        <div class="ctrl">
+          <button class="btn" id="ds-fire" style="width:100%; justify-content:center">Fire 200 at once</button>
+        </div>
+        <div class="ctrl">
+          <button class="btn btn--ghost" id="ds-clear" style="width:100%; justify-content:center">Clear screen</button>
+        </div>
+        <div class="readout" style="margin-top:8px">
+          <div class="row"><span class="k">Particles landed</span><span class="v" id="ds-count">0</span></div>
+          <div class="row"><span class="k">Pattern</span><span class="v amber" id="ds-mode">interference</span></div>
+        </div>
+      </aside>
+    </div>
+    <p class="flow-note" data-reveal>Each dot is one whole particle. The stripes only exist across many. Flip the
+      detector on and the stripes collapse into two plain blobs, one behind each slit.</p>
+  </section>
+
+  <!-- ===== DRILL-IN SUB-CONCEPTS (all visible, no accordions) ===== -->
+  <section class="subs wrap">
+    <article class="sub">
+      <div>
+        <h2 data-reveal>The build-up is the whole point</h2>
+        <p data-reveal>Watch the screen with the fire rate low. The first dozen hits look random, scattered like
+          buckshot. There is no way to predict where the next one lands. Yet the crowd has a plan: bright bands
+          where the two paths add up, dark gaps where they cancel. Probability with structure.</p>
+      </div>
+      <div class="sub__viz stage" id="ds-mini1"><span class="stage__tag">PROBABILITY CURVE</span></div>
+    </article>
+
+    <article class="sub">
+      <div>
+        <h2 data-reveal>Why peeking kills it</h2>
+        <p data-reveal>To know which slit a particle used, you have to interact with it, bounce a photon off it,
+          tag it somehow. That nudge scrambles the delicate phase relationship between the two paths. With the
+          which-path information available, the wave story is gone and you get particle stripes: two heaps,
+          no interference. Information has a physical price.</p>
+      </div>
+      <div class="sub__viz stage" id="ds-mini2"><span class="stage__tag">WITH vs WITHOUT DETECTOR</span></div>
+    </article>
+  </section>
+
+  <section class="facts wrap">
+    <div class="fact" data-reveal><b>1909</b><span>Taylor's faint-light run</span></div>
+    <div class="fact" data-reveal><b>1</b><span>particles in flight at a time</span></div>
+    <div class="fact" data-reveal><b>2</b><span>paths, taken simultaneously</span></div>
+    <div class="fact" data-reveal><b>0</b><span>peeking allowed for stripes</span></div>
+  </section>
+
+  <section class="prose wrap">
+    <p class="big" data-reveal>"It has in it the heart of quantum mechanics. It is the only mystery." — Feynman</p>
+    <p data-reveal>Richard Feynman called this experiment the central mystery of the whole field, and he meant it.
+      Nothing about it can be explained the classical way. The particle is not secretly going through one slit
+      and we just don't know which. The math only works if it genuinely explores both and the two possibilities
+      interfere. The instant you force an answer to "which one?", reality obliges, and the magic stops.</p>
+  </section>
+
+  <nav class="pager wrap" id="pager-mount"></nav>
+  <footer class="wrap foot"><span>QUANTUM//LAB</span><span>LAB 03 // DOUBLE SLIT</span></footer>
+
+  <script>window.__ACTIVE_TOPIC = "double-slit";</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="../app.js"></script>
+  <script>
+  // ---- main detector screen: Canvas2D accumulation of single hits ----
+  (function () {
+    const cv = document.getElementById("ds-canvas");
+    const stage = document.getElementById("ds-stage");
+    const ctx = cv.getContext("2d");
+    let W, H;
+    function size() {
+      const r = stage.getBoundingClientRect();
+      W = cv.width = r.width; H = cv.height = r.height;
+      paintFrame(); // re-draw guides after resize
+    }
+    let whichPath = false;
+    let sep = 60, rate = 12, count = 0;
+    const rng = QUANTUM.makeRNG(7);
+
+    // probability density: two-slit interference (wave) OR sum of two gaussians (particle)
+    function sample() {
+      const cx = W / 2;
+      if (whichPath) {
+        // particle: pick a slit, land in a blob behind it
+        const slit = rng() > 0.5 ? 1 : -1;
+        const g = (rng() + rng() + rng() - 1.5) * 38; // approx normal
+        return cx + slit * sep + g;
+      }
+      // wave: rejection-sample cos^2 envelope * single-slit sinc^2 falloff
+      for (let i = 0; i < 40; i++) {
+        const x = rng() * W;
+        const d = (x - cx);
+        const inter = Math.pow(Math.cos(d / (sep * 0.42)), 2);
+        const env = Math.pow(Math.cos(d / (W * 0.42)), 2);
+        const p = inter * env;
+        if (rng() < p) return x;
+      }
+      return cx + (rng() - 0.5) * W * 0.6;
+    }
+
+    function paintFrame() {
+      // faint slit guides (don't clear the accumulated dots)
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,179,62,0.25)"; ctx.lineWidth = 1;
+      const cx = W / 2;
+      [cx - sep, cx + sep].forEach((x) => {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 14); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, H - 14); ctx.lineTo(x, H); ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    function hit() {
+      const x = sample();
+      const y = rng() * H;
+      // additive amber glow dot
+      ctx.fillStyle = "rgba(255,179,62,0.85)";
+      ctx.beginPath(); ctx.arc(x, y, 1.5, 0, 7); ctx.fill();
+      ctx.fillStyle = "rgba(255,179,62,0.18)";
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill();
+      count++;
+      document.getElementById("ds-count").textContent = count;
+    }
+
+    function clear() {
+      ctx.fillStyle = "#05050a"; ctx.fillRect(0, 0, W, H);
+      paintFrame(); count = 0; document.getElementById("ds-count").textContent = 0;
+    }
+
+    // continuous trickle of single particles
+    let acc = 0, last = performance.now();
+    QUANTUM.loop((t) => {
+      const now = performance.now(); const dt = (now - last) / 1000; last = now;
+      acc += dt * rate;
+      while (acc >= 1) { hit(); acc -= 1; }
+    });
+
+    // controls
+    const rEl = document.getElementById("ds-rate");
+    rEl.addEventListener("input", () => { rate = +rEl.value;
+      document.getElementById("ds-rate-v").textContent = rate + " / s"; });
+    const sEl = document.getElementById("ds-sep");
+    sEl.addEventListener("input", () => { sep = +sEl.value;
+      document.getElementById("ds-sep-v").textContent = sep < 45 ? "narrow" : sep > 90 ? "wide" : "medium"; });
+    document.querySelectorAll("#ds-which button").forEach((b) => b.addEventListener("click", () => {
+      document.querySelectorAll("#ds-which button").forEach((x) => x.classList.remove("is-on"));
+      b.classList.add("is-on");
+      whichPath = b.dataset.v === "on";
+      document.getElementById("ds-mode").textContent = whichPath ? "two blobs" : "interference";
+      clear();
+    }));
+    document.getElementById("ds-fire").addEventListener("click", () => { for (let i = 0; i < 200; i++) hit(); });
+    document.getElementById("ds-clear").addEventListener("click", clear);
+
+    window.addEventListener("resize", size);
+    size(); clear();
+  })();
+
+  // ---- mini 1: live probability curve (the envelope the dots fill) ----
+  (function () {
+    const host = document.getElementById("ds-mini1");
+    const cv = document.createElement("canvas"); host.appendChild(cv);
+    const ctx = cv.getContext("2d"); let W, H;
+    function size(){ const r=host.getBoundingClientRect(); W=cv.width=r.width; H=cv.height=r.height; }
+    size(); window.addEventListener("resize", size);
+    QUANTUM.loop((t) => {
+      ctx.clearRect(0,0,W,H);
+      const ph = t * 0.0008;
+      ctx.beginPath();
+      for (let x = 0; x <= W; x++) {
+        const d = (x - W/2);
+        const inter = Math.pow(Math.cos(d/26 + Math.sin(ph)*0.0), 2);
+        const env = Math.pow(Math.cos(d/(W*0.42)), 2);
+        const y = H - 18 - inter*env*(H-46);
+        x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.strokeStyle = "#41e0d6"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath();
+      ctx.fillStyle = "rgba(65,224,214,0.10)"; ctx.fill();
+    });
+  })();
+
+  // ---- mini 2: side-by-side static comparison, redrawn slowly ----
+  (function () {
+    const host = document.getElementById("ds-mini2");
+    const cv = document.createElement("canvas"); host.appendChild(cv);
+    const ctx = cv.getContext("2d"); let W, H;
+    const rng = QUANTUM.makeRNG(99);
+    function draw(){
+      const r=host.getBoundingClientRect(); W=cv.width=r.width; H=cv.height=r.height;
+      ctx.fillStyle="#05050a"; ctx.fillRect(0,0,W,H);
+      // left half: interference; right half: two blobs
+      for (let i=0;i<1800;i++){
+        let x;
+        if (i%2===0){ // wave (left)
+          x = (function(){ for(let k=0;k<30;k++){ const xx=rng()*W*0.5; const d=xx-W*0.25;
+            if(rng()<Math.pow(Math.cos(d/16),2)*Math.pow(Math.cos(d/(W*0.22)),2)) return xx; } return W*0.25; })();
+          ctx.fillStyle="rgba(65,224,214,0.5)";
+        } else { // particle (right)
+          const slit = rng()>0.5?1:-1;
+          x = W*0.75 + slit*W*0.08 + (rng()+rng()-1)*W*0.05;
+          ctx.fillStyle="rgba(255,179,62,0.5)";
+        }
+        const y=rng()*H;
+        ctx.beginPath(); ctx.arc(x,y,1.2,0,7); ctx.fill();
+      }
+      ctx.strokeStyle="rgba(255,255,255,0.12)"; ctx.beginPath();
+      ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke();
+    }
+    draw(); window.addEventListener("resize", draw);
+  })();
+  </script>
+</body>
+</html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               

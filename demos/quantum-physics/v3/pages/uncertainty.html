@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Uncertainty — QUANTUM//LAB</title>
+  <meta name="description" content="A live Fourier seesaw: squeeze a particle's position and watch its momentum spread blow up, in real time." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div id="nav-mount"></div>
+
+  <section class="topic-hero wrap">
+    <span class="eyebrow" data-reveal>Lab 04 // the seesaw</span>
+    <h1 data-reveal>Pin down where it is,<br>lose how fast it goes.</h1>
+    <p class="lede" data-reveal>This is not about clumsy instruments. Position and momentum are tied together by the
+      math of waves themselves: they are a Fourier pair. A sharp spike in space is built from a wide spread of
+      momenta, and vice versa. Drag the slider to squeeze the position blob and watch the momentum blob fight back.
+      Their product can never drop below a hard floor.</p>
+  </section>
+
+  <section class="bigviz wrap">
+    <div class="lab">
+      <div class="stage" id="un-stage">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <span class="stage__tag">FOURIER PAIR // position &harr; momentum</span>
+        <canvas id="un-canvas"></canvas>
+      </div>
+      <aside class="panel">
+        <div class="panel__title">Squeeze control</div>
+        <div class="ctrl">
+          <label>Position spread &Delta;x <span class="val" id="un-dx-v">1.00</span></label>
+          <input type="range" id="un-dx" min="20" max="200" value="100" />
+        </div>
+        <div class="readout">
+          <div class="row"><span class="k">&Delta;x (position)</span><span class="v" id="un-rx">1.00</span></div>
+          <div class="row"><span class="k">&Delta;p (momentum)</span><span class="v amber" id="un-rp">0.50</span></div>
+          <div class="row"><span class="k">&Delta;x &middot; &Delta;p</span><span class="v" id="un-prod">0.50</span></div>
+          <div class="row"><span class="k">Floor (&#8463;/2)</span><span class="v" id="un-floor">0.50</span></div>
+        </div>
+        <p class="flow-note" style="margin-top:14px">No matter how you slide, the product never dips under the floor.
+          That is Heisenberg's inequality, drawn live.</p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="subs wrap">
+    <article class="sub">
+      <div>
+        <h2 data-reveal>It is baked into waves</h2>
+        <p data-reveal>Any wave that is short and sharp in space must be made of many different frequencies added
+          together. A pure single frequency, by contrast, has to stretch on forever. Sound engineers know this:
+          a click contains every pitch, a sustained tone contains one. Position and momentum are the quantum
+          version of that exact same trade.</p>
+      </div>
+      <div class="sub__viz stage" id="un-mini1"><span class="stage__tag">CLICK vs TONE</span></div>
+    </article>
+
+    <article class="sub">
+      <div>
+        <h2 data-reveal>Why atoms don't collapse</h2>
+        <p data-reveal>Classically an electron should spiral into the nucleus and the atom should wink out. It
+          doesn't, because confining the electron to a tiny space forces a huge momentum spread, which means
+          huge kinetic energy that pushes back out. Uncertainty is not just a limit on knowledge, it is the
+          pressure that holds matter apart.</p>
+      </div>
+      <div class="sub__viz stage" id="un-mini2"><span class="stage__tag">CONFINEMENT PRESSURE</span></div>
+    </article>
+  </section>
+
+  <section class="facts wrap">
+    <div class="fact" data-reveal><b>1927</b><span>Heisenberg's paper</span></div>
+    <div class="fact" data-reveal><b>&#8463;/2</b><span>the unbreakable floor</span></div>
+    <div class="fact" data-reveal><b>x &amp; p</b><span>a Fourier pair</span></div>
+    <div class="fact" data-reveal><b>0</b><span>chance of beating it</span></div>
+  </section>
+
+  <section class="prose wrap">
+    <p class="big" data-reveal>The blur is not in your measurement. It is in the thing itself.</p>
+    <p data-reveal>Before you measure, the particle does not secretly have an exact position and an exact momentum
+      that you fail to read. The wave description, the only one that matches every experiment, simply does not
+      contain both sharp values at once. Sharpen one and the other genuinely smears. The seesaw above is not a
+      cartoon of our ignorance, it is a portrait of what is real.</p>
+  </section>
+
+  <nav class="pager wrap" id="pager-mount"></nav>
+  <footer class="wrap foot"><span>QUANTUM//LAB</span><span>LAB 04 // UNCERTAINTY</span></footer>
+
+  <script>window.__ACTIVE_TOPIC = "uncertainty";</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="../app.js"></script>
+  <script>
+  // ---- main: two live gaussians (position + its Fourier transform momentum) ----
+  (function(){
+    const host=document.getElementById("un-stage"); const cv=document.getElementById("un-canvas");
+    const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    let dx=1.0; const FLOOR=0.5;
+    function curve(sigma, cy, color, fill){
+      ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.beginPath();
+      for(let x=0;x<=W;x++){ const u=(x-W/2)/(W*0.18); const y=cy-Math.exp(-(u*u)/(2*sigma*sigma))*(H*0.30);
+        x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke();
+      ctx.lineTo(W,cy); ctx.lineTo(0,cy); ctx.closePath(); ctx.fillStyle=fill; ctx.fill();
+    }
+    QUANTUM.loop(()=>{
+      ctx.clearRect(0,0,W,H);
+      const sx=dx, sp=FLOOR/dx*2; // momentum spread is inverse
+      // labels + dividing line
+      ctx.strokeStyle="#2b2935"; ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
+      curve(sx*0.8, H*0.46, "#41e0d6", "rgba(65,224,214,0.12)");
+      curve(sp*0.8, H*0.96, "#ffb33e", "rgba(255,179,62,0.12)");
+      ctx.fillStyle="#8d8a82"; ctx.font="12px 'IBM Plex Mono'";
+      ctx.fillText("POSITION  Δx="+sx.toFixed(2), 14, 22);
+    

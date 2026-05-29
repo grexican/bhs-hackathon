@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Superposition — QUANTUM//LAB</title>
+  <meta name="description" content="Steer a qubit around a real 3D Bloch sphere, then measure it and watch the arrow snap to a definite answer." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div id="nav-mount"></div>
+
+  <section class="topic-hero wrap">
+    <span class="eyebrow" data-reveal>Lab 02 // both at once</span>
+    <h1 data-reveal>Not 0. Not 1. A live<br>blend of both.</h1>
+    <p class="lede" data-reveal>A classical bit is a coin lying flat: heads or tails. A qubit is a coin spinning in
+      mid-air, pointing anywhere on a sphere. The arrow below is a real quantum state. Steer it. The closer it
+      tilts to the north pole, the more likely you get 0 when you measure. Hit measure and the spinning coin
+      slams down to one face.</p>
+  </section>
+
+  <section class="bigviz wrap">
+    <div class="lab">
+      <div class="stage" id="bl-stage">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <span class="stage__tag">BLOCH SPHERE // drag to rotate the view</span>
+        <canvas id="bl-canvas"></canvas>
+      </div>
+      <aside class="panel">
+        <div class="panel__title">State controls</div>
+        <div class="ctrl">
+          <label>Polar &theta; (toward 0 / 1) <span class="val" id="bl-theta-v">90&deg;</span></label>
+          <input type="range" id="bl-theta" min="0" max="180" value="90" />
+        </div>
+        <div class="ctrl">
+          <label>Phase &phi; (spin around) <span class="val" id="bl-phi-v">0&deg;</span></label>
+          <input type="range" id="bl-phi" min="0" max="360" value="0" />
+        </div>
+        <div class="readout">
+          <div class="row"><span class="k">P( measure 0 )</span><span class="v" id="bl-p0">50%</span></div>
+          <div class="row"><span class="k">P( measure 1 )</span><span class="v amber" id="bl-p1">50%</span></div>
+          <div class="row"><span class="k">Last result</span><span class="v" id="bl-last">—</span></div>
+        </div>
+        <div class="ctrl" style="margin-top:18px">
+          <button class="btn" id="bl-measure" style="width:100%; justify-content:center">Measure the qubit</button>
+        </div>
+        <div class="ctrl">
+          <button class="btn btn--ghost" id="bl-reset" style="width:100%; justify-content:center">Reset to blend</button>
+        </div>
+      </aside>
+    </div>
+    <p class="flow-note" data-reveal>The percentages are not "we don't know yet". Before measurement the qubit is
+      genuinely both, and the angle sets the odds. Measuring forces a choice and the arrow jumps to a pole forever.</p>
+  </section>
+
+  <section class="subs wrap">
+    <article class="sub">
+      <div>
+        <h2 data-reveal>The arrow is the answer</h2>
+        <p data-reveal>Every possible qubit state is one point on this sphere. North pole is a guaranteed 0,
+          south pole a guaranteed 1, and the equator is a perfect fifty-fifty blend. Tilt the polar angle and
+          you slide the odds. Quantum gates, the operations inside a quantum computer, are just rotations that
+          move this arrow around.</p>
+      </div>
+      <div class="sub__viz stage" id="bl-mini1"><span class="stage__tag">PROBABILITY DIAL</span></div>
+    </article>
+
+    <article class="sub">
+      <div>
+        <h2 data-reveal>Phase is invisible, until it isn't</h2>
+        <p data-reveal>Spin the phase angle and the measurement odds don't budge. So is phase useless? No. It is
+          the secret ingredient that lets two qubits interfere, the same trick the double slit uses. Phase is
+          hidden in plain sight on a single qubit and becomes the whole game once you combine them.</p>
+      </div>
+      <div class="sub__viz stage" id="bl-mini2"><span class="stage__tag">PHASE ROTATION</span></div>
+    </article>
+  </section>
+
+  <section class="facts wrap">
+    <div class="fact" data-reveal><b>&infin;</b><span>states on the sphere</span></div>
+    <div class="fact" data-reveal><b>2</b><span>outcomes when measured</span></div>
+    <div class="fact" data-reveal><b>1925</b><span>Schrodinger's wave idea</span></div>
+    <div class="fact" data-reveal><b>n</b><span>qubits hold 2ⁿ amplitudes</span></div>
+  </section>
+
+  <section class="prose wrap">
+    <p class="big" data-reveal>A qubit is not undecided. It is committed to being both.</p>
+    <p data-reveal>The trap is to think the qubit secretly is a 0 or a 1 and we just lack the info. Decades of
+      experiments rule that out. The blend is real and physical, and it is exactly why a handful of qubits can
+      explore enormous numbers of possibilities at the same time. Measurement is the toll: the moment you read
+      one out, the rich blend collapses to a single bit and the rest is gone.</p>
+  </section>
+
+  <nav class="pager wrap" id="pager-mount"></nav>
+  <footer class="wrap foot"><span>QUANTUM//LAB</span><span>LAB 02 // SUPERPOSITION</span></footer>
+
+  <script>window.__ACTIVE_TOPIC = "superposition";</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="../app.js"></script>
+  <script>
+  // ---- 3D Bloch sphere ----
+  (function () {
+    const stage = document.getElementById("bl-stage");
+    const cv = document.getElementById("bl-canvas");
+    const scene = new THREE.Scene();
+    const cam = new THREE.PerspectiveCamera(50, 1, 0.1, 100); cam.position.set(2.6, 1.8, 3.4);
+    const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
+    QUANTUM.fitRenderer(renderer, cam, stage);
+
+    // wire sphere
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(1.6, 32, 24),
+      new THREE.MeshBasicMaterial({ color: 0x3a3746, wireframe: true, transparent: true, opacity: 0.45 }));
+    scene.add(sphere);
+    // equator ring + axes
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.006, 8, 64),
+      new THREE.MeshBasicMaterial({ color: 0x41e0d6 }));
+    ring.rotation.x = Math.PI/2; scene.add(ring);
+    function axis(dir, color){
+      const mat = new THREE.LineBasicMaterial({ color });
+      const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), dir.clone().multiplyScalar(2)]);
+      scene.add(new THREE.Line(geo, mat));
+    }
+    axis(new THREE.Vector3(0,1,0), 0xffb33e);
+
+    // labels as sprites would need textures; use small spheres at poles instead
+    const poleN = new THREE.Mesh(new THREE.SphereGeometry(0.06,12,12), new THREE.MeshBasicMaterial({color:0xffb33e}));
+    poleN.position.y = 1.6; scene.add(poleN);
+    const poleS = new THREE.Mesh(new THREE.SphereGeometry(0.06,12,12), new THREE.MeshBasicMaterial({color:0x41e0d6}));
+    poleS.position.y = -1.6; scene.add(poleS);
+
+    // the state arrow
+    const arrowGeo = new THREE.CylinderGeometry(0.018, 0.018, 1.6, 8);
+    const arrow = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({ color: 0xff8a1e }));
+    const tip = new THREE.Mesh(new THREE.ConeGeomet

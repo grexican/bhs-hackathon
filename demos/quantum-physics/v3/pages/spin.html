@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spin — QUANTUM//LAB</title>
+  <meta name="description" content="Send atoms through a Stern-Gerlach magnet and the beam splits cleanly in two. Chain magnets at different angles and watch quantum memory get erased." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div id="nav-mount"></div>
+
+  <section class="topic-hero wrap">
+    <span class="eyebrow" data-reveal>Lab 08 // the beam splits</span>
+    <h1 data-reveal>Measure its spin and the<br>beam splits clean in two.</h1>
+    <p class="lede" data-reveal>Electrons and atoms carry a tiny built-in magnetism called spin. Send a beam through a
+      lopsided magnet and classically you'd expect a smeared streak as spins point every which way. Instead the beam
+      splits into exactly two sharp spots: spin-up and spin-down, nothing between. Spin is quantized. Chain the
+      magnets at different angles and something even stranger happens to the atom's memory.</p>
+  </section>
+
+  <section class="bigviz wrap">
+    <div class="lab">
+      <div class="stage" id="sp-stage">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <span class="stage__tag">STERN-GERLACH // sequential magnets, live beam</span>
+        <canvas id="sp-canvas"></canvas>
+      </div>
+      <aside class="panel">
+        <div class="panel__title">Apparatus</div>
+        <div class="ctrl">
+          <label>Magnet 1 axis</label>
+          <div class="seg" id="sp-m1"><button class="is-on" data-v="z">Z</button><button data-v="x">X</button></div>
+        </div>
+        <div class="ctrl">
+          <label>Second magnet</label>
+          <div class="seg" id="sp-m2on"><button class="is-on" data-v="on">On</button><button data-v="off">Off</button></div>
+        </div>
+        <div class="ctrl">
+          <label>Magnet 2 axis</label>
+          <div class="seg" id="sp-m2"><button data-v="z">Z</button><button class="is-on" data-v="x">X</button></div>
+        </div>
+        <div class="readout">
+          <div class="row"><span class="k">Top spot</span><span class="v" id="sp-up">50%</span></div>
+          <div class="row"><span class="k">Bottom spot</span><span class="v amber" id="sp-dn">50%</span></div>
+          <div class="row"><span class="k">Memory of axis 1</span><span class="v" id="sp-mem">kept</span></div>
+        </div>
+      </aside>
+    </div>
+    <p class="flow-note" data-reveal>Two Z-magnets in a row: the second never flips a spin back. But put an X-magnet
+      between two Z-magnets and the atom forgets its Z answer entirely. Measuring one axis erases the other.</p>
+  </section>
+
+  <section class="subs wrap">
+    <article class="sub">
+      <div>
+        <h2 data-reveal>Two values, never a smear</h2>
+        <p data-reveal>In 1922 Stern and Gerlach fired silver atoms through their magnet expecting a vertical
+          smudge. They got two distinct dots. An electron's spin along any axis you choose is always either fully up
+          or fully down, never tilted, never partial. It is the cleanest demonstration that some quantities in nature
+          simply do not come in continuous amounts.</p>
+      </div>
+      <div class="sub__viz stage" id="sp-mini1"><span class="stage__tag">CLASSICAL vs QUANTUM SPOTS</span></div>
+    </article>
+
+    <article class="sub">
+      <div>
+        <h2 data-reveal>Measuring erases memory</h2>
+        <p data-reveal>Select only spin-up along Z, then measure along X, then measure Z again. Half come out down,
+          even though you'd already filtered them all to up. The X-measurement wiped the Z information clean. Spin
+          along different axes are incompatible questions: answering one randomizes the other, the same trade you saw
+          in the uncertainty lab.</p>
+      </div>
+      <div class="sub__viz stage" id="sp-mini2"><span class="stage__tag">Z → X → Z ERASURE</span></div>
+    </article>
+  </section>
+
+  <section class="facts wrap">
+    <div class="fact" data-reveal><b>1922</b><span>Stern-Gerlach experiment</span></div>
+    <div class="fact" data-reveal><b>2</b><span>spots, always exactly two</span></div>
+    <div class="fact" data-reveal><b>&frac12;</b><span>the electron's spin number</span></div>
+    <div class="fact" data-reveal><b>±&#8463;/2</b><span>the only allowed values</span></div>
+  </section>
+
+  <section class="prose wrap">
+    <p class="big" data-reveal>Spin is not a tiny ball actually spinning. It is its own kind of thing.</p>
+    <p data-reveal>The name is a historical accident. A literal spinning electron would have to whirl faster than light
+      to make the magnetism we measure. Spin is a genuinely quantum property with no everyday picture, yet it is
+      utterly real: it underlies magnets, the structure of the periodic table, MRI scanners, and the very rule that
+      keeps two electrons from sitting in the same state.</p>
+  </section>
+
+  <nav class="pager wrap" id="pager-mount"></nav>
+  <footer class="wrap foot"><span>QUANTUM//LAB</span><span>LAB 08 // SPIN</span></footer>
+
+  <script>window.__ACTIVE_TOPIC = "spin";</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="../app.js"></script>
+  <script>
+  // ---- main: animated beam of atoms splitting through 1 or 2 magnets ----
+  (function(){
+    const host=document.getElementById("sp-stage"); const cv=document.getElementById("sp-canvas");
+    const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    let m1="z", m2on=true, m2="x";
+    const rng=QUANTUM.makeRNG(11);
+    const atoms=[];
+    function spawn(){ atoms.push({x:0, y:H/2, vy:0, stage:0, spin:null, life:0}); }
+    let acc=0, last=performance.now();
+
+    QUANTUM.loop((t)=>{
+      const now=performance.now(); const dt=(now-last); last=now;
+      acc+=dt; while(acc>60){ if(atoms.length<120) spawn(); acc-=60; }
+      ctx.clearRect(0,0,W,H);
+      const m1x=W*0.34, m2x=W*0.66;
+      // draw magnets
+      function mag(x,label,on){ if(!on) return;
+        ctx.fillStyle="rgba(255,138,30,0.12)"; ctx.fillRect(x-18,H*0.2,36,H*0.6);
+        ctx.strokeStyle="#ff8a1e"; ctx.lineWidth=2; ctx.strokeRect(x-18,H*0.2,36,H*0.6);
+        ctx.fillStyle="#ffb33e"; ctx.font="600 13px 'IBM Plex Mono'"; ctx.textAlign="center"; ctx.fillText(label,x,H*0.18);}
+      mag(m1x, m1.toUpperCase(), true); mag(m2x, m2.toUpperCase(), m2on);
+      ctx.textAlign="left";
+      // source
+      ctx.fillStyle="#41e0d6"; ctx.fillRect(0,H/2-14,8,28);
+
+      let upCount=0, total=0;
+      for(let i=atoms.length-1;i>=0;i--){
+        const a=atoms[i]; a.x+=2.4; a.life++;
+        // at magnet 1: split
+        if(a.stage===0 && a.x>=m1x){ a.spin = rng()>0.5?1:-1; a.vy = a.spin*-0.9; a.stage=1; a.axis1=m1; }
+        // at magnet 2: if on, re-measure on m2 axis; if axes differ, randomize
+        if(a.stage===1 && m2on && a.x>=m2x){
+          if(m2!==a.axis1){ a.spin = rng()>0.5?1:-1; } // incompatible axis randomizes
+          a.vy = a.spin*-0.9; a.stage=2;
+        }
+        a.y += a.vy;
+        ctx.fillStyle= a.spin===1?"#ffb33e": a.spin===-1?"#41e0d6":"#c7c2b8";
+        ctx.beginPath(); ctx.arc(a.x,a.y,3,0,7); ctx.fill();
+        if(a.x>W){ if(a.spin===1)upCount++; total++; atoms.splice(i,1); }
+      }
+      // tallies update occasionally
+      if(total>0){ /* per-frame escape count is noisy; rely on theoretical readout instead */ }
+      ctx.fillStyle="#8d8a82"; ctx.font="11px '

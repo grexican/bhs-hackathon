@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Quantum Quest — Play With the Universe's Weirdest Rules</title>
+<style>
+  :root {
+    --bg: #0a0a1f;
+    --bg2: #131336;
+    --card: #1a1a44;
+    --card2: #222258;
+    --accent: #7af6ff;
+    --accent2: #ff7ae0;
+    --accent3: #ffe27a;
+    --green: #8cff9e;
+    --text: #eef0ff;
+    --muted: #a3a8d8;
+    --shadow: 0 8px 30px rgba(0,0,0,.4);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: radial-gradient(ellipse at top, #1b1b4d 0%, var(--bg) 55%);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+  /* floating particles backdrop */
+  #starfield { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .wrap { position: relative; z-index: 1; max-width: 920px; margin: 0 auto; padding: 0 18px; }
+
+  header.hero {
+    text-align: center;
+    padding: 70px 18px 40px;
+    position: relative;
+    z-index: 1;
+  }
+  .hero h1 {
+    font-size: clamp(2.2rem, 7vw, 4rem);
+    margin: 0 0 10px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    letter-spacing: -1px;
+  }
+  .hero p { font-size: 1.2rem; color: var(--muted); max-width: 600px; margin: 0 auto 24px; }
+  .hero .hint { font-size: .95rem; color: var(--accent3); }
+
+  nav.toc {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+    max-width: 920px; margin: 0 auto 30px; padding: 0 18px; position: relative; z-index: 1;
+  }
+  nav.toc a {
+    background: var(--card); color: var(--text); text-decoration: none;
+    padding: 7px 14px; border-radius: 999px; font-size: .9rem; border: 1px solid #ffffff1a;
+    transition: .2s;
+  }
+  nav.toc a:hover { background: var(--accent); color: #061018; transform: translateY(-2px); }
+
+  section.concept {
+    background: linear-gradient(180deg, var(--card), var(--card2));
+    border: 1px solid #ffffff14;
+    border-radius: 20px;
+    padding: 28px;
+    margin: 26px 0;
+    box-shadow: var(--shadow);
+  }
+  section.concept h2 { font-size: 1.7rem; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
+  section.concept .emoji { font-size: 1.6rem; }
+  section.concept .lead { color: var(--muted); margin-top: 4px; }
+  .analogy {
+    background: #ffffff10; border-left: 4px solid var(--accent3);
+    padding: 10px 14px; border-radius: 8px; margin: 14px 0; font-size: .98rem;
+  }
+  .analogy b { color: var(--accent3); }
+
+  .demo {
+    background: #0c0c28; border-radius: 14px; padding: 18px; margin-top: 16px;
+    border: 1px solid #ffffff10;
+  }
+  canvas { display: block; max-width: 100%; border-radius: 10px; background: #05051a; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 14px; }
+  .control { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); }
+  .control label { font-weight: 600; }
+  input[type=range] { width: 180px; accent-color: var(--accent2); cursor: pointer; }
+
+  button.btn {
+    background: var(--accent2); color: #1a0014; border: none; font-weight: 700;
+    padding: 10px 18px; border-radius: 999px; cursor: pointer; font-size: .95rem; transition: .15s;
+  }
+  button.btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+  button.btn.alt { background: var(--accent); color: #04141a; }
+  button.btn.ghost { background: #ffffff14; color: var(--text); }
+
+  .readout { font-size: .95rem; margin-top: 10px; min-height: 1.4em; color: var(--accent); }
+  .pill { display:inline-block; background:#ffffff14; padding:2px 10px; border-radius:999px; font-size:.8rem; margin-left:6px; }
+
+  footer { text-align: center; padding: 50px 18px; color: var(--muted); position: relative; z-index: 1; }
+  footer .big { font-size: 1.3rem; color: var(--accent3); margin-bottom: 6px; }
+
+  /* superposition coin */
+  .coin {
+    width: 120px; height: 120px; border-radius: 50%; margin: 10px auto;
+    display:flex; align-items:center; justify-content:center; font-size: 2.6rem; font-weight: 800;
+    background: radial-gradient(circle at 35% 30%, #fff6, transparent 60%), conic-gradient(var(--accent), var(--accent2), var(--accent3), var(--accent));
+    color:#0a0a1f; cursor:pointer; user-select:none; box-shadow: var(--shadow);
+    transition: transform .1s;
+  }
+  .coin.spinning { animation: spin .35s linear infinite; }
+  .coin:active { transform: scale(.95); }
+  @keyframes spin { to { transform: rotateY(360deg); } }
+
+  /* tunneling ball */
+  .quiz { margin-top: 14px; }
+  .quiz .q { font-weight: 600; margin-bottom: 8px; }
+  .quiz .opt {
+    display:block; width:100%; text-align:left; background:#ffffff10; color:var(--text);
+    border:1px solid #ffffff1a; padding:10px 14px; border-radius:10px; margin:6px 0; cursor:pointer; transition:.15s;
+  }
+  .quiz .opt:hover { background:#ffffff1f; }
+  .quiz .opt.correct { background: #1f6b3a; border-color: var(--green); }
+  .quiz .opt.wrong { background: #6b1f2a; }
+  .quiz .feedback { margin-top:8px; font-weight:600; min-height:1.4em; }
+
+  .entangle-wrap { display:flex; gap:20px; justify-content:center; flex-wrap:wrap; margin:10px 0; }
+  .ebox {
+    width:130px; height:130px; border-radius:16px; display:flex; align-items:center; justify-content:center;
+    font-size:3rem; background:#0c0c28; border:2px solid #ffffff20; transition:.3s;
+  }
+  .ebox.lit { box-shadow: 0 0 30px var(--accent); border-color: var(--accent); }
+
+  @media (max-width:600px){ section.concept{padding:18px;} input[type=range]{width:140px;} }
+</style>
+</head>
+<body>
+<canvas id="starfield"></canvas>
+
+<header class="hero">
+  <h1>Quantum Quest</h1>
+  <p>The universe runs on rules so strange they sound made up. Good news: you can poke at every one of them right here.</p>
+  <p class="hint">Tap, drag, and slide everything you see. That's how quantum scientists actually figure stuff out.</p>
+</header>
+
+<nav class="toc">
+  <a href="#duality">Wave or Particle?</a>
+  <a href="#doubleslit">Double Slit</a>
+  <a href="#superposition">Superposition</a>
+  <a href="#uncertainty">Uncertainty</a>
+  <a href="#quantization">Energy Levels</a>
+  <a href="#tunneling">Tunneling</a>
+  <a href="#spin">Spin</a>
+  <a href="#entanglement">Entanglement</a>
+  <a href="#quiz">Quiz</a>
+</nav>
+
+<div class="wrap">
+
+  <!-- WAVE-PARTICLE DUALITY -->
+  <section class="concept" id="duality">
+    <h2><span class="emoji">🌊</span> Wave or Particle? <span class="pill">Yes.</span></h2>
+    <p class="lead">Light and tiny things like electrons can act like a <b>wave</b> (spread out, rippling) OR like a <b>particle</b> (a single dot). Which one? Depends on how you look.</p>
+    <div class="analogy"><b>Think of it like:</b> a Slinky. Held still it's just a coil of metal (a "thing"). Wiggle it and it becomes a traveling wave. Same object, two personalities.</div>
+    <div class="demo">
+      <canvas id="dualityCanvas" width="820" height="220"></canvas>
+      <div class="controls">
+        <button class="btn" id="dualityToggle">Switch to Particle view</button>
+        <div class="control">
+          <label>Wave energy</label>
+          <input type="range" id="dualityFreq" min="1" max="8" value="3" />
+        </div>
+      </div>
+      <div class="readout" id="dualityReadout">Right now you're seeing the WAVE side — smooth ripples carrying energy.</div>
+    </div>
+  </section>
+
+  <!-- DOUBLE SLIT -->
+  <section class="concept" id="doubleslit">
+    <h2><span class="emoji">🎯</span> The Double-Slit Experiment</h2>
+    <p class="lead">Fire tiny particles at a wall with two slits. Logic says you'd get two stripes. Instead you get <b>many</b> stripes — an interference pattern — as if each particle went through both slits and rippled into itself.</p>
+    <div class="analogy"><b>Think of it like:</b> two stones dropped in a pond. The ripples overlap, making big-and-flat spots. Quantum particles make that same pattern — even when you send them one at a time!</div>
+    <div class="demo">
+      <canvas id="slitCanvas" width="820" height="300"></canvas>
+      <div class="controls">
+        <button class="btn alt" id="slitFire">Fire one particle</button>
+        <button class="btn" id="slitAuto">Auto-fire 500</button>
+        <button class="btn ghost" id="slitReset">Clear screen</button>
+      </div>
+      <div class="readout" id="slitReadout">Particles fired: 0. Watch the bands build up dot by dot.</div>
+    </div>
+  </section>
+
+  <!-- SUPERPOSITION -->
+  <section class="concept" id="superposition">
+    <h2><span class="emoji">🪙</span> Superposition</h2>
+    <p class="lead">Before you measure it, a quantum thing isn't "heads" or "tails" — it's genuinely <b>both at once</b>. The moment you look, it picks one. This is the heart of Schrödinger's famous cat.</p>
+    <div class="analogy"><b>Think of it like:</b> a spinning coin. While it spins, asking "heads or tails?" makes no sense — it's a blur of both. It only becomes one answer when it lands.</div>
+    <div class="demo" style="text-align:center;">
+      <div class="coin" id="coin">?</div>
+      <div class="controls" style="justify-content:center;">
+        <button class="btn alt" id="coinSpin">Put in superposition</button>
+        <button class="btn" id="coinMeasure">Measure it!</button>
+      </div>
+      <div class="readout" id="coinReadout">The coin is sitting still. Spin it to put it in superposition.</div>
+    </div>
+  </section>
+
+  <!-- UNCERTAINTY -->
+  <section class="concept" id="uncertainty">
+    <h2><span class="emoji">🔍</span> The Uncertainty Principle</h2>
+    <p class="lead">You can know <b>where</b> a particle is, OR <b>how fast</b> it's moving — but never both perfectly. Pin down one and the other goes fuzzy. It's a law of nature, not a bad measuring tool.</p>
+    <div class="analogy"><b>Think of it like:</b> a photo of a race car. A sharp photo freezes its position but hides its speed. A blurry streak shows its speed but smears its position. You can't have both crisp at once.</div>
+    <div class="demo">
+      <canvas id="uncertaintyCanvas" width="820" height="180"></canvas>
+      <div class="controls">
+        <div class="control" style="flex:1;">
+          <label>Drag: focus on POSITION ⟷ focus on SPEED</label>
+          <input type="range" id="uncSlider" min="0" max="100" value="50" style="width:100%;" />
+        </div>
+      </div>
+      <div class="readout" id="uncReadout">Balanced: position is a little fuzzy and speed is a little fuzzy.</div>
+    </div>
+  </section>
+
+  <!-- QUANTIZATION -->
+  <section class="concept" id="quantization">
+    <h2><span class="emoji">🪜</span> Energy Comes in Steps</h2>
+    <p class="lead">An electron in an atom can't sit at just any energy. It can only live on specific "rungs," like a ladder. To jump up it must absorb an exact-sized chunk of energy (a <b>quantum</b>); dropping down spits out a flash of colored light.</p>
+    <div class="analogy"><b>Think of it like:</b> stairs vs. a ramp. On a ramp you can stop anywhere. On stairs you're only ever on step 1, 2, or 3 — never on "step 2.4."</div>
+    <div class="demo" style="text-align:center;">
+      <canvas id="atomCanvas" width="320" height="320" style="margin:auto;"></canvas>
+      <div class="controls" style="justify-content:center;">
+        <button class="btn alt" id="atomUp">Absorb energy (jump up)</button>
+        <button class="btn" id="atomDown">Drop down (emit light)</button>
+      </div>
+      <div class="readout" id="atomReadout">Electron is on energy level 1 (the ground floor).</div>
+    </div>
+  </section>
+
+  <!-- TUNNELING -->
+  <section class="concept" id="tunneling">
+    <h2><span class="emoji">👻</span> Quantum Tunneling</h2>
+    <p class="lead">A tiny particle can sometimes pass straight <b>through</b> a wall it shouldn't have enough energy to climb. There's just a chance its "wave" leaks to the other side. Thinner walls = better odds. This is how the Sun shines!</p>
+    <div class="analogy"><b>Think of it like:</b> rolling a ball at a hill it can't crest. In our world it always rolls back. In the quantum world, every so often it mysteriously appears on the far side.</div>
+    <div class="demo">
+      <canvas id="tunnelCanvas" width="820" height="200"></canvas>
+      <div class="controls">
+        <div class="control">
+          <label>Wall thickness</label>
+          <input type="range" id="tunnelWall" min="10" max="120" value="40" />
+        </div>
+        <button class="btn alt" id="tunnelFire">Send the particle</button>
+      </div>
+      <div class="readout" id="tunnelReadout">Set a wall thickness, then send the particle and see if it tunnels through.</div>
+    </div>
+  </section>
+
+  <!-- SPIN -->
+  <section class="concept" id="spin">
+    <h2><span class="emoji">🧭</span> Spin</h2>
+    <p class="lead">Particles carry a built-in property called <b>spin</b>. Measure it along an axis and you only ever get one of two answers: <b>up</b> or <b>down</b> — never anything in between. Tilt your detector and you change the odds.</p>
+    <div class="analogy"><b>Think of it like:</b> a tiny magnet that, weirdly, always snaps to point fully with you or fully against you the instant you check — never sideways.</div>
+    <div class="demo" style="text-align:center;">
+      <canvas id="spinCanvas" width="280" height="280" style="margin:auto;"></canvas>
+      <div class="controls" style="justify-content:center;">
+        <div class="control">
+          <label>Tilt your detector</label>
+          <input type="range" id="spinAngle" min="0" max="180" value="0" />
+        </div>
+        <button class="btn alt" id="spinMeasure">Measure spin</button>
+      </div>
+      <div class="readout" id="spinReadout">Detector pointing up. Odds of "up": 100%.</div>
+    </div>
+  </section>
+
+  <!-- ENTANGLEMENT -->
+  <section class="concept" id="entanglement">
+    <h2><span class="emoji">🔗</span> Entanglement <span class="pill">"spooky"</span></h2>
+    <p class="lead">Two particles can be linked so that measuring one <b>instantly</b> tells you about the other — even if they're on opposite sides of the galaxy. Einstein called it "spooky action at a distance."</p>
+    <div class="analogy"><b>Think of it like:</b> a pair of magic gloves split into two boxes shipped to different planets. Open one and see a left glove — you instantly know the other is a right glove, faster than any message could travel.</div>
+    <div class="demo" style="text-align:center;">
+      <div class="entangle-wrap">
+        <div class="ebox" id="eboxA">❔</div>
+        <div class="ebox" id="eboxB">❔</div>
+      </div>
+      <div class="controls" style="justify-content:center;">
+        <button class="btn alt" id="entMeasure">Measure the LEFT particle</button>
+        <button class="btn ghost" id="entReset">Re-entangle a new pair</button>
+      </div>
+      <div class="readout" id="entReadout">A fresh entangled pair is ready. Neither has a value yet — they're linked but undecided.</div>
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="concept" id="quiz">
+    <h2><span class="emoji">🏆</span> Quantum Quiz</h2>
+    <p class="lead">Think you've got it? Test yourself. Score: <b><span id="score">0</span></b> / <span id="total">0</span></p>
+    <div id="quizBox"></div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="big">You just played with the rules that build everything. ⚛️</div>
+  <div>Atoms, lasers, computer chips, the Sun, your phone screen — all running on this weirdness.</div>
+</footer>
+
+<script>
+/* ============ STARFIELD BACKDROP ============ */
+(function(){
+  const c = document.getElementById('starfield'), x = c.getContext('2d');
+  let stars = [];
+  function size(){ c.width = innerWidth; c.height = innerHeight;
+    stars = Array.from({length: 90}, () => ({
+      x: Math.random()*c.width, y: Math.random()*c.height,
+      r: Math.random()*1.6+.3, s: Math.random()*.3+.05, t: Math.random()*6 }));
+  }
+  size(); addEventListener('resize', size);
+  (function loop(){
+    x.clearRect(0,0,c.width,c.height);
+    for(const st of stars){
+      st.t += .04; st.y += st.s; if(st.y > c.height) st.y = 0;
+      const a = .4 + .4*Math.sin(st.t);
+      x.beginPath(); x.arc(st.x, st.y, st.r, 0, 7); x.fillStyle = `rgba(170,200,255,${a})`; x.fill();
+    }
+    requestAnimationFrame(loop);
+  })();
+})();
+
+/* ============ WAVE-PARTICLE DUALITY ============ */
+(function(){
+  const c = document.getElementById('dualityCanvas'), x = c.getContext('2d');
+  let isWave = true, freq = 3, t = 0;
+  const toggle = document.getElementById('dualityToggle');
+  const freqEl = document.getElementById('dualityFreq');
+  const out = document.getElementById('dualityReadout');
+  toggle.onclick = () => {
+    isWave = !isWave;
+    toggle.textContent = isWave ? 'Switch to Particle view' : 'Switch to Wave view';
+    out.textContent = isWave
+      ? "Right now you're seeing the WAVE side — smooth ripples carrying energy."
+      : "Now it's a PARTICLE — a single dot zipping along. Same quantum object, different costume.";
+  };
+  freqEl.oninput = e => freq = +e.target.value;
+  (function loop(){
+    t += .04; x.clearRect(0,0,c.width,c.height);
+    if(isWave){
+      x.lineWidth = 3;
+      for(let layer=0; layer<3; layer++){
+        x.beginPath();
+        for(let px=0; px<=c.width; px+=4){
+          const y = c.height/2 + Math.sin(px*0.012*freq - t - layer*0.6) * (60 - layer*15);
+          px===0 ? x.moveTo(px,y) : x.lineTo(px,y);
+        }
+        x.strokeStyle = ['#7af6ff','#ff7ae0','#ffe27a'][layer]; x.globalAlpha = 1-layer*0.25; x.stroke();
+      }
+      x.globalAlpha = 1;
+    } else {
+      const px = (t*120 % (c.width+40)) - 20;
+      const y = c.height/2;
+      // trail
+      for(let i=1;i<=10;i++){ x.beginPath(); x.arc(px-i*14, y, 10-i, 0, 7);
+        x.fillStyle = `rgba(255,122,224,${0.35-i*0.03})`; x.fill(); }
+      x.beginPath(); x.arc(px, y, 14, 0, 7);
+      const g = x.createRadialGradient(px-4,y-4,2,px,y,16);
+      g.addColorStop(0,'#fff'); g.addColorStop(1,'#ff7ae0');
+      x.fillStyle = g; x.fill();
+    }
+    requestAnimationFrame(loop);
+  })();
+})();
+
+/* ============ DOUBLE SLIT ============ */
+(function(){
+  const c = document.getElementById('slitCanvas'), x = c.getContext('2d');
+  const out = document.getElementById('slitReadout');
+  const screenX = c.width - 60, wallX = c.width*0.42;
+  const slit1 = c.height*0.4, slit2 = c.height*0.6;
+  let count = 0;
+  // probability of landing at y on the screen = double-slit interference pattern
+  function sampleY(){
+    while(true){
+      const y = Math.random()*c.height;
+      const d = (y - c.height/2)/c.height;
+      const p = Math.pow(Math.cos(d*22), 2) * Math.exp(-d*d*9);
+      if(Math.random() < p) return y;
+    }
+  }
+  const hits = [];
+  function drawStatic(){
+    x.clearRect(0,0,c.width,c.height);
+    // wall with two slits
+    x.fillStyle = '#3a3a72';
+    x.fillRect(wallX, 0, 10, slit1-18);
+    x.fillRect(wallX, slit1+18, 10, slit2-slit1-36);
+    x.fillRect(wallX, slit2+18, 10, c.height-(slit2+18));
+    // emitter
+    x.fillStyle = '#ffe27a'; x.beginPath(); x.arc(30, c.height/2, 8, 0, 7); x.fill();
+    // screen
+    x.fillStyle = '#222258'; x.fillRect(screenX, 0, 6, c.height);
+    // accumulated hits
+    for(const h of hits){ x.beginPath(); x.arc(screenX+3, h, 1.6, 0, 7);
+      x.fillStyle = 'rgba(122,246,255,.8)'; x.fill(); }
+  }
+  function fireOne(animate){
+    const y = sampleY();
+    if(animate){
+      let prog = 0;
+      const ix = (Math.random()<.5? slit1: slit2);
+      (function step(){
+        drawStatic();
+        prog += 0.06;
+        if(prog < 0.5){ // to wall
+          const px = 30 + (wallX-30)*(prog*2), py = c.height/2 + (ix-c.height/2)*(prog*2);
+          x.beginPath(); x.arc(px,py,5,0,7); x.fillStyle='#ff7ae0'; x.fill();
+        } else if(prog < 1){ // wall to screen
+          const k=(prog-0.5)*2; const px = wallX + (screenX-wallX)*k, py = ix + (y-ix)*k;
+          x.beginPath(); x.arc(px,py,5,0,7); x.fillStyle='#ff7ae0'; x.fill();
+        }
+        if(prog < 1) requestAnimationFrame(step);
+        else { hits.push(y); count++; drawStatic(); out.textContent = `Particles fired: ${count}. ` + (count>30? 'See the bright bands forming? That’s interference!':'Keep firing to reveal the pattern.'); }
+      })();
+    } else { hits.push(y); count++; }
+  }
+  document.getElementById('slitFire').onclick = () => fireOne(true);
+  document.getElementById('slitAuto').onclick = () => {
+    for(let i=0;i<500;i++) fireOne(false);
+    drawStatic(); out.textContent = `Particles fired: ${count}. Many stripes — each particle interfered with itself. Spooky!`;
+  };
+  document.getElementById('slitReset').onclick = () => { hits.length=0; count=0; drawStatic(); out.textContent='Particles fired: 0. Watch the bands build up dot by dot.'; };
+  drawStatic();
+})();
+
+/* ============ SUPERPOSITION COIN ============ */
+(function(){
+  const coin = document.getElementById('coin'), out = document.getElementById('coinReadout');
+  let state = 'idle';
+  document.getElementById('coinSpin').onclick = () => {
+    state='super'; coin.classList.add('spinning'); coin.textContent='?';
+    out.textContent='The coin is now in superposition — it’s genuinely BOTH heads and tails until you measure it.';
+  };
+  document.getElementById('coinMeasure').onclick = () => {
+    coin.classList.remove('spinning');
+    const r = Math.random()<.5 ? 'H' : 'T';
+    coin.textContent = r;
+    state='collapsed';
+    out.textContent = `You measured it! The superposition collapsed to ${r==='H'?'HEADS':'TAILS'}. Looking forced it to choose.`;
+  };
+  coin.onclick = () => document.getElementById('coinSpin').click();
+})();
+
+/* ============ UNCERTAINTY ============ */
+(function(){
+  const c = document.getElementById('uncertaintyCanvas'), x = c.getContext('2d');
+  const sl = document.getElementById('uncSlider'), out = document.getElementById('uncReadout');
+  function draw(){
+    const v = sl.value/100; // 0 = all position, 1 = all speed
+    x.clearRect(0,0,c.width,c.height);
+    const cx = c.width/2, cy = c.height/2;
+    // position blob: narrow when v small
+    const posW = 20 + v*260;
+    const g = x.createLinearGradient(cx-posW,0,cx+posW,0);
+    g.addColorStop(0,'rgba(122,246,255,0)'); g.addColorStop(.5,'rgba(122,246,255,.9)'); g.addColorStop(1,'rgba(122,246,255,0)');
+    x.fillStyle=g; x.fillRect(cx-posW, cy-30, posW*2, 60);
+    // speed arrows: long/clear when v large
+    const speedClarity = v;
+    x.strokeStyle = `rgba(255,122,224,${0.25+speedClarity*0.75})`; x.lineWidth=3;
+    const arrowLen = 20 + speedClarity*120;
+    x.beginPath(); x.moveTo(cx, cy+50); x.lineTo(cx+arrowLen, cy+50);
+    x.lineTo(cx+arrowLen-10, cy+44); x.moveTo(cx+arrowLen, cy+50); x.lineTo(cx+arrowLen-10, cy+56); x.stroke();
+    x.fillStyle='#a3a8d8'; x.font='13px sans-serif';
+    x.fillText('position (fuzzy width)', cx-70, cy-40);
+    x.fillText('speed', cx-20, cy+72);
+    let msg;
+    if(v<0.25) msg='Sharp POSITION (you know exactly where it is) — but its speed is a total mystery.';
+    else if(v>0.75) msg='Sharp SPEED (you know exactly how fast) — but now its position is smeared out everywhere.';
+    else msg='Balanced: position is a little fuzzy and speed is a little fuzzy. You can never make both perfectly sharp.';
+    out.textContent = msg;
+  }
+  sl.oninput = draw; draw();
+})();
+
+/* ============ QUANTIZATION / ATOM ============ */
+(function(){
+  const c = document.getElementById('atomCanvas'), x = c.getContext('2d');
+  const out = document.getElementById('atomReadout');
+  let level = 1, t = 0, flash = 0, flashColor = '#fff';
+  const radii = {1:50, 2:85, 3:120};
+  const colors = {2:'#7af6ff', 3:'#ff7ae0'}; // light emitted dropping FROM level
+  function up(){ if(level<3){ level++; out.textContent=`Absorbed a quantum of energy! Jumped to level ${level}. The bigger the jump, the more energy needed.`;} else out.textContent='Already on the top level (3). Can’t go higher here.'; }
+  function down(){ if(level>1){ flash=1; flashColor=colors[level]; level--; out.textContent=`Dropped to level ${level} and spat out a flash of ${flashColor==='#7af6ff'?'blue':'pink'} light! That color = the exact energy released.`;} else out.textContent='Already on level 1 (ground floor). Can’t drop lower.'; }
+  document.getElementById('atomUp').onclick = up;
+  document.getElementById('atomDown').onclick = down;
+  (function loop(){
+    t+=.02; x.clearRect(0,0,c.width,c.height);
+    const cx=c.width/2, cy=c.height/2;
+    // orbits
+    for(const lv of [1,2,3]){ x.beginPath(); x.arc(cx,cy,radii[lv],0,7);
+      x.strokeStyle = lv===level?'#ffe27a':'#ffffff22'; x.lineWidth = lv===level?2:1; x.stroke(); }
+    // nucleus
+    if(flash>0){ x.beginPath(); x.arc(cx,cy,16+flash*40,0,7); x.fillStyle=flashColor.replace(')',`,${flash})`).replace('rgb','rgba');
+      x.globalAlpha=flash; x.fillStyle=flashColor; x.fill(); x.globalAlpha=1; flash-=0.03; }
+    x.beginPath(); x.arc(cx,cy,14,0,7); x.fillStyle='#ffe27a'; x.fill();
+    // electron
+    const r = radii[level], ex = cx + Math.cos(t*2)*r, ey = cy + Math.sin(t*2)*r;
+    x.beginPath(); x.arc(ex,ey,8,0,7);
+    const g=x.createRadialGradient(ex-2,ey-2,1,ex,ey,9); g.addColorStop(0,'#fff'); g.addColorStop(1,'#7af6ff');
+    x.fillStyle=g; x.fill();
+    requestAnimationFrame(loop);
+  })();
+})();
+
+/* ============ TUNNELING ============ */
+(function(){
+  const c = document.getElementById('tunnelCanvas'), x = c.getContext('2d');
+  const wallSl = document.getElementById('tunnelWall'), out = document.getElementById('tunnelReadout');
+  const wallX = c.width*0.5;
+  let anim = null;
+  function chance(thick){ return Math.max(0.02, Math.min(0.95, Math.exp(-thick/35))); }
+  function drawBase(thick){
+    x.clearRect(0,0,c.width,c.height);
+    x.fillStyle='#5a3a8a'; x.fillRect(wallX, 20, thick, c.height-40);
+    x.fillStyle='#a3a8d8'; x.font='13px sans-serif';
+    x.fillText('the wall (a barrier)', wallX-10, 16);
+    const pct = Math.round(chance(thick)*100);
+    x.fillText('tunnel odds: ~'+pct+'%', 20, 20);
+  }
+  function fire(){
+    if(anim) cancelAnimationFrame(anim);
+    const thick = +wallSl.value;
+    const willTunnel = Math.random() < chance(thick);
+    let px = 20; const py = c.height/2; let bounced=false;
+    (function step(){
+      drawBase(thick);
+      x.beginPath(); x.arc(px, py, 9, 0, 7);
+      const g=x.createRadialGradient(px-3,py-3,1,px,py,10); g.addColorStop(0,'#fff'); g.addColorStop(1,'#7af6ff');
+      x.fillStyle=g; x.fill();
+      if(!bounced && px < wallX-9){ px += 6; }
+      else if(willTunnel){ px += 6; if(px > c.width-15){ out.textContent='It TUNNELED through! Even without enough energy, its wave leaked to the far side. Thinner walls make this happen more often.'; return; } }
+      else { // bounce back
+        bounced = true; px -= 6;
+        if(px < 20){ out.textContent='Bounced back — this time it didn’t tunnel. Try a thinner wall to improve the odds.'; return; }
+      }
+      anim = requestAnimationFrame(step);
+    })();
+  }
+  wallSl.oninput = () => drawBase(+wallSl.value);
+  document.getElementById('tunnelFire').onclick = fire;
+  drawBase(+wallSl.value);
+})();
+
+/* ============ SPIN ============ */
+(function(){
+  const c = document.getElementById('spinCanvas'), x = c.getContext('2d');
+  const angleSl = document.getElementById('spinAngle'), out = document.getElementById('spinReadout');
+  let result = null, t=0;
+  function draw(){
+    t+=.03;
+    const ang = angleSl.value * Math.PI/180;
+    x.clearRect(0,0,c.width,c.height);
+    const cx=c.width/2, cy=c.height/2, R=90;
+    // detector axis
+    x.strokeStyle='#ffe27a'; x.lineWidth=2; x.setLineDash([6,6]);
+    x.beginPath();
+    x.moveTo(cx - Math.sin(ang)*R, cy - Math.cos(ang)*R);
+    x.lineTo(cx + Math.sin(ang)*R, cy + Math.cos(ang)*R);
+    x.stroke(); x.setLineDash([]);
+    // particle
+    x.beginPath(); x.arc(cx,cy,30,0,7);
+    const g=x.createRadialGradient(cx-8,cy-8,4,cx,cy,32); g.addColorStop(0,'#fff'); g.addColorStop(1,'#7af6ff');
+    x.fillStyle=g; x.fill();
+    // result arrow
+    if(result){
+      const dir = result==='up'? -1 : 1;
+      x.strokeStyle = result==='up'? '#8cff9e':'#ff7ae0'; x.lineWidth=5;
+      const ex = cx + Math.sin(ang)*60*dir, ey = cy + Math.cos(ang)*60*dir;
+      x.beginPath(); x.moveTo(cx,cy); x.lineTo(ex,ey); x.stroke();
+      x.fillStyle = result==='up'? '#8cff9e':'#ff7ae0';
+      x.font='bold 18px sans-serif'; x.fillText(result.toUpperCase(), ex-14, ey + (result==='up'?-8:18));
+    }
+    requestAnimationFrame(draw);
+  }
+  angleSl.oninput = () => {
+    const a = +angleSl.value;
+    const pUp = Math.pow(Math.cos(a*Math.PI/360),2);
+    out.textContent = `Detector tilted ${a}°. Odds of measuring “up”: ${Math.round(pUp*100)}%.`;
+    result=null;
+  };
+  document.getElementById('spinMeasure').onclick = () => {
+    const a = +angleSl.value;
+    const pUp = Math.pow(Math.cos(a*Math.PI/360),2);
+    result = Math.random()<pUp ? 'up' : 'down';
+    out.textContent = `Measured: ${result.toUpperCase()}! Always exactly up or down — never sideways. (Up was ${Math.round(pUp*100)}% likely.)`;
+  };
+  draw();
+})();
+
+/* ============ ENTANGLEMENT ============ */
+(function(){
+  const A=document.getElementById('eboxA'), B=document.getElementById('eboxB'), out=document.getElementById('entReadout');
+  let measured=false;
+  function reset(){ measured=false; A.textContent='❔'; B.textContent='❔'; A.classList.remove('lit'); B.classList.remove('lit');
+    out.textContent='A fresh entangled pair is ready. Neither has a value yet — they’re linked but undecided.'; }
+  document.getElementById('entMeasure').onclick = () => {
+    if(measured){ out.textContent='Already measured this pair. Re-entangle a new pair to try again.'; return; }
+    measured=true;
+    const left = Math.random()<.5 ? '⬆️' : '⬇️';
+    const right = left==='⬆️' ? '⬇️' : '⬆️'; // anti-correlated
+    A.textContent=left; A.classList.add('lit');
+    setTimeout(()=>{ B.textContent=right; B.classList.add('lit');
+      out.textContent='The instant you measured the LEFT one, the RIGHT one was decided too — opposite, guaranteed, no matter the distance. Spooky!'; }, 350);
+    out.textContent='Measuring LEFT…';
+  };
+  document.getElementById('entReset').onclick = reset;
+  reset();
+})();
+
+/* ============ QUIZ ============ */
+(function(){
+  const questions = [
+    { q: 'In the double-slit experiment, why do single particles still make many stripes?',
+      a: ['Because each one interferes with itself like a wave','Because the slits are dirty','Because particles repel each other'], correct:0 },
+    { q: 'A quantum thing in "superposition" is best described as…',
+      a: ['Definitely heads, we just can’t see it','Genuinely both possibilities until measured','Broken'], correct:1 },
+    { q: 'The Uncertainty Principle says you can’t perfectly know both a particle’s…',
+      a: ['Color and smell','Position and speed','Name and age'], correct:1 },
+    { q: 'Why does an electron emit a specific color of light when it drops levels?',
+      a: ['It releases an exact-sized chunk of energy','It gets hot','It changes mass'], correct:0 },
+    { q: 'Quantum tunneling lets a particle…',
+      a: ['Move faster than light','Pass through a barrier it couldn’t normally cross','Become two particles'], correct:1 },
+    { q: 'Measure entangled particle A and you instantly know about B because…',
+      a: ['A sends a fast radio signal','Their outcomes were linked from the start','It’s a coincidence'], correct:1 },
+  ];
+  let score=0, answered=0;
+  const box=document.getElementById('quizBox');
+  document.getElementById('total').textContent = questions.length;
+  questions.forEach((item, qi) => {
+    const wrap=document.createElement('div'); wrap.className='quiz';
+    const q=document.createElement('div'); q.className='q'; q.textContent=(qi+1)+'. '+item.q; wrap.appendChild(q);
+    const fb=document.createElement('div'); fb.className='feedback';
+    let done=false;
+    item.a.forEach((opt,oi)=>{
+      const b=document.createElement('button'); b.className='opt'; b.textContent=opt;
+      b.onclick=()=>{
+        if(done) return; done=true; answered++;
+        if(oi===item.correct){ b.classList.add('correct'); fb.textContent='Correct! 🎉'; fb.style.color='#8cff9e'; score++; }
+        else { b.classList.add('wrong'); fb.textContent='Not quite — the highlighted answer is right.'; fb.style.color='#ff9eae';
+          wrap.querySelectorAll('.opt')[item.correct].classList.add('correct'); }
+        document.getElementById('score').textContent=score;
+      };
+      wrap.appendChild(b);
+    });
+    wrap.appendChild(fb); box.appendChild(wrap);
+  });
+})();
+</script>
+
+<!-- BHS-DEMO-BANNER -->
+<div id="bhs-demo-banner" style="position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:#0b0d12;color:#e7e9ee;border-top:2px solid #ffb020;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;box-shadow:0 -8px 24px rgba(0,0,0,.45)">
+  <div style="max-width:1100px;margin:0 auto;padding:10px 48px 10px 16px;position:relative">
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#ffb020;font-weight:700;margin-bottom:4px">
+      BHS Hackathon · Prompting demo · v2 — this site was built from exactly this prompt
+    </div>
+    <div style="color:#cdd2db;white-space:pre-wrap;word-break:break-word">Build me an interactive website that explains all the major fundamentals of quantum physics. The site should be fun and playful and use interaction as a way to describe the details in a way that even middle schoolers could understand.</div>
+    <button onclick="document.getElementById('bhs-demo-banner').style.display='none'" aria-label="Hide" style="position:absolute;top:8px;right:10px;background:transparent;border:1px solid #3a3f4b;color:#9aa1ad;border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:14px;line-height:1">×</button>
+  </div>
+</div>
+<!-- /BHS-DEMO-BANNER -->
+
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QUANTUM//LAB — an interactive field guide to the small</title>
+  <meta name="description" content="A hands-on, animated field guide to quantum physics. Real 3D, real interaction, one concept at a time." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="nav-mount"></div>
+
+  <!-- ===================== LEVEL 1: HERO ===================== -->
+  <header class="hero">
+    <div id="hero-canvas"></div>
+    <div class="hero__inner wrap">
+      <span class="eyebrow" data-reveal>Field guide // 01–09</span>
+      <h1 data-reveal>The rules of the<br><span class="ghost">very small</span></h1>
+      <p class="hero__sub" data-reveal>Nine ideas that run the universe at its smallest scale. Each one is a
+        machine you can grab, twist, and break on purpose. No equations to memorize, just things to push.</p>
+      <div class="hero__meta">
+        <div data-reveal>INTERACTIVE DEMOS<b>20+</b></div>
+        <div data-reveal>RENDERED IN<b>real 3D</b></div>
+        <div data-reveal>EQUATIONS REQUIRED<b>zero</b></div>
+      </div>
+      <div style="margin-top:34px; display:flex; gap:14px; flex-wrap:wrap" data-reveal>
+        <a class="btn" href="#map">Open the map &darr;</a>
+        <a class="btn btn--ghost" href="pages/double-slit.html">Start with the famous one</a>
+      </div>
+    </div>
+    <div class="scroll-cue">SCROLL TO EXPLORE</div>
+  </header>
+
+  <!-- ===================== LEVEL 1 -> 2: THE MAP ===================== -->
+  <section class="map wrap" id="map">
+    <div class="map__head">
+      <div>
+        <span class="eyebrow" data-reveal>The map</span>
+        <h2 data-reveal>Pick a door. Every<br>tile drills down.</h2>
+      </div>
+      <p data-reveal style="max-width:34ch">The tiles are sized by how much there is to play with, not by importance.
+        Bigger tile, bigger toy. Click any one to drop into its lab.</p>
+    </div>
+
+    <div class="map-grid">
+      <a class="node span-7" href="pages/double-slit.html" data-seed="11" data-reveal>
+        <span class="node__no">03 / THE ONE EVERYONE KNOWS</span>
+        <h3>The Double Slit</h3>
+        <p>Fire particles one at a time and watch an interference pattern build from nothing.</p>
+        <span class="go">ENTER LAB &rarr;</span>
+      </a>
+      <a class="node span-5" href="pages/superposition.html" data-seed="22" data-hue="cyan" data-reveal>
+        <span class="node__no">02</span>
+        <h3>Superposition</h3>
+        <p>Spin a qubit on a real 3D Bloch sphere, then measure it and watch it snap.</p>
+        <span class="go">ENTER LAB &rarr;</span>
+      </a>
+
+      <a class="node span-4" href="pages/wave-particle.html" data-seed="33" data-reveal>
+        <span class="node__no">01</span>
+        <h3>Wave / Particle</h3>
+        <p>Build a wave packet and watch a thing be a wave and a dot at once.</p>
+        <span class="go">ENTER LAB &rarr;</span>
+      </a>
+      <a class="node span-4" href="pages/entanglement.html" data-seed="44" data-hue="cyan" data-reveal>
+        <span class="node__no">06</span>
+        <h3>Entanglement</h3>
+        <p>Two particles, any distance apart, that always disagree the instant you look.</p>
+        <span class="go">ENTER LAB &rarr;</span>
+      </a>
+      <a class="node span-4" href="pages/tunneling.html" data-seed="55" data-reveal>
+        <span class="node__no">07</span>
+        <h3>Tunneling</h3>
+        <p>Throw a ball at a wall too tall to clear, and sometimes it appears on the far side.</p>
+        <span class="go">ENTER LAB &rarr;</span>
+      </a>
+
+      <a class="node span-6" href="pages/quantization.html" data-seed="66" data-hue="cyan" data-reveal>
+        <span class="node__no">05</span>
+        <h3>Quantization</h3>
+        <p>Energy comes in steps, not slopes. Click an electron jump and hear it in real color.</p>
+        <span class="go">ENTER LAB &rarr;</span>
+      </a>
+      <a class="node span-3" href="pages/uncertainty.html" data-seed="77" data-reveal>
+        <span class="node__no">04</span>
+        <h3>Uncertainty</h3>
+        <p>Squeeze the position, the momentum blows up. A live Fourier seesaw.</p>
+        <span class="go">ENTER LAB &rarr;</span>
+      </a>
+      <a class="node span-3" href="pages/spin.html" data-seed="88" data-reveal>
+        <span class="node__no">08</span>
+        <h3>Spin</h3>
+        <p>Send atoms through a magnet and the beam splits cleanly in two.</p>
+        <span class="go">ENTER LAB &rarr;</span>
+      </a>
+
+      <a class="node span-12" href="pages/measurement.html" data-seed="99" data-hue="cyan" data-reveal>
+        <span class="node__no">09 / WHERE IT ALL POINTS</span>
+        <h3>Measurement &amp; Collapse</h3>
+        <p>The idea hiding under all the others: a fog of maybe, frozen into one fact the moment you check.</p>
+        <span class="go">ENTER LAB &rarr;</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- a closing manifesto strip, fully visible copy -->
+  <section class="wrap prose" style="padding-bottom:14vh">
+    <span class="eyebrow" data-reveal>How to use this</span>
+    <p class="big" data-reveal>You are not supposed to "get it" on the first read. You are supposed to play with it.</p>
+    <p data-reveal>Quantum physics feels strange because our intuition was built by throwing rocks and watching them land,
+      not by watching electrons. Every lab here turns one weird rule into a knob you can turn. Twist it past the
+      sensible range. Break it. The point where it stops making sense is exactly where the physics lives.</p>
+  </section>
+
+  <footer class="wrap foot">
+    <span>QUANTUM//LAB — an interactive field guide</span>
+    <span>BUILT WITH THREE.JS r128 + GSAP</span>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="app.js"></script>
+
+  <!-- BHS-DEMO-BANNER -->
+  <div id="bhs-demo-banner" style="position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:#0b0d12;color:#e7e9ee;border-top:2px solid #ffb33e;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;box-shadow:0 -8px 24px rgba(0,0,0,.45)">
+    <div style="max-width:1100px;margin:0 auto;padding:10px 48px 10px 16px;position:relative">
+      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#ffb33e;font-weight:700;margin-bottom:4px">
+        BHS Hackathon &middot; Prompting demo &middot; v3 &mdash; this site was built from exactly this prompt
+      </div>
+      <div style="color:#cdd2db;white-space:pre-wrap;word-break:break-word">I want you to build me a jaw-dropping, highly interactive, content-rich, multi-level (drilldowns and drill-ins) website about quantum physics. Go heavy on style and 'wow' &mdash; bold and immersive, not corporate-crisp. Lead with interaction and visualization: every concept gets a hands-on, animated demo, and content stays visible, not hidden behind accordions. Use a real 3D/canvas engine (Three.js) and GSAP for the interactions. Pull and apply Skills from the hyperframe skill library (github), and design principles from impeccable (https://github.com/pbakaus/impeccable) and taste (https://github.com/Leonxlnx/taste-skill).</div>
+      <button onclick="document.getElementById('bhs-demo-banner').style.display='none'" aria-label="Hide" style="position:absolute;top:8px;right:10px;background:transparent;border:1px solid #3a3f4b;color:#9aa1ad;border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:14px;line-height:1">&times;</button>
+    </div>
+  </div>
+  <!-- /BHS-DEMO-BANNER -->
+</body>
+</html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               

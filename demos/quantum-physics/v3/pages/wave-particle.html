@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wave / Particle — QUANTUM//LAB</title>
+  <meta name="description" content="Build a de Broglie wave packet in 3D. Add more waves and watch a spread-out ripple bunch into a moving lump that acts like a particle." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div id="nav-mount"></div>
+
+  <section class="topic-hero wrap">
+    <span class="eyebrow" data-reveal>Lab 01 // two faces</span>
+    <h1 data-reveal>It travels like a wave.<br>It arrives like a dot.</h1>
+    <p class="lede" data-reveal>Louis de Broglie's wild 1924 guess: everything that moves is also a wave, even you,
+      just with a wavelength too tiny to notice. For an electron the wave is huge by comparison. The trick to making
+      a "particle" out of waves is to stack many wavelengths so they pile up in one spot. That moving lump is a wave
+      packet, and it is the closest thing quantum mechanics has to a particle.</p>
+  </section>
+
+  <section class="bigviz wrap">
+    <div class="lab">
+      <div class="stage" id="wp-stage">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <span class="stage__tag">WAVE PACKET // 3D field, &Sigma; of waves</span>
+        <canvas id="wp-canvas"></canvas>
+      </div>
+      <aside class="panel">
+        <div class="panel__title">Packet builder</div>
+        <div class="ctrl">
+          <label>Number of waves stacked <span class="val" id="wp-n-v">12</span></label>
+          <input type="range" id="wp-n" min="1" max="40" value="12" />
+        </div>
+        <div class="ctrl">
+          <label>Ripple wavelength <span class="val" id="wp-sp-v">medium</span></label>
+          <input type="range" id="wp-sp" min="2" max="40" value="16" />
+        </div>
+        <div class="ctrl">
+          <label>Travel speed <span class="val" id="wp-v-v">1.0&times;</span></label>
+          <input type="range" id="wp-v" min="0" max="30" value="12" />
+        </div>
+        <div class="readout">
+          <div class="row"><span class="k">Looks like a</span><span class="v amber" id="wp-mode">spread wave</span></div>
+          <div class="row"><span class="k">Position certainty</span><span class="v" id="wp-cert">low</span></div>
+        </div>
+      </aside>
+    </div>
+    <p class="flow-note" data-reveal>Stack just one wave and it fills all of space, total wave, no location. Stack
+      many and they cancel everywhere except one bump, which then looks and moves like a particle. More waves, sharper bump.</p>
+  </section>
+
+  <section class="subs wrap">
+    <article class="sub">
+      <div>
+        <h2 data-reveal>de Broglie's bargain</h2>
+        <p data-reveal>The faster something moves, the shorter its wavelength: wavelength equals Planck's constant
+          divided by momentum. A thrown baseball has a wavelength of about 10⁻³⁴ metres, unmeasurably small, so it
+          looks purely like a particle. An electron's wavelength is roomy enough to diffract through a crystal, which
+          is exactly how electron microscopes work.</p>
+      </div>
+      <div class="sub__viz stage" id="wp-mini1"><span class="stage__tag">&lambda; vs MOMENTUM</span></div>
+    </article>
+
+    <article class="sub">
+      <div>
+        <h2 data-reveal>Sharper in space, blurrier in speed</h2>
+        <p data-reveal>To localise the packet tightly you must blend a wide range of wavelengths, which means a wide
+          range of momenta. Squeeze the packet narrow and its velocity becomes uncertain. You just discovered the
+          uncertainty principle by accident, it falls straight out of stacking waves.</p>
+      </div>
+      <div class="sub__viz stage" id="wp-mini2"><span class="stage__tag">PACKET WIDTH TRADE</span></div>
+    </article>
+  </section>
+
+  <section class="facts wrap">
+    <div class="fact" data-reveal><b>1924</b><span>de Broglie's thesis</span></div>
+    <div class="fact" data-reveal><b>1927</b><span>electron waves confirmed</span></div>
+    <div class="fact" data-reveal><b>10⁻³⁴</b><span>baseball wavelength (m)</span></div>
+    <div class="fact" data-reveal><b>&lambda;=h/p</b><span>the whole idea</span></div>
+  </section>
+
+  <section class="prose wrap">
+    <p class="big" data-reveal>The question "is it a wave or a particle?" has the wrong shape.</p>
+    <p data-reveal>It is neither, in the way those words mean for everyday objects. It is a quantum thing that spreads
+      and interferes like a wave while it travels and deposits its energy in one lump when it lands. The two faces are
+      not a contradiction, they are two questions you can ask. Ask about its path and you get wave behaviour. Ask where
+      it hit and you get a single point.</p>
+  </section>
+
+  <nav class="pager wrap" id="pager-mount"></nav>
+  <footer class="wrap foot"><span>QUANTUM//LAB</span><span>LAB 01 // WAVE / PARTICLE</span></footer>
+
+  <script>window.__ACTIVE_TOPIC = "wave-particle";</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="../app.js"></script>
+  <script>
+  // ---- 3D wave packet: a line of points whose height = sum of sine waves ----
+  (function(){
+    const stage=document.getElementById("wp-stage"); const cv=document.getElementById("wp-canvas");
+    const scene=new THREE.Scene();
+    const cam=new THREE.PerspectiveCamera(50,1,0.1,200); cam.position.set(0,14,34); cam.lookAt(0,0,0);
+    const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+    QUANTUM.fitRenderer(renderer,cam,stage);
+
+    const COUNT=200, SPAN=64, MAXN=40;
+    const xs=new Float32Array(COUNT);
+    for(let i=0;i<COUNT;i++) xs[i]=(i/(COUNT-1)-0.5)*SPAN;
+
+    // pre-make MAXN faint component waves, layered in depth; reveal as many as are "stacked"
+    const comps=[];
+    for(let m=0;m<MAXN;m++){
+      const p=new Float32Array(COUNT*3);
+      for(let i=0;i<COUNT;i++) p[i*3]=xs[i];
+      const g=new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(p,3));
+      const line=new THREE.Line(g, new THREE.LineBasicMaterial({color:0x41e0d6, transparent:true, opacity:0.28}));
+      line.visible=false; scene.add(line); comps.push({line,g});
+    }
+    // the bold resultant — the actual sum of the visible waves — sitting up front
+    const sumP=new Float32Array(COUNT*3);
+    for(let i=0;i<COUNT;i++) sumP[i*3]=xs[i];
+    const sumG=new THREE.BufferGeometry(); sumG.setAttribute("position", new THREE.BufferAttribute(sumP,3));
+    const sumLine=new THREE.Line(sumG, new THREE.LineBasicMaterial({color:0xffb33e, transparent:true, opacity:0.98}));
+    scene.add(sumLine);
+    // baseline axis
+    const axis=new THREE.Line(new THREE.BufferGeometry().setFromPoints(
+      [new THREE.Vector3(-SPAN/2,0,0), new THREE.Vector3(SPAN/2,0,0)]),
+     

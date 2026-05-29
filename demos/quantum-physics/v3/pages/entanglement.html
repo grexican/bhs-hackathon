@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Entanglement — QUANTUM//LAB</title>
+  <meta name="description" content="Measure one entangled particle and its partner instantly takes the opposite value, no matter the distance. Run trials and watch the anti-correlation tally build." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div id="nav-mount"></div>
+
+  <section class="topic-hero wrap">
+    <span class="eyebrow" data-reveal>Lab 06 // spooky action</span>
+    <h1 data-reveal>Two particles. One fate.<br>Any distance apart.</h1>
+    <p class="lede" data-reveal>Make two particles together in the right way and their futures lock. Neither has a
+      definite value on its own, yet the moment you measure one, the other instantly settles on the opposite, whether
+      it sits on the next bench or across the galaxy. Einstein hated it and called it "spooky action at a distance."
+      Decades of experiments say it is real. Fire pairs below and watch the tally.</p>
+  </section>
+
+  <section class="bigviz wrap">
+    <div class="lab">
+      <div class="stage" id="en-stage">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <span class="stage__tag">EPR PAIR // 3D source firing entangled particles</span>
+        <canvas id="en-canvas"></canvas>
+      </div>
+      <aside class="panel">
+        <div class="panel__title">Bell test</div>
+        <div class="ctrl">
+          <button class="btn" id="en-fire" style="width:100%; justify-content:center">Measure Alice's particle</button>
+        </div>
+        <div class="ctrl">
+          <button class="btn btn--ghost" id="en-auto" style="width:100%; justify-content:center">Run 100 trials</button>
+        </div>
+        <div class="readout">
+          <div class="row"><span class="k">Alice got</span><span class="v" id="en-a">—</span></div>
+          <div class="row"><span class="k">Bob got</span><span class="v amber" id="en-b">—</span></div>
+          <div class="row"><span class="k">Trials</span><span class="v" id="en-t">0</span></div>
+          <div class="row"><span class="k">Always opposite?</span><span class="v" id="en-match">—</span></div>
+        </div>
+        <div class="panel__title" style="margin-top:18px">Outcome tally</div>
+        <div class="tally">
+          <div><div style="font-size:.72rem;color:var(--ink-faint);margin-bottom:6px">↑↓ opposite</div>
+            <div class="bar"><i id="en-bar-opp"></i></div></div>
+          <div><div style="font-size:.72rem;color:var(--ink-faint);margin-bottom:6px">↑↑ same</div>
+            <div class="bar rose"><i id="en-bar-same"></i></div></div>
+        </div>
+      </aside>
+    </div>
+    <p class="flow-note" data-reveal>In this perfectly anti-correlated pair the "same" bar should stay empty no matter
+      how many trials you run. That stubborn perfection is the whole mystery.</p>
+  </section>
+
+  <section class="subs wrap">
+    <article class="sub">
+      <div>
+        <h2 data-reveal>Not a hidden note</h2>
+        <p data-reveal>The easy explanation is that the particles agreed on their answers before they split, like
+          tearing a glove pair and mailing one of each. John Bell found a clever test: measure along tilted angles
+          and count the matches. Pre-arranged answers can only go so far. Real entangled particles beat that limit.
+          There was no note. The correlation is created at the instant of measurement.</p>
+      </div>
+      <div class="sub__viz stage" id="en-mini1"><span class="stage__tag">BELL ANGLE TEST</span></div>
+    </article>
+
+    <article class="sub">
+      <div>
+        <h2 data-reveal>No, you can't text with it</h2>
+        <p data-reveal>It looks like instant communication, but it isn't. Alice sees random outcomes; so does Bob.
+          Only when they later compare notes, over an ordinary slower-than-light channel, does the eerie correlation
+          show up. Relativity survives. What entanglement does power is quantum computing, quantum cryptography, and
+          teleportation of quantum states.</p>
+      </div>
+      <div class="sub__viz stage" id="en-mini2"><span class="stage__tag">RANDOM LOCALLY, LINKED GLOBALLY</span></div>
+    </article>
+  </section>
+
+  <section class="facts wrap">
+    <div class="fact" data-reveal><b>1935</b><span>the EPR paper</span></div>
+    <div class="fact" data-reveal><b>1964</b><span>Bell's inequality</span></div>
+    <div class="fact" data-reveal><b>2022</b><span>Nobel Prize awarded</span></div>
+    <div class="fact" data-reveal><b>0</b><span>bits sent faster than light</span></div>
+  </section>
+
+  <section class="prose wrap">
+    <p class="big" data-reveal>The link is not a signal. It is a shared identity.</p>
+    <p data-reveal>Before measurement the pair has no separate parts to speak of, just one joint state spread across
+      both particles. Measuring is not Alice sending a command to Bob. It is the single shared state resolving all at
+      once. Nothing travels between them because there were never quite two independent things to begin with.</p>
+  </section>
+
+  <nav class="pager wrap" id="pager-mount"></nav>
+  <footer class="wrap foot"><span>QUANTUM//LAB</span><span>LAB 06 // ENTANGLEMENT</span></footer>
+
+  <script>window.__ACTIVE_TOPIC = "entanglement";</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="../app.js"></script>
+  <script>
+  // ---- 3D source firing pairs left/right; on measure they pick opposite colors ----
+  (function(){
+    const stage=document.getElementById("en-stage"); const cv=document.getElementById("en-canvas");
+    const scene=new THREE.Scene();
+    const cam=new THREE.PerspectiveCamera(50,1,0.1,200); cam.position.set(0,3,26); cam.lookAt(0,0,0);
+    const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+    QUANTUM.fitRenderer(renderer,cam,stage);
+    // source
+    const src=new THREE.Mesh(new THREE.SphereGeometry(0.8,16,16), new THREE.MeshBasicMaterial({color:0xffffff}));
+    scene.add(src);
+    // Alice (left) and Bob (right) particles, start grey (undetermined)
+    const grey=0x8d8a82;
+    const A=new THREE.Mesh(new THREE.SphereGeometry(1.1,24,24), new THREE.MeshBasicMaterial({color:grey}));
+    const B=new THREE.Mesh(new THREE.SphereGeometry(1.1,24,24), new THREE.MeshBasicMaterial({color:grey}));
+    A.position.x=-9; B.position.x=9; scene.add(A,B);
+    // detectors
+    [-12,12].forEach(x=>{ const d=new THREE.Mesh(new THREE.RingGeometry(1.6,1.9,24),
+      new THREE.MeshBasicMaterial({color:0x3a3746,side:THREE.DoubleSide})); d.position.x=x; scene.add(d); });
+    // link line
+    const linkGeo=new THREE.BufferGeometry().setFromPoints([A.position,B.position]);
+    const link=new THREE.Line(linkGeo, new THREE.LineDashedMaterial({color:0x41e0d6,dashSize:0.6,gapSize:0.4,transparent:true,opacity:0.5}));
+    link.computeLineDistances(); scene.add(link);
+
+    let phase=0;
+    QUANTUM.loop(

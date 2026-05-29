@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quantum Physics — A Beginner's Guide</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #141b33;
+      --accent: #6ea8fe;
+      --accent-soft: #9bc1ff;
+      --text: #e8ecf6;
+      --muted: #a4adc4;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* Top banner with a soft gradient so the page feels less plain */
+    header {
+      background: radial-gradient(circle at 20% 30%, #1d2a52 0%, #0b1020 70%);
+      padding: 4rem 1.5rem 3rem;
+      text-align: center;
+      border-bottom: 1px solid #233056;
+    }
+
+    header h1 {
+      margin: 0 0 0.5rem;
+      font-size: 2.6rem;
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      margin: 0 auto;
+      max-width: 620px;
+      color: var(--muted);
+      font-size: 1.1rem;
+    }
+
+    /* Simple in-page nav linking to each section */
+    nav {
+      position: sticky;
+      top: 0;
+      background: rgba(11, 16, 32, 0.92);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid #233056;
+      text-align: center;
+      padding: 0.75rem 1rem;
+      z-index: 10;
+    }
+
+    nav a {
+      color: var(--accent-soft);
+      text-decoration: none;
+      margin: 0 0.75rem;
+      font-size: 0.95rem;
+    }
+
+    nav a:hover { color: #fff; text-decoration: underline; }
+
+    main {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid #233056;
+      border-radius: 12px;
+      padding: 1.75rem 2rem;
+      margin-bottom: 2rem;
+    }
+
+    section h2 {
+      margin-top: 0;
+      color: var(--accent);
+      font-size: 1.6rem;
+    }
+
+    section h3 {
+      color: var(--accent-soft);
+      margin-bottom: 0.25rem;
+    }
+
+    p { color: var(--text); }
+    .muted { color: var(--muted); }
+
+    ul { padding-left: 1.25rem; }
+    li { margin-bottom: 0.4rem; }
+
+    footer {
+      text-align: center;
+      padding: 2rem 1.5rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+      border-top: 1px solid #233056;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Quantum Physics</h1>
+    <p>The strange and beautiful rules that govern the smallest pieces of the universe — atoms, electrons, and light itself.</p>
+  </header>
+
+  <nav>
+    <a href="#intro">Introduction</a>
+    <a href="#concepts">Key Concepts</a>
+    <a href="#experiments">Famous Experiments</a>
+    <a href="#applications">Applications</a>
+    <a href="#learn-more">Learn More</a>
+  </nav>
+
+  <main>
+    <section id="intro">
+      <h2>What Is Quantum Physics?</h2>
+      <p>Quantum physics (also called quantum mechanics) is the branch of science that describes how matter and energy behave at the tiniest scales — the level of atoms and subatomic particles. At this scale, the familiar rules of everyday life break down and are replaced by surprising, often counterintuitive behavior.</p>
+      <p class="muted">Developed in the early 20th century by scientists like Max Planck, Albert Einstein, Niels Bohr, and Erwin Schrödinger, quantum theory is one of the most successful and precisely tested theories in all of science.</p>
+    </section>
+
+    <section id="concepts">
+      <h2>Key Concepts</h2>
+
+      <h3>Quantization</h3>
+      <p>Energy doesn't flow smoothly; it comes in tiny, discrete packets called <em>quanta</em>. This is where the field gets its name.</p>
+
+      <h3>Wave-Particle Duality</h3>
+      <p>Particles like electrons and photons can behave like both particles and waves, depending on how you observe them.</p>
+
+      <h3>Superposition</h3>
+      <p>A quantum system can exist in multiple states at once until it is measured — the famous idea behind "Schrödinger's cat."</p>
+
+      <h3>Uncertainty Principle</h3>
+      <p>Formulated by Werner Heisenberg, it states that you cannot know both the exact position and the exact momentum of a particle at the same time.</p>
+
+      <h3>Entanglement</h3>
+      <p>Two particles can become linked so that measuring one instantly affects the other, no matter how far apart they are — what Einstein called "spooky action at a distance."</p>
+    </section>
+
+    <section id="experiments">
+      <h2>Famous Experiments</h2>
+      <ul>
+        <li><strong>The Double-Slit Experiment</strong> — demonstrated that particles produce wave-like interference patterns, the cornerstone of wave-particle duality.</li>
+        <li><strong>The Photoelectric Effect</strong> — explained by Einstein in 1905, showing that light delivers energy in discrete quanta (photons).</li>
+        <li><strong>Stern–Gerlach Experiment</strong> — revealed that particles have a quantized property called "spin."</li>
+        <li><strong>Bell Test Experiments</strong> — confirmed that quantum entanglement is real and cannot be explained by hidden classical variables.</li>
+      </ul>
+    </section>
+
+    <section id="applications">
+      <h2>Everyday Applications</h2>
+      <p>Quantum physics isn't just abstract theory — it powers much of modern technology:</p>
+      <ul>
+        <li><strong>Computers &amp; smartphones</strong> rely on transistors, which work because of quantum behavior in semiconductors.</li>
+        <li><strong>Lasers</strong> in everything from barcode scanners to surgery use quantum principles.</li>
+        <li><strong>MRI machines</strong> in hospitals use quantum spin to image the body.</li>
+        <li><strong>Quantum computers</strong> use superposition and entanglement to solve certain problems far faster than ordinary computers.</li>
+      </ul>
+    </section>
+
+    <section id="learn-more">
+      <h2>Learn More</h2>
+      <p>Quantum physics rewards curiosity. If you'd like to dig deeper, here are some great starting points:</p>
+      <ul>
+        <li>"Six Easy Pieces" by Richard Feynman — a friendly introduction.</li>
+        <li>"In Search of Schrödinger's Cat" by John Gribbin — the history of the ideas.</li>
+        <li>Online lectures from MIT OpenCourseWare and university physics channels.</li>
+      </ul>
+      <p class="muted">The deeper you go, the stranger and more wonderful it gets.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>An introductory guide to quantum physics. Built as a simple static website.</p>
+  </footer>
+
+<!-- BHS-DEMO-BANNER -->
+<div id="bhs-demo-banner" style="position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:#0b0d12;color:#e7e9ee;border-top:2px solid #ffb020;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;box-shadow:0 -8px 24px rgba(0,0,0,.45)">
+  <div style="max-width:1100px;margin:0 auto;padding:10px 48px 10px 16px;position:relative">
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#ffb020;font-weight:700;margin-bottom:4px">
+      BHS Hackathon · Prompting demo · v1 — this site was built from exactly this prompt
+    </div>
+    <div style="color:#cdd2db;white-space:pre-wrap;word-break:break-word">Build me a website about quantum physics</div>
+    <button onclick="document.getElementById('bhs-demo-banner').style.display='none'" aria-label="Hide" style="position:absolute;top:8px;right:10px;background:transparent;border:1px solid #3a3f4b;color:#9aa1ad;border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:14px;line-height:1">×</button>
+  </div>
+</div>
+<!-- /BHS-DEMO-BANNER -->
+
+</body>
+</html>
