@@ -101,7 +101,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
   <script src="../app.js"></script>
   <script>
-  // ---- 3D wave packet: a line of points whose height = sum of sine waves ----
+  // ---- 3D wave packet: many stacked component waves summing to a packet ----
   (function(){
     const stage=document.getElementById("wp-stage"); const cv=document.getElementById("wp-canvas");
     const scene=new THREE.Scene();
@@ -131,4 +131,101 @@
     // baseline axis
     const axis=new THREE.Line(new THREE.BufferGeometry().setFromPoints(
       [new THREE.Vector3(-SPAN/2,0,0), new THREE.Vector3(SPAN/2,0,0)]),
-     
+      new THREE.LineBasicMaterial({color:0x3a3746})); scene.add(axis);
+    // the "particle" marker that rides the packet center once it localizes
+    const marker=new THREE.Mesh(new THREE.SphereGeometry(0.9,16,16),
+      new THREE.MeshBasicMaterial({color:0xff8a1e, transparent:true, opacity:0})); scene.add(marker);
+
+    let nWaves=12, k0=0.9, speed=12;
+    const GAP=0.7;
+    // m-th wave's wavenumber, spread symmetrically around k0; all phased to align at the center
+    function kOf(m,N){ return N<=1 ? k0 : (k0 - k0*0.35) + m*((k0*0.7)/(N-1)); }
+
+    QUANTUM.loop((t)=>{
+      const tt=t*0.001;
+      const N=nWaves;
+      const x0=(SPAN*0.34)*Math.sin(tt*(speed/12)*0.5);   // the whole stack glides together
+      const zBase=-(N-1)/2*GAP;
+      // each faint component: a pure sine of its own wavelength, stacked in depth
+      for(let m=0;m<MAXN;m++){
+        const c=comps[m];
+        if(m>=N){ if(c.line.visible) c.line.visible=false; continue; }
+        c.line.visible=true;
+        const km=kOf(m,N), z=zBase+m*GAP, a=c.g.attributes.position.array;
+        for(let i=0;i<COUNT;i++){ a[i*3+1]=2.4*Math.cos(km*(xs[i]-x0)); a[i*3+2]=z; }
+        c.g.attributes.position.needsUpdate=true;
+      }
+      // bold resultant = the true sum of those same waves, normalized, up front
+      const frontZ=(N-1)/2*GAP+4, a=sumG.attributes.position.array;
+      for(let i=0;i<COUNT;i++){
+        let s=0; for(let m=0;m<N;m++) s+=Math.cos(kOf(m,N)*(xs[i]-x0));
+        a[i*3+1]=(s/N)*8; a[i*3+2]=frontZ;
+      }
+      sumG.attributes.position.needsUpdate=true;
+      // the particle fades in as the stack localizes into one lump
+      const loc=Math.max(0, Math.min(1, (nWaves-4)/8));
+      marker.position.set(x0, 9, frontZ);
+      marker.visible=loc>0.04; marker.material.opacity=loc;
+      const ms=0.6+loc*0.6; marker.scale.set(ms,ms,ms);
+      renderer.render(scene,cam);
+    });
+
+    const upd=()=>{
+      let mode, cert;
+      if(nWaves<=4){ mode="spread wave"; cert="low"; }
+      else if(nWaves<12){ mode="localizing…"; cert="medium"; }
+      else { mode="a particle (lump)"; cert="high"; }
+      document.getElementById("wp-mode").textContent=mode;
+      document.getElementById("wp-cert").textContent=cert;
+    };
+    const nEl=document.getElementById("wp-n"); nEl.addEventListener("input",()=>{nWaves=+nEl.value;
+      document.getElementById("wp-n-v").textContent=nWaves; upd();});
+    const spEl=document.getElementById("wp-sp"); spEl.addEventListener("input",()=>{ k0=0.4 + (spEl.value/40)*1.4;
+      document.getElementById("wp-sp-v").textContent= spEl.value<12?"long":spEl.value>28?"short":"medium";});
+    const vEl=document.getElementById("wp-v"); vEl.addEventListener("input",()=>{speed=+vEl.value;
+      document.getElementById("wp-v-v").textContent=(speed/12).toFixed(1)+"×";});
+    upd();
+    window.addEventListener("resize", ()=>QUANTUM.fitRenderer(renderer,cam,stage));
+  })();
+
+  // ---- mini 1: lambda vs momentum hyperbola ----
+  (function(){
+    const host=document.getElementById("wp-mini1"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H,mx=0.5;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    host.addEventListener("pointermove",e=>{const r=host.getBoundingClientRect(); mx=(e.clientX-r.left)/W;});
+    window.addEventListener("resize", size);
+    QUANTUM.loop(()=>{
+      ctx.clearRect(0,0,W,H);
+      ctx.strokeStyle="#ffb33e"; ctx.lineWidth=2; ctx.beginPath();
+      for(let x=8;x<=W;x++){ const p=x/W; const y=H-14-(0.06/(p+0.04))*H; x===8?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke();
+      const px=mx*W; const py=H-14-(0.06/(mx+0.04))*H;
+      ctx.fillStyle="#41e0d6"; ctx.beginPath(); ctx.arc(px,py,6,0,7); ctx.fill();
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'"; ctx.fillText("momentum →",10,H-4);
+      ctx.save(); ctx.translate(12,H/2); ctx.rotate(-Math.PI/2); ctx.fillText("wavelength →",0,0); ctx.restore();
+    });
+  })();
+
+  // ---- mini 2: width trade-off, two gaussians breathing in anti-phase ----
+  (function(){
+    const host=document.getElementById("wp-mini2"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    QUANTUM.loop((t)=>{
+      ctx.clearRect(0,0,W,H);
+      const w=0.5+Math.sin(t*0.0008)*0.42; // position width
+      function gauss(color, sigma, baseY){
+        ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
+        for(let x=0;x<=W;x++){ const u=(x-W/2)/(W*0.16); const y=baseY-Math.exp(-u*u/(sigma*sigma))*(H*0.32);
+          x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke();
+      }
+      gauss("#ffb33e", w, H*0.46);          // position
+      gauss("#41e0d6", 1.0-w+0.1, H*0.94);  // momentum (anti-correlated)
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'";
+      ctx.fillText("position", 10, 16); ctx.fillText("momentum (speed)", 10, H*0.5+18);
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -27,7 +27,7 @@
       <div class="stage" id="tn-stage">
         <span class="corner tl"></span><span class="corner tr"></span>
         <span class="corner bl"></span><span class="corner br"></span>
-        <span class="stage__tag">BARRIER // wave amplitude decaying inside</span>
+        <span class="stage__tag">BARRIER // the wave decays as it crosses the wall</span>
         <canvas id="tn-canvas"></canvas>
       </div>
       <aside class="panel">
@@ -102,7 +102,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
   <script src="../app.js"></script>
   <script>
-  // ---- main barrier: wave packet hits barrier, amplitude decays inside, partial transmit ----
+  // ---- main barrier: a wave crosses a full-height wall and decays inside it ----
   (function(){
     const host=document.getElementById("tn-stage"); const cv=document.getElementById("tn-canvas");
     const ctx=cv.getContext("2d"); let W,H;
@@ -128,4 +128,130 @@
       const A0 = 16;                            // incoming amplitude
       const Aout = Math.max(A0*Math.sqrt(T), 0.6);   // transmitted amplitude, always <= A0
       const kappa = -Math.log(Aout/A0)/bwidth;  // decay rate so the wave meets Aout exactly at the far edge
-      const s
+      const strength = bh/100;                  // 0..1, how "forbidding" the wall is
+
+      // --- the barrier is a FULL-HEIGHT vertical band the wave travels THROUGH ---
+      ctx.fillStyle = "rgba(255,138,30," + (0.10 + 0.16*strength).toFixed(3) + ")";
+      ctx.fillRect(bx0, 0, bwidth, H);
+      // diagonal hatching reads as a solid wall; denser/darker when the wall is taller
+      ctx.strokeStyle = "rgba(255,138,30," + (0.22 + 0.40*strength).toFixed(3) + ")"; ctx.lineWidth=1;
+      const step = 28 - 16*strength;
+      for(let hx=bx0-H; hx<bx1; hx+=step){ ctx.beginPath(); ctx.moveTo(hx,H); ctx.lineTo(hx+H,0); ctx.stroke(); }
+      // crisp edges + label
+      ctx.strokeStyle="#ff8a1e"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(bx0,0); ctx.lineTo(bx0,H); ctx.moveTo(bx1,0); ctx.lineTo(bx1,H); ctx.stroke();
+      ctx.fillStyle="#ffb33e"; ctx.font="11px 'IBM Plex Mono'";
+      ctx.fillText("THE WALL", bx0+8, 18);
+      ctx.fillText(bh<40?"low · easy to cross":bh>75?"tall · hard to cross":"medium", bx0+8, 34);
+
+      // --- the wave: full amplitude everywhere, shrinking ONLY inside the band ---
+      ctx.strokeStyle="#41e0d6"; ctx.lineWidth=2; ctx.beginPath();
+      for(let x=0;x<=W;x++){
+        let amp;
+        if(x < bx0) amp = A0;                                  // incoming, full size
+        else if(x <= bx1) amp = A0*Math.exp(-kappa*(x-bx0));   // decays as it crosses the wall
+        else amp = Aout;                                       // emerges smaller on the far side
+        const y = y0 - Math.sin(x*0.22 - t*0.006)*amp;
+        x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+
+      // --- animated test particle, on the SAME centerline as the wave ---
+      if(particle){
+        particle.x += 4.2*particle.dir;
+        ctx.fillStyle = particle.transmitted ? "#ffb33e" : "#ff5d6c";
+        ctx.beginPath(); ctx.arc(particle.x, y0, 7, 0, 7); ctx.fill();
+        // a reflected particle turns back at the wall's near face
+        if(!particle.transmitted && particle.dir>0 && particle.x>=bx0-3) particle.dir=-1;
+        if(particle.x>W+20 || particle.x<-20) particle=null;
+      }
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'";
+      ctx.fillText("incoming →", 12, H-12);
+      ctx.fillText("far side", W-66, H-12);
+    });
+
+    function fire(){
+      const r=QUANTUM.makeRNG((Date.now()+fired*53)&0xffff)();
+      const transmitted = r < T;
+      particle={ x:-10, dir:1, transmitted };
+      fired++; if(transmitted) through++;
+      document.getElementById("tn-hits").textContent=through+" / "+fired;
+    }
+    document.getElementById("tn-fire").addEventListener("click", fire);
+
+    const wEl=document.getElementById("tn-w"); wEl.addEventListener("input",()=>{bw=+wEl.value; calcT();
+      document.getElementById("tn-w-v").textContent= bw<35?"thin":bw>85?"thick":"medium";});
+    const hEl=document.getElementById("tn-h"); hEl.addEventListener("input",()=>{bh=+hEl.value; calcT();
+      document.getElementById("tn-h-v").textContent= bh<40?"low":bh>75?"tall":"medium";});
+  })();
+
+  // ---- mini 1: two protons + repulsion hill with a tunnel-and-fuse loop ----
+  (function(){
+    const host=document.getElementById("tn-mini1"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    // the electric repulsion "hill" between two protons; the dot rides this curve
+    function hillY(x){ const u=(x-W/2)/(W*0.13); return H-22 - Math.exp(-u*u)*(H*0.6); }
+    QUANTUM.loop((t)=>{
+      ctx.clearRect(0,0,W,H);
+      // repulsion hill
+      ctx.strokeStyle="#ff8a1e"; ctx.lineWidth=2; ctx.beginPath();
+      for(let x=0;x<=W;x++){ const y=hillY(x); x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke();
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'"; ctx.fillText("proton vs the repulsion hill",10,16);
+
+      // the partner proton we want to fuse with, parked on the far side (always visible)
+      const xR=W*0.80;
+      ctx.fillStyle="rgba(255,179,62,0.5)";
+      ctx.beginPath(); ctx.arc(xR, hillY(xR), 7,0,7); ctx.fill();
+
+      const xLow=W*0.16, xTurn=W*0.40, xMirror=W-xTurn; // turning point + its mirror past the peak
+      const P=(t*0.0004)%1;            // one full attempt-then-tunnel round (~several seconds)
+      let px,py,col="#41e0d6",tunnel=false,fusing=false;
+      if(P<0.25){                      // try 1: climb partway up the flank, slip back down
+        const o=Math.sin(P/0.25*Math.PI); px=xLow+o*(xTurn-xLow); py=hillY(px);
+      } else if(P<0.50){               // try 2: same — it can't get over the top
+        const o=Math.sin((P-0.25)/0.25*Math.PI); px=xLow+o*(xTurn-xLow); py=hillY(px);
+      } else if(P<0.62){               // final climb — ends AT the turning point, held high
+        const c=(P-0.50)/0.12; px=xLow+c*(xTurn-xLow); py=hillY(px);
+      } else if(P<0.70){               // poised at the top of its climb — about to tunnel
+        px=xTurn; py=hillY(px); tunnel=true;
+      } else if(P<0.90){               // shoots across at the SAME height, then rolls down to the partner
+        const c=(P-0.70)/0.20; px=xMirror+c*(xR-xMirror); py=hillY(px); col="#ffb33e"; tunnel=(c<0.25);
+      } else {                         // fusion!
+        px=xR; py=hillY(px); col="#ffb33e"; fusing=true;
+      }
+      if(tunnel){                      // dashed shortcut straight THROUGH the hill
+        ctx.save(); ctx.setLineDash([5,5]); ctx.strokeStyle="rgba(65,224,214,0.6)"; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.moveTo(xTurn,hillY(xTurn)); ctx.lineTo(xMirror,hillY(xMirror)); ctx.stroke(); ctx.restore();
+      }
+      if(fusing){
+        const r=8+(Math.sin(t*0.02)*0.5+0.5)*12;
+        ctx.fillStyle="rgba(255,179,62,0.22)"; ctx.beginPath(); ctx.arc(xR,hillY(xR),r,0,7); ctx.fill();
+        ctx.fillStyle="#ffb33e"; ctx.font="12px 'IBM Plex Mono'"; ctx.fillText("FUSION!", xR-22, hillY(xR)-18);
+      }
+      ctx.fillStyle=col; ctx.beginPath(); ctx.arc(px,py,7,0,7); ctx.fill();
+    });
+  })();
+
+  // ---- mini 2: exponential decay of probability vs width ----
+  (function(){
+    const host=document.getElementById("tn-mini2"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H,mx=0.4;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    host.addEventListener("pointermove",e=>{const r=host.getBoundingClientRect(); mx=(e.clientX-r.left)/W;});
+    window.addEventListener("resize", size);
+    QUANTUM.loop(()=>{
+      ctx.clearRect(0,0,W,H);
+      ctx.strokeStyle="#ffb33e"; ctx.lineWidth=2.5; ctx.beginPath();
+      for(let x=0;x<=W;x++){ const d=x/W*5; const y=H-20-Math.exp(-d)*(H*0.7); x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke();
+      const d=mx*5, px=mx*W, py=H-20-Math.exp(-d)*(H*0.7);
+      ctx.fillStyle="#41e0d6"; ctx.beginPath(); ctx.arc(px,py,6,0,7); ctx.fill();
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'";
+      ctx.fillText("T = e^(-k·width) — hover to read",10,H-8);
+      ctx.fillText(Math.round(Math.exp(-d)*100)+"% through", px+10, py-8);
+    });
+  })();
+  </script>
+</body>
+</html>

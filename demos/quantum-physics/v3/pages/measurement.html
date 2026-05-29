@@ -150,4 +150,68 @@
 
     function measure(){
       collapsed=true; tt=0;
-      // sample a point per |psi|^2 (pick one of the existing clo
+      // sample a point per |psi|^2 (pick one of the existing cloud points)
+      const idx=Math.floor(rng()*N);
+      target.set(home[idx*3], home[idx*3+1], home[idx*3+2]);
+      document.getElementById("me-state").textContent="collapsed point";
+      document.getElementById("me-poss").textContent="just one";
+      document.getElementById("me-at").textContent="("+target.x.toFixed(1)+", "+target.y.toFixed(1)+")";
+      if(typeof gsap!=="undefined" && !QUANTUM.REDUCED) gsap.fromTo(cloud.scale,{x:1,y:1,z:1},{x:1.15,y:1.15,z:1.15,duration:0.3,yoyo:true,repeat:1,ease:"power2.out"});
+    }
+    function reset(){
+      collapsed=false; cloud.material.color.set(0x41e0d6); cloud.material.opacity=0.6; cloud.scale.set(1,1,1);
+      seedCloud();
+      document.getElementById("me-state").textContent="superposed cloud";
+      document.getElementById("me-poss").textContent="many";
+      document.getElementById("me-at").textContent="—";
+    }
+    stage.addEventListener("click", (e)=>{ if(e.target.tagName!=="BUTTON") measure(); });
+    document.getElementById("me-measure").addEventListener("click", measure);
+    document.getElementById("me-reset").addEventListener("click", reset);
+    const spEl=document.getElementById("me-sp"); spEl.addEventListener("input",()=>{ spread=spEl.value/10;
+      document.getElementById("me-sp-v").textContent= spread<6?"tight":spread>12?"vast":"wide"; if(!collapsed) seedCloud(); });
+    window.addEventListener("resize", ()=>QUANTUM.fitRenderer(renderer,cam,stage));
+  })();
+
+  // ---- mini 1: bar of probabilities that snaps to one on click ----
+  (function(){
+    const host=document.getElementById("me-mini1"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H; const rng=QUANTUM.makeRNG(42);
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    let chosen=-1; const probs=[0.1,0.22,0.35,0.18,0.15];
+    host.addEventListener("click", ()=>{ let r=rng(), acc=0; for(let i=0;i<probs.length;i++){acc+=probs[i]; if(r<acc){chosen=i;break;}}
+      setTimeout(()=>chosen=-1, 1400); });
+    QUANTUM.loop((t)=>{
+      ctx.clearRect(0,0,W,H);
+      const bw=W/probs.length;
+      probs.forEach((p,i)=>{
+        const h=(chosen===-1? p : (i===chosen?0.9:0.02))*(H*0.7);
+        ctx.fillStyle= chosen===i? "#ffb33e": "#41e0d6";
+        ctx.globalAlpha= chosen===-1? 0.6 : (i===chosen?1:0.15);
+        ctx.fillRect(i*bw+8, H-30-h, bw-16, h);
+      });
+      ctx.globalAlpha=1; ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'";
+      ctx.fillText(chosen===-1?"click: many possible outcomes":"one outcome, the rest vanish", 10, H-10);
+    });
+  })();
+
+  // ---- mini 2: decoherence, interference fringes washing out ----
+  (function(){
+    const host=document.getElementById("me-mini2"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    QUANTUM.loop((t)=>{
+      ctx.clearRect(0,0,W,H);
+      const coh=0.5+0.5*Math.sin(t*0.0006); // coherence breathing
+      ctx.strokeStyle="#41e0d6"; ctx.lineWidth=2; ctx.beginPath();
+      for(let x=0;x<=W;x++){ const fr=Math.cos(x*0.18)*coh; const y=H/2 - (1+fr)*(H*0.18);
+        x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke();
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'";
+      ctx.fillText(coh>0.5?"fringes sharp (isolated, quantum)":"fringes washed out (coupled to environment)", 10, H-10);
+    });
+  })();
+  </script>
+</body>
+</html>

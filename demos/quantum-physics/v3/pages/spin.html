@@ -147,4 +147,68 @@
       }
       // tallies update occasionally
       if(total>0){ /* per-frame escape count is noisy; rely on theoretical readout instead */ }
-      ctx.fillStyle="#8d8a82"; ctx.font="11px '
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'";
+      ctx.fillText("amber = up   cyan = down", 10, H-10);
+    });
+
+    function refresh(){
+      // theoretical readout
+      let up=50, mem="kept";
+      if(m2on && m2!==m1){ up=50; mem="erased"; }
+      else if(m2on && m2===m1){ up=50; mem="kept (confirmed)"; }
+      document.getElementById("sp-up").textContent=up+"%";
+      document.getElementById("sp-dn").textContent=(100-up)+"%";
+      document.getElementById("sp-mem").textContent=mem;
+    }
+    function seg(id,set){ document.querySelectorAll("#"+id+" button").forEach(b=>b.addEventListener("click",()=>{
+      document.querySelectorAll("#"+id+" button").forEach(x=>x.classList.remove("is-on")); b.classList.add("is-on");
+      set(b.dataset.v); refresh(); })); }
+    seg("sp-m1", v=>m1=v); seg("sp-m2on", v=>m2on=(v==="on")); seg("sp-m2", v=>m2=v);
+    refresh();
+  })();
+
+  // ---- mini 1: classical smear vs two quantum dots ----
+  (function(){
+    const host=document.getElementById("sp-mini1"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H; const rng=QUANTUM.makeRNG(5);
+    function draw(){ const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;
+      ctx.fillStyle="#05050a"; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'"; ctx.fillText("expected (classical)",10,16); ctx.fillText("actual (quantum)",W*0.55,16);
+      for(let i=0;i<600;i++){ // smear left
+        const x=W*0.25+(rng()-0.5)*W*0.12; const y=H*0.5+(rng()-0.5)*H*0.6;
+        ctx.fillStyle="rgba(65,224,214,0.4)"; ctx.beginPath(); ctx.arc(x,y,1.4,0,7); ctx.fill(); }
+      for(let i=0;i<600;i++){ // two dots right
+        const up=rng()>0.5; const x=W*0.78+(rng()-0.5)*W*0.06; const y=(up?H*0.32:H*0.68)+(rng()-0.5)*H*0.08;
+        ctx.fillStyle= up?"#ffb33e":"#41e0d6"; ctx.beginPath(); ctx.arc(x,y,1.6,0,7); ctx.fill(); }
+      ctx.strokeStyle="rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke();
+    }
+    draw(); window.addEventListener("resize", draw);
+  })();
+
+  // ---- mini 2: Z->X->Z erasure as flowing dots ----
+  (function(){
+    const host=document.getElementById("sp-mini2"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H; const rng=QUANTUM.makeRNG(8);
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    const ds=[];
+    QUANTUM.loop((t)=>{
+      if(ds.length<60 && Math.random()<0.3) ds.push({x:0,y:H*0.5,s:1});
+      ctx.clearRect(0,0,W,H);
+      ["Z","X","Z"].forEach((lab,i)=>{ const x=W*(0.25+i*0.25);
+        ctx.fillStyle="#8d8a82"; ctx.font="600 12px 'IBM Plex Mono'"; ctx.textAlign="center"; ctx.fillText(lab,x,18);
+        ctx.strokeStyle="#3a3746"; ctx.beginPath(); ctx.moveTo(x,24); ctx.lineTo(x,H-10); ctx.stroke(); });
+      ctx.textAlign="left";
+      for(let i=ds.length-1;i>=0;i--){ const d=ds[i]; d.x+=2;
+        if(d.x>W*0.25 && d.x<W*0.27) d.s=1;              // Z: keep up
+        if(d.x>W*0.5 && d.x<W*0.52) d.s=rng()>0.5?1:-1;  // X: randomize
+        if(d.x>W*0.75 && d.x<W*0.77) d.s=rng()>0.5?1:-1; // final Z: half flip
+        d.y += (H*0.5 + d.s*H*0.0 - d.y)*0; // keep on line for clarity
+        ctx.fillStyle= d.s===1?"#ffb33e":"#41e0d6"; ctx.beginPath(); ctx.arc(d.x,H*0.5,3,0,7); ctx.fill();
+        if(d.x>W) ds.splice(i,1); }
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'"; ctx.fillText("X-measurement scrambles the final Z result",10,H-8);
+    });
+  })();
+  </script>
+</body>
+</html>

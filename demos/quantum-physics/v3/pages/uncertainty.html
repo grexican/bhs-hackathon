@@ -118,4 +118,63 @@
       curve(sp*0.8, H*0.96, "#ffb33e", "rgba(255,179,62,0.12)");
       ctx.fillStyle="#8d8a82"; ctx.font="12px 'IBM Plex Mono'";
       ctx.fillText("POSITION  Δx="+sx.toFixed(2), 14, 22);
-    
+      ctx.fillText("MOMENTUM  Δp="+sp.toFixed(2), 14, H*0.5+20);
+    });
+    const dxEl=document.getElementById("un-dx");
+    dxEl.addEventListener("input", ()=>{
+      dx=dxEl.value/100;
+      const dp=FLOOR/dx;
+      document.getElementById("un-dx-v").textContent=dx.toFixed(2);
+      document.getElementById("un-rx").textContent=dx.toFixed(2);
+      document.getElementById("un-rp").textContent=dp.toFixed(2);
+      document.getElementById("un-prod").textContent=(dx*dp).toFixed(2);
+    });
+  })();
+
+  // ---- mini 1: click (broad spectrum) vs tone (single line) ----
+  (function(){
+    const host=document.getElementById("un-mini1"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    QUANTUM.loop((t)=>{
+      ctx.clearRect(0,0,W,H);
+      const m=Math.sin(t*0.0007)*0.5+0.5; // morph click<->tone
+      // time signal (top): sharp spike when m small, long tone when m large
+      ctx.strokeStyle="#41e0d6"; ctx.lineWidth=2; ctx.beginPath();
+      for(let x=0;x<=W;x++){ const u=(x-W/2)/(W*0.5); const env=Math.exp(-u*u/((0.02+m*0.5)*(0.02+m*0.5)));
+        const y=H*0.28 - Math.sin(x*0.5)*env*(H*0.18); x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke();
+      // spectrum (bottom): wide when click, narrow when tone
+      ctx.strokeStyle="#ffb33e"; ctx.lineWidth=2; ctx.beginPath();
+      const sw=0.04+ (1-m)*0.4;
+      for(let x=0;x<=W;x++){ const u=(x-W/2)/(W*0.5); const y=H*0.92 - Math.exp(-u*u/(sw*sw))*(H*0.34);
+        x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke();
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'"; ctx.fillText("signal",10,14); ctx.fillText("spectrum",10,H*0.6);
+    });
+  })();
+
+  // ---- mini 2: confinement pressure, a particle bouncing harder as box shrinks ----
+  (function(){
+    const host=document.getElementById("un-mini2"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    let px=0.5, vx=0.004;
+    QUANTUM.loop((t)=>{
+      ctx.clearRect(0,0,W,H);
+      const box=0.18+Math.sin(t*0.0006)*0.14; // box half-width fraction
+      const speed=0.002/box; vx = Math.sign(vx)*speed;
+      px+=vx; const lo=0.5-box, hi=0.5+box;
+      if(px<lo){px=lo;vx=Math.abs(vx);} if(px>hi){px=hi;vx=-Math.abs(vx);}
+      // walls
+      ctx.strokeStyle="#ffb33e"; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(lo*W,H*0.2); ctx.lineTo(lo*W,H*0.8); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(hi*W,H*0.2); ctx.lineTo(hi*W,H*0.8); ctx.stroke();
+      // particle
+      ctx.fillStyle="#41e0d6"; ctx.beginPath(); ctx.arc(px*W,H*0.5, 9+speed*200,0,7); ctx.fill();
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'"; ctx.fillText("smaller box → faster jitter",10,H-10);
+    });
+  })();
+  </script>
+</body>
+</html>

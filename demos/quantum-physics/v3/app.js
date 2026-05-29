@@ -221,4 +221,3 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // expose shared helpers for per-page scripts
 window.QUANTUM = { makeRNG, REDUCED, fitRenderer, loop, TOPICS };
-                                                           

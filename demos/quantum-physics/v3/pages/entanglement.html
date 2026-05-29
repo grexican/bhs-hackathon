@@ -128,4 +128,78 @@
     link.computeLineDistances(); scene.add(link);
 
     let phase=0;
-    QUANTUM.loop(
+    QUANTUM.loop((t)=>{
+      const pulse=0.5+0.5*Math.sin(t*0.004);
+      src.scale.setScalar(1+pulse*0.3);
+      A.position.y=Math.sin(t*0.002)*0.4; B.position.y=-A.position.y;
+      link.geometry.setFromPoints([A.position,B.position]); link.computeLineDistances();
+      renderer.render(scene,cam);
+    });
+
+    let trials=0, opp=0, same=0;
+    function measure(){
+      const r=QUANTUM.makeRNG((Date.now()+trials*97)&0xffff)();
+      const a = r<0.5 ? "up":"down";          // Alice random
+      const b = a==="up" ? "down":"up";        // Bob always opposite (singlet)
+      A.material.color.set(a==="up"?0xffb33e:0x41e0d6);
+      B.material.color.set(b==="up"?0xffb33e:0x41e0d6);
+      document.getElementById("en-a").textContent= a==="up"?"↑ spin-up":"↓ spin-down";
+      document.getElementById("en-b").textContent= b==="up"?"↑ spin-up":"↓ spin-down";
+      trials++; (a!==b? opp++ : same++);
+      document.getElementById("en-t").textContent=trials;
+      document.getElementById("en-match").textContent = same===0 ? "yes, every time" : "broke!";
+      document.getElementById("en-bar-opp").style.right=(100-opp/trials*100)+"%";
+      document.getElementById("en-bar-same").style.right=(100-same/trials*100)+"%";
+      if(typeof gsap!=="undefined" && !QUANTUM.REDUCED){
+        gsap.fromTo(A.scale,{x:1.6,y:1.6,z:1.6},{x:1,y:1,z:1,duration:0.5,ease:"expo.out"});
+        gsap.fromTo(B.scale,{x:1.6,y:1.6,z:1.6},{x:1,y:1,z:1,duration:0.5,ease:"expo.out"});
+      }
+    }
+    document.getElementById("en-fire").addEventListener("click", measure);
+    document.getElementById("en-auto").addEventListener("click", ()=>{ for(let i=0;i<100;i++) measure(); });
+    window.addEventListener("resize", ()=>QUANTUM.fitRenderer(renderer,cam,stage));
+  })();
+
+  // ---- mini 1: Bell angle correlation curve (cos of angle) ----
+  (function(){
+    const host=document.getElementById("en-mini1"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H,ang=0.5;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    host.addEventListener("pointermove",e=>{const r=host.getBoundingClientRect(); ang=(e.clientX-r.left)/W;});
+    window.addEventListener("resize", size);
+    QUANTUM.loop(()=>{
+      ctx.clearRect(0,0,W,H);
+      // quantum prediction (-cos) vs classical limit (straight line)
+      ctx.strokeStyle="#3a3746"; ctx.lineWidth=1.5; ctx.beginPath();
+      ctx.moveTo(0,H*0.85); ctx.lineTo(W,H*0.15); ctx.stroke(); // classical bound
+      ctx.strokeStyle="#41e0d6"; ctx.lineWidth=2.5; ctx.beginPath();
+      for(let x=0;x<=W;x++){ const a=x/W*Math.PI; const corr=-Math.cos(a); const y=H/2 - corr*(H*0.36);
+        x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke();
+      const px=ang*W, pa=ang*Math.PI, py=H/2 - (-Math.cos(pa))*(H*0.36);
+      ctx.fillStyle="#ffb33e"; ctx.beginPath(); ctx.arc(px,py,6,0,7); ctx.fill();
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'";
+      ctx.fillText("quantum (curve) beats classical (line)", 10, H-10);
+    });
+  })();
+
+  // ---- mini 2: two random streams, locally random but mirror-linked ----
+  (function(){
+    const host=document.getElementById("en-mini2"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    const seq=[]; const rng=QUANTUM.makeRNG(2024);
+    QUANTUM.loop((t)=>{
+      if(seq.length<40 && Math.floor(t/200)>seq.length) seq.push(rng()>0.5?1:0);
+      ctx.clearRect(0,0,W,H);
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'";
+      ctx.fillText("ALICE", 10, 18); ctx.fillText("BOB (mirror)", 10, H*0.6);
+      seq.forEach((v,i)=>{ const x=10+i*((W-20)/40);
+        ctx.fillStyle= v? "#ffb33e":"#41e0d6"; ctx.fillRect(x,28,8,18);
+        ctx.fillStyle= v? "#41e0d6":"#ffb33e"; ctx.fillRect(x,H*0.6+8,8,18);
+      });
+    });
+  })();
+  </script>
+</body>
+</html>

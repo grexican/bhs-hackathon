@@ -137,4 +137,115 @@
     // the state arrow
     const arrowGeo = new THREE.CylinderGeometry(0.018, 0.018, 1.6, 8);
     const arrow = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({ color: 0xff8a1e }));
-    const tip = new THREE.Mesh(new THREE.ConeGeomet
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 12), new THREE.MeshBasicMaterial({ color: 0xff8a1e }));
+    const arrowGroup = new THREE.Group(); scene.add(arrowGroup);
+    arrow.position.y = 0.8; tip.position.y = 1.6; arrowGroup.add(arrow, tip);
+    // glowing state point
+    const stateDot = new THREE.Mesh(new THREE.SphereGeometry(0.09,16,16), new THREE.MeshBasicMaterial({color:0xffe7b0}));
+    scene.add(stateDot);
+
+    let theta = Math.PI/2, phi = 0, collapsed = null, settle = 0;
+    function setArrow() {
+      // direction from spherical angles (theta from +y)
+      const x = Math.sin(theta)*Math.cos(phi), y = Math.cos(theta), z = Math.sin(theta)*Math.sin(phi);
+      const dir = new THREE.Vector3(x,y,z);
+      arrowGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+      stateDot.position.copy(dir.clone().multiplyScalar(1.6));
+      const p0 = Math.pow(Math.cos(theta/2),2);
+      document.getElementById("bl-p0").textContent = Math.round(p0*100)+"%";
+      document.getElementById("bl-p1").textContent = Math.round((1-p0)*100)+"%";
+    }
+    setArrow();
+
+    // drag to orbit the camera
+    let drag=false, lx=0, ly=0, az=0.7, el=0.5;
+    stage.addEventListener("pointerdown", e=>{drag=true; lx=e.clientX; ly=e.clientY;});
+    window.addEventListener("pointerup", ()=>drag=false);
+    window.addEventListener("pointermove", e=>{ if(!drag) return;
+      az -= (e.clientX-lx)*0.008; el += (e.clientY-ly)*0.008;
+      el = Math.max(-1.2, Math.min(1.2, el)); lx=e.clientX; ly=e.clientY; });
+
+    QUANTUM.loop((t)=>{
+      const R=4.6; cam.position.set(Math.cos(az)*Math.cos(el)*R, Math.sin(el)*R, Math.sin(az)*Math.cos(el)*R);
+      cam.lookAt(0,0,0);
+      if(collapsed!==null && settle<1){ settle+=0.06; if(settle>=1) settle=1; }
+      renderer.render(scene, cam);
+    });
+
+    // controls
+    const thEl=document.getElementById("bl-theta"), phEl=document.getElementById("bl-phi");
+    thEl.addEventListener("input", ()=>{ theta=thEl.value*Math.PI/180; collapsed=null;
+      document.getElementById("bl-theta-v").textContent=thEl.value+"°"; setArrow(); });
+    phEl.addEventListener("input", ()=>{ phi=phEl.value*Math.PI/180; collapsed=null;
+      document.getElementById("bl-phi-v").textContent=phEl.value+"°"; setArrow(); });
+
+    document.getElementById("bl-measure").addEventListener("click", ()=>{
+      const p0=Math.pow(Math.cos(theta/2),2);
+      const r=QUANTUM.makeRNG((Date.now()&0xffff))();
+      const got = r < p0 ? 0 : 1;
+      collapsed=got; settle=0;
+      // snap arrow to a pole
+      theta = got===0 ? 0 : Math.PI; setArrow();
+      thEl.value = got===0?0:180; document.getElementById("bl-theta-v").textContent=(got===0?0:180)+"°";
+      const el=document.getElementById("bl-last"); el.textContent="| "+got+" ⟩";
+      el.style.color = got===0 ? "#ffb33e":"#41e0d6";
+      if(typeof gsap!=="undefined" && !QUANTUM.REDUCED) gsap.fromTo(stateDot.scale,{x:2.4,y:2.4,z:2.4},{x:1,y:1,z:1,duration:0.6,ease:"expo.out"});
+    });
+    document.getElementById("bl-reset").addEventListener("click", ()=>{
+      theta=Math.PI/2; phi=0; collapsed=null; thEl.value=90; phEl.value=0;
+      document.getElementById("bl-theta-v").textContent="90°"; document.getElementById("bl-phi-v").textContent="0°";
+      document.getElementById("bl-last").textContent="—"; setArrow();
+    });
+
+    window.addEventListener("resize", ()=>QUANTUM.fitRenderer(renderer, cam, stage));
+  })();
+
+  // ---- mini 1: a tilt-gauge — the qubit arrow leans from |0> to |1>, odds follow cos^2 ----
+  (function(){
+    const host=document.getElementById("bl-mini1"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    QUANTUM.loop((t)=>{
+      ctx.clearRect(0,0,W,H);
+      const cx=W/2, cy=H/2, R=Math.min(W,H)*0.30;
+      const th=(Math.sin(t*0.0005)*0.5+0.5)*Math.PI;     // the qubit tilt, sweeping 0..180°
+      const p0=Math.pow(Math.cos(th/2),2);
+      // rim split: amber arc = P(0) growing from the top, cyan = P(1)
+      ctx.lineWidth=9; ctx.lineCap="round"; ctx.strokeStyle="#2b2935";
+      ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke();
+      ctx.strokeStyle="#ffb33e"; ctx.beginPath(); ctx.arc(cx,cy,R,-Math.PI/2,-Math.PI/2+p0*2*Math.PI); ctx.stroke();
+      ctx.strokeStyle="#41e0d6"; ctx.beginPath(); ctx.arc(cx,cy,R,-Math.PI/2+p0*2*Math.PI,1.5*Math.PI); ctx.stroke();
+      // the qubit arrow: straight up at |0>, straight down at |1>, sideways at 50/50
+      const ax=cx+Math.sin(th)*R*0.68, ay=cy-Math.cos(th)*R*0.68;
+      ctx.strokeStyle="#ffe7b0"; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ax,ay); ctx.stroke();
+      ctx.fillStyle="#ffe7b0"; ctx.beginPath(); ctx.arc(ax,ay,5,0,7); ctx.fill();
+      // labels
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'"; ctx.textAlign="center";
+      ctx.fillText("|0⟩", cx, cy-R-9); ctx.fillText("|1⟩", cx, cy+R+17);
+      ctx.textAlign="left"; ctx.font="600 13px 'IBM Plex Mono'";
+      ctx.fillStyle="#ffb33e"; ctx.fillText("P(0) "+Math.round(p0*100)+"%", 12, H-28);
+      ctx.fillStyle="#41e0d6"; ctx.fillText("P(1) "+Math.round((1-p0)*100)+"%", 12, H-10);
+      ctx.textAlign="start";
+    });
+  })();
+
+  // ---- mini 2: phase rotation, a dot circling the equator ----
+  (function(){
+    const host=document.getElementById("bl-mini2"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    QUANTUM.loop((t)=>{
+      ctx.clearRect(0,0,W,H);
+      const cx=W/2, cy=H/2, R=Math.min(W,H)*0.3;
+      ctx.strokeStyle="#41e0d6"; ctx.lineWidth=1.5; ctx.globalAlpha=0.5;
+      ctx.beginPath(); ctx.ellipse(cx,cy,R,R*0.32,0,0,Math.PI*2); ctx.stroke(); ctx.globalAlpha=1;
+      const a=t*0.001; const x=cx+Math.cos(a)*R, y=cy+Math.sin(a)*R*0.32;
+      ctx.fillStyle="#ffb33e"; ctx.beginPath(); ctx.arc(x,y,7,0,7); ctx.fill();
+      ctx.strokeStyle="#3a3746"; ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(x,y); ctx.stroke();
+    });
+  })();
+  </script>
+</body>
+</html>

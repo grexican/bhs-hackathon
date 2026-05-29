@@ -143,4 +143,82 @@
       document.getElementById("qz-e").textContent=(-13.6/(n*n)).toFixed(2);
       document.getElementById("qz-r").textContent=(n*n)+" a₀";
       document.getElementById("qz-size").textContent= n>=4?"sprawling":n>=2?"loose":"tight";
-      if(typeof gsap!=="undefined" && !QUANTUM.REDUCED) gsap.fromTo(pts.scale,{x:0.6,y:0.6,z
+      if(typeof gsap!=="undefined" && !QUANTUM.REDUCED) gsap.fromTo(pts.scale,{x:0.6,y:0.6,z:0.6},{x:1,y:1,z:1,duration:0.6,ease:"expo.out"});
+    });
+    window.addEventListener("resize", ()=>QUANTUM.fitRenderer(renderer,cam,stage));
+  })();
+
+  // ---- clickable Balmer spectrum (real wavelengths -> real colors) ----
+  (function(){
+    const lines=[
+      {wl:656.3, from:3, name:"red (H-alpha)"},
+      {wl:486.1, from:4, name:"cyan (H-beta)"},
+      {wl:434.0, from:5, name:"blue-violet (H-gamma)"},
+      {wl:410.2, from:6, name:"violet (H-delta)"},
+    ];
+    const host=document.getElementById("qz-spectrum");
+    // dark continuum background with bright lines positioned by wavelength (380-680nm range)
+    const lo=380, hi=680;
+    host.innerHTML="";
+    lines.forEach((ln)=>{
+      const frac=(ln.wl-lo)/(hi-lo);
+      const seg=document.createElement("div"); seg.className="line";
+      const [r,g,b]=wlToRGB(ln.wl);
+      seg.style.flex="0 0 8px";
+      seg.style.background=`rgb(${r},${g},${b})`;
+      seg.style.boxShadow=`0 0 18px rgb(${r},${g},${b})`;
+      seg.style.marginLeft=(frac*100)+"%";
+      seg.title=ln.name+" "+ln.wl+"nm";
+      seg.addEventListener("click", ()=>{
+        document.getElementById("qz-jump").textContent="n="+ln.from+" → n=2";
+        document.getElementById("qz-wl").textContent=ln.wl+" nm";
+        document.getElementById("qz-cn").textContent=ln.name;
+        host.style.transition="box-shadow .1s";
+        host.style.boxShadow=`inset 0 0 60px rgb(${r},${g},${b})`;
+        setTimeout(()=>host.style.boxShadow="none", 320);
+      });
+      // reset margins so lines sit at absolute positions: use absolute layout instead
+      host.appendChild(seg);
+    });
+    // simpler robust layout: absolutely position lines
+    host.style.position="relative"; host.querySelectorAll(".line").forEach((seg,i)=>{
+      const frac=(lines[i].wl-lo)/(hi-lo);
+      seg.style.position="absolute"; seg.style.left=(8+frac*84)+"%"; seg.style.top="0"; seg.style.bottom="0";
+      seg.style.width="10px"; seg.style.marginLeft="0";
+    });
+  })();
+
+  // ---- energy ladder (canvas) showing 1/n^2 rung spacing ----
+  (function(){
+    const host=document.getElementById("qz-ladder"); const cv=document.createElement("canvas");
+    host.appendChild(cv); const ctx=cv.getContext("2d"); let W,H;
+    function size(){const r=host.getBoundingClientRect();W=cv.width=r.width;H=cv.height=r.height;} size();
+    window.addEventListener("resize", size);
+    QUANTUM.loop((t)=>{
+      ctx.clearRect(0,0,W,H);
+      const top=40, bot=H-30;
+      ctx.strokeStyle="#3a3746"; ctx.beginPath(); ctx.moveTo(60,top); ctx.lineTo(60,bot); ctx.stroke();
+      ctx.fillStyle="#8d8a82"; ctx.font="11px 'IBM Plex Mono'"; ctx.fillText("0 eV (free)", 70, top+4);
+      for(let n=1;n<=6;n++){
+        const e=-13.6/(n*n); const y=bot - ((e+13.6)/13.6)*(bot-top);
+        const glow=0.5+0.5*Math.sin(t*0.002+n);
+        ctx.strokeStyle= n===2 ? `rgba(255,179,62,${0.6+glow*0.4})` : "#41e0d6";
+        ctx.lineWidth= n===2?3:1.5; ctx.globalAlpha= n===2?1:0.7;
+        ctx.beginPath(); ctx.moveTo(60,y); ctx.lineTo(W-70,y); ctx.stroke(); ctx.globalAlpha=1;
+        ctx.fillStyle="#c7c2b8"; ctx.fillText("n="+n+"   "+e.toFixed(2)+" eV", W-180, y-4);
+      }
+      ctx.fillStyle="#8d8a82"; ctx.fillText("rungs bunch up toward 0 — that's why spectra crowd in the violet", 70, bot+18);
+    });
+  })();
+
+  // simple tab switch
+  document.querySelectorAll("#qz-tabs button").forEach(b=>b.addEventListener("click",()=>{
+    document.querySelectorAll("#qz-tabs button").forEach(x=>x.classList.remove("is-on"));
+    document.querySelectorAll(".tabpane").forEach(p=>p.classList.remove("is-on"));
+    b.classList.add("is-on");
+    document.querySelector('.tabpane[data-pane="'+b.dataset.pane+'"]').classList.add("is-on");
+    window.dispatchEvent(new Event("resize"));
+  }));
+  </script>
+</body>
+</html>
