@@ -1,0 +1,18 @@
+{
+  "name": "g-roller-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Browser port of the G-Roller 3D endless runner, built with Three.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

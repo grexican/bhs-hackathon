@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>G-Roller</title>
+    <style>
+      :root {
+        --accent: #ffd34e;
+        --cyan: #2bd6ff;
+        --pink: #ff3f7a;
+        --ink: #0c0f22;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink); }
+      body {
+        font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+        color: #fff; user-select: none; -webkit-user-select: none;
+      }
+
+      /* The canvas Three.js draws the 3D world into */
+      #game-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+      /* Gunk splatted on the screen by the "splat" powerdown — sits above the
+         canvas but below the HUD so your score stays readable. */
+      #splats { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+      .splat {
+        position: absolute; transform: translate(-50%, -50%) rotate(var(--rot)) scale(0.2);
+        border-radius: 46% 54% 43% 57% / 52% 44% 56% 48%;
+        opacity: 0; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5));
+        animation: splat-in 0.18s ease-out forwards, splat-drip 4.2s ease-in 0.18s forwards;
+      }
+      @keyframes splat-in {
+        from { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rot)) scale(0.2); }
+        to   { opacity: 0.96; transform: translate(-50%, -50%) rotate(var(--rot)) scale(1); }
+      }
+      @keyframes splat-drip {
+        0%   { opacity: 0.96; }
+        70%  { opacity: 0.9; }
+        100% { opacity: 0; transform: translate(-50%, 18px) rotate(var(--rot)) scale(1.08); }
+      }
+
+      /* Heads-up display layered on top of the 3D canvas */
+      .hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+
+      /* Score panel, top-left, on a soft glass card */
+      .hud__panel {
+        position: absolute; top: 18px; left: 18px;
+        padding: 12px 16px; border-radius: 14px;
+        background: rgba(14, 20, 44, 0.45);
+        backdrop-filter: blur(6px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+      .hud__dist { font-size: 30px; font-weight: 800; color: var(--accent); line-height: 1; }
+      .hud__dist span:last-child { font-size: 15px; opacity: 0.7; font-weight: 600; }
+      .hud__stats { margin-top: 8px; display: flex; gap: 14px; font-size: 15px; }
+      .hud__stats b { color: #fff; }
+      .hud__best { margin-top: 8px; font-size: 12px; opacity: 0.55; line-height: 1.5; }
+
+      /* Active powerup chips, top-right */
+      .hud__effects {
+        position: absolute; top: 18px; right: 18px;
+        display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+      }
+      .chip {
+        font-size: 16px; font-weight: 800; padding: 6px 12px; border-radius: 999px;
+        background: rgba(14, 20, 44, 0.5); backdrop-filter: blur(6px);
+        border: 2px solid #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+      }
+
+      /* Center "BOING!" / "BOOST!" toast */
+      .toast {
+        position: absolute; top: 26%; left: 50%; transform: translate(-50%, -50%) scale(0.6);
+        font-size: 52px; font-weight: 900; letter-spacing: 2px; opacity: 0;
+        color: var(--cyan); text-shadow: 0 0 24px rgba(43, 214, 255, 0.7);
+      }
+      .toast--show { animation: toast 0.7s ease-out forwards; }
+      @keyframes toast {
+        0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+        25% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+        70% { opacity: 1; transform: translate(-50%, -60%) scale(1); }
+        100% { opacity: 0; transform: translate(-50%, -80%) scale(1); }
+      }
+
+      /* Center overlay (start + game over) */
+      .hud__center {
+        position: absolute; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; text-align: center; gap: 16px;
+        background: radial-gradient(ellipse at center, rgba(12,15,34,0.2), rgba(12,15,34,0.72));
+      }
+      .hud__center.is-hidden { display: none; }
+
+      .hud__title {
+        font-size: clamp(54px, 12vw, 104px); font-weight: 900; letter-spacing: 6px;
+        background: linear-gradient(180deg, #fff 0%, var(--accent) 55%, #ff9f1c 100%);
+        -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        filter: drop-shadow(0 6px 18px rgba(0,0,0,0.55));
+        animation: float 3.4s ease-in-out infinite;
+      }
+      @keyframes float { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-10px) rotate(1deg); } }
+
+      .hud__subtitle { font-size: clamp(16px, 3.5vw, 22px); opacity: 0.95; }
+      .hud__hint {
+        font-size: 17px; font-weight: 700; color: var(--accent);
+        padding: 10px 18px; border: 2px solid rgba(255,211,78,0.5); border-radius: 999px;
+        animation: pulse 1.3s ease-in-out infinite;
+      }
+      @keyframes pulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 rgba(255,211,78,0); } 50% { opacity: 0.65; box-shadow: 0 0 22px rgba(255,211,78,0.3); } }
+
+      .hud__controls { font-size: 14px; opacity: 0.75; line-height: 1.7; max-width: 460px; }
+      .hud__controls kbd {
+        background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 6px; padding: 1px 7px; font-family: inherit; font-weight: 700;
+      }
+      .legend { display: flex; gap: 18px; margin-top: 4px; font-size: 13px; opacity: 0.85; }
+      .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
+    </style>
+  </head>
+  <body>
+    <canvas id="game-canvas"></canvas>
+
+    <div id="splats"></div>
+
+    <div class="hud">
+      <div class="hud__panel">
+        <div class="hud__dist"><span id="distance">0</span> <span>m</span></div>
+        <div class="hud__stats">
+          <div>🦘 <b id="jumps">0</b></div>
+          <div>💎 <b id="gems">0</b></div>
+        </div>
+        <div class="hud__best">
+          Best: <span id="best-distance">0</span> m · <span id="best-jumps">0</span> jumps
+        </div>
+      </div>
+
+      <div class="hud__effects" id="effects"></div>
+
+      <div class="toast" id="toast"></div>
+
+      <div class="hud__center" id="overlay">
+        <div class="hud__title">G&#8209;ROLLER</div>
+        <div class="hud__subtitle" id="overlay-subtitle">Roll the gauntlet of floating blocks</div>
+        <div class="hud__hint" id="overlay-hint">Press SPACE to roll</div>
+        <div class="hud__controls">
+          <kbd>Space</kbd> / <kbd>W</kbd> / <kbd>&uarr;</kbd> jump — hold for height, release early to drop fast<br />
+          <kbd>A</kbd><kbd>D</kbd> / <kbd>&larr;</kbd><kbd>&rarr;</kbd> steer &nbsp;·&nbsp; on phone, tap a side of the screen
+        </div>
+        <div class="legend">
+          <span><i style="background:#ff3f7a"></i>bouncy</span>
+          <span><i style="background:#2bd6ff"></i>boost</span>
+          <span><i style="background:#66f0ff"></i>gem</span>
+          <span><i style="background:#35e0ff"></i>powerup</span>
+          <span><i style="background:#ff3b3b"></i>avoid</span>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
