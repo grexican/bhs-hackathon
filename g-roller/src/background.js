@@ -61,12 +61,16 @@ export class Background {
     this.moonOffset = new THREE.Vector3(70, 70, 240);
     this.group.add(this.moon);
 
+    this._t = 0;       // colour-cycle time (always advances)
+    this._driftT = 0;  // building-scroll time (only advances while playing)
+
     // Drifting nebula sprites.
     this.clouds = [];
     const cloudMat = new THREE.SpriteMaterial({
       map: cloudTexture(), transparent: true, depthWrite: false,
       blending: THREE.AdditiveBlending, fog: false,
     });
+    this._cloudMat = cloudMat;
     for (let i = 0; i < 7; i++) {
       const s = new THREE.Sprite(cloudMat);
       const scale = 60 + Math.random() * 90;
@@ -86,7 +90,7 @@ export class Background {
         map: tex, transparent: true, opacity, fog: false, side: THREE.DoubleSide, depthWrite: false,
       });
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(1200, height), mat);
-      plane.userData = { dist, tex, parallax: 1 / dist };
+      plane.userData = { dist, tex, parallax: 1 / dist, baseOpacity: opacity, hue: hue / 360 };
       this.ranges.push(plane);
       this.group.add(plane);
       return plane;
@@ -99,10 +103,17 @@ export class Background {
     this._sides = [1, -1, 1, -1];
   }
 
-  update(playerZ) {
+  update(playerZ, dt = 0, playing = false) {
+    this._t += dt;
+    if (playing) this._driftT += dt; // city only moves while you're actually rolling
+    const t = this._t;
+    const dT = this._driftT;
+
     this.moon.position.set(this.moonOffset.x, this.moonOffset.y, playerZ + this.moonOffset.z);
     this.moon.rotation.y += 0.0006;
 
+    // Nebula drifts and slowly cycles colour with the skyline.
+    this._cloudMat.color.setHSL((t * 0.01) % 1, 0.6, 0.6);
     for (const c of this.clouds) {
       c.position.set(c.userData.offset.x, c.userData.offset.y, playerZ + c.userData.offset.z);
     }
@@ -110,8 +121,17 @@ export class Background {
     this.ranges.forEach((p, i) => {
       const d = p.userData.dist;
       p.position.set(this._sides[i] * d, 30, playerZ + 60);
-      // Scroll the texture for a parallax drift as the player advances.
-      p.userData.tex.offset.x = -playerZ * p.userData.parallax * 0.5;
+      // Parallax with the player PLUS a slow constant drift, so the buildings
+      // keep passing by (and new ones scroll in) even while you stand still.
+      // The right-hand planes face the opposite way, so flip their scroll sign
+      // to keep the two sides consistent; the leading sign sets the direction.
+      const flip = this._sides[i] === 1 ? -1 : 1;
+      p.userData.tex.offset.x = flip * (playerZ * p.userData.parallax * 0.28 + dT * 0.004);
+      // Super-slow chill rainbow: each layer eases through the hue wheel, gently
+      // fading in and out, slightly out of phase for depth.
+      const hue = (p.userData.hue + t * 0.013 + i * 0.13) % 1;
+      p.material.color.setHSL(hue, 0.55, 0.6);
+      p.material.opacity = p.userData.baseOpacity * (0.78 + 0.22 * Math.sin(t * 0.22 + i));
     });
   }
 }

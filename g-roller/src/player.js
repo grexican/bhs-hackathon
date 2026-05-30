@@ -3,6 +3,12 @@ import { CONFIG } from "./config.js";
 
 const ONE = new THREE.Vector3(1, 1, 1);
 
+// Effects without a dedicated mesh get an orbiting glyph around the ball so you
+// can always see what you've got running. (flight=wings, doublejump=board,
+// shield=bubble are shown separately.)
+const ORBIT_KEYS = ["magnet", "slow", "reverse", "surge", "morph", "trip"];
+const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡", morph: "🌀", trip: "🌈" };
+
 // A gold checker-grid skin for the ball so you can read its spin under the light.
 function ballTexture() {
   const c = document.createElement("canvas");
@@ -47,6 +53,16 @@ export class Player {
     this.shieldMesh.visible = false;
     group.add(this.shieldMesh);
 
+    // Effect indicators that ride on the ball. They live on the (non-rolling)
+    // group so they stay upright while only the ball spins underneath.
+    this._wings = this._makeWings();
+    this._board = this._makeBoard();
+    this._orbit = new THREE.Group();
+    group.add(this._wings, this._board, this._orbit);
+    this._orbitSprites = {};
+    this._emojiTex = {};
+    this._vt = 0;
+
     this.mesh = group;
     scene.add(group);
 
@@ -64,8 +80,14 @@ export class Player {
 
   reset() {
     this.mesh.position.set(0, this.radius, 0);
-    this.mesh.rotation.set(0, 0, 0);
+    this._ball.rotation.set(0, 0, 0);
     this._ball.scale.set(1, 1, 1);
+    this._wings.visible = false;
+    this._board.visible = false;
+    for (const k of Object.keys(this._orbitSprites)) {
+      this._orbit.remove(this._orbitSprites[k]);
+      delete this._orbitSprites[k];
+    }
     this.vel.set(0, 0, 0);
     this.grounded = false;
     this.jumpCount = -1; // first landing bumps it to 0, matching the original
@@ -190,12 +212,114 @@ export class Player {
     if (this.grounded) this._coyote = CONFIG.coyoteTime;
     else this._coyote = Math.max(0, this._coyote - dt);
 
-    const died = !this.grounded && p.y < this.lastGroundedY - CONFIG.fallMargin;
+    // Die only once we're below the lowest floor still drawn nearby — so there's
+    // truly nothing left to land on (not just below the last pad we stood on).
+    const floor = field.lowestTopNear(p.z);
+    const died = !this.grounded && p.y < floor - CONFIG.fallMargin;
     return { died, landed, hit, jumped, pos: p };
   }
 
   _roll(dt) {
-    this.mesh.rotation.x += (this.vel.z * dt) / this.radius;
-    this.mesh.rotation.z += (this.vel.x * dt) / this.radius;
+    // Spin only the ball, so the wings / board / orbiting glyphs stay upright.
+    this._ball.rotation.x += (this.vel.z * dt) / this.radius;
+    this._ball.rotation.z += (this.vel.x * dt) / this.radius;
+  }
+
+  // --- On-ball effect indicators -------------------------------------------
+
+  // Called every frame with the live effects state so you can read what's
+  // active straight off the ball. `e` is the game's effects object (seconds
+  // remaining per timed effect, or a bool for shield).
+  updateVisuals(e, dt) {
+    this._vt += dt;
+    const t = this._vt;
+    // Fast blink in the final 5 seconds so you know an effect's about to end.
+    const blink = (rem) => (rem > 0 && rem < 5 ? 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * 16)) : 1);
+
+    // Flight -> flapping wings.
+    this._wings.visible = e.flight > 0;
+    if (e.flight > 0) {
+      const flap = Math.sin(t * 11) * 0.5;
+      this._wings.userData.r.rotation.z = -0.15 + flap;
+      this._wings.userData.l.rotation.z = 0.15 - flap;
+      const o = 0.85 * blink(e.flight);
+      this._wings.userData.r.material.opacity = o;
+      this._wings.userData.l.material.opacity = o;
+    }
+
+    // Double jump -> a translucent board hovers under you in mid-air, ready to
+    // kick off of, and vanishes once you've spent the air jump.
+    const showBoard = e.doublejump > 0 && !this.grounded && this.airJumps < 1;
+    this._board.visible = showBoard;
+    if (showBoard) {
+      this._board.rotation.y += dt * 1.6;
+      this._board.material.opacity = 0.45 * blink(e.doublejump);
+    }
+
+    this._updateOrbit(e, t, blink);
+  }
+
+  // Orbiting glyphs around the ball for the effects without a dedicated mesh.
+  _updateOrbit(e, t, blink) {
+    const active = ORBIT_KEYS.filter((k) => e[k] > 0);
+    for (const k of Object.keys(this._orbitSprites)) {
+      if (!active.includes(k)) { this._orbit.remove(this._orbitSprites[k]); delete this._orbitSprites[k]; }
+    }
+    active.forEach((k, i) => {
+      let s = this._orbitSprites[k];
+      if (!s) { s = this._emojiSprite(ORBIT_EMOJI[k]); this._orbit.add(s); this._orbitSprites[k] = s; }
+      const ang = t * 1.3 + (i / active.length) * Math.PI * 2;
+      const rr = this.radius * 2.4;
+      s.position.set(Math.cos(ang) * rr, this.radius * 1.5, Math.sin(ang) * rr);
+      s.material.opacity = blink(e[k]);
+    });
+  }
+
+  _makeWings() {
+    const g = new THREE.Group();
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0); shape.lineTo(2.3, 0.6); shape.lineTo(1.9, -0.5); shape.lineTo(0.2, -0.3); shape.lineTo(0, 0);
+    const geo = new THREE.ShapeGeometry(shape);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xffe89a, emissive: 0xffb000, emissiveIntensity: 0.4,
+      transparent: true, opacity: 0.85, side: THREE.DoubleSide, roughness: 0.4,
+    });
+    const r = new THREE.Mesh(geo, mat);
+    r.position.set(this.radius * 0.5, this.radius * 0.4, 0);
+    const l = new THREE.Mesh(geo, mat.clone());
+    l.position.set(-this.radius * 0.5, this.radius * 0.4, 0);
+    l.scale.x = -1;
+    g.add(r, l);
+    g.userData = { r, l };
+    g.visible = false;
+    return g;
+  }
+
+  _makeBoard() {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(2.6, 0.2, 2.6),
+      new THREE.MeshStandardMaterial({
+        color: 0xc6ff3a, emissive: 0x88ff00, emissiveIntensity: 0.5,
+        transparent: true, opacity: 0.45, roughness: 0.5,
+      })
+    );
+    m.position.set(0, -this.radius - 0.45, 0);
+    m.visible = false;
+    return m;
+  }
+
+  _emojiSprite(emoji) {
+    let tex = this._emojiTex[emoji];
+    if (!tex) {
+      const c = document.createElement("canvas"); c.width = c.height = 48;
+      const ctx = c.getContext("2d");
+      ctx.font = "34px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(emoji, 24, 27);
+      tex = new THREE.CanvasTexture(c);
+      this._emojiTex[emoji] = tex;
+    }
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+    s.scale.set(1.1, 1.1, 1);
+    return s;
   }
 }

@@ -5,10 +5,10 @@
 export const CONFIG = {
   // Player movement (units per second)
   sideSpeed: 20,
-  forwardSpeed: 25.2,       // starting auto-run speed (eases up from here)
-  maxForwardSpeed: 66,
-  jumpSpeed: 26.5,          // ~12% higher arc than before
-  gravity: 34,
+  forwardSpeed: 24,         // starting auto-run speed (eases up from here) — 5% slower
+  maxForwardSpeed: 63,
+  jumpSpeed: 31.5,          // another ~10% jump height
+  gravity: 39,
   playerRadius: 0.9,
 
   // Variable jump: releasing jump while rising chops upward speed for a fast drop
@@ -65,10 +65,18 @@ export const CONFIG = {
   // --- Hazards: a small floor right after the safe intro (so spikes, obstacles
   // and moving platforms show up early), ramping to their peak. ---
   obstacleChance: [0.14, 0.6],
-  movingChance: [0.12, 0.45],
-  moveAmp: [4, 10],
+  movingChance: [0.22, 0.62],     // moving boards are a big part of the mix now
+  moveAmp: [4, 11],
   sharpTurnChance: [0.08, 0.38],
   goodPowerupChance: [0.9, 0.5],
+
+  // --- Tunnels: a short run of glowing rings you roll through. Kept short so
+  // the exit is always visible past it in the third-person camera. ---
+  tunnelChance: [0.0, 0.16],
+  tunnelCooldown: 6,   // min normal steps between tunnels
+  tunnelLength: 34,
+  tunnelRings: 7,
+  tunnelRadius: 4.5,
 
   // Powerups / powerdowns
   powerupChance: 0.18,    // chance a path platform floats a power pickup
@@ -82,8 +90,8 @@ export const CONFIG = {
   surgeAmount: 16,        // extra forward speed while surged (a powerdown)
   invulnTime: 1.2,        // brief mercy window after a shielded hit
   doubleJumpDuration: 16, // grants one mid-air jump
-  flightDuration: 9,      // hold jump to soar
-  flightLift: 14.5,       // upward speed while flying
+  flightDuration: 6,      // hold jump to soar (shortened — it was the strongest effect)
+  flightLift: 17,         // upward speed while flying
   morphDuration: 11,      // ball deforms and steering goes wobbly
   morphWobble: 7,         // strength of the steering wobble while morphed
   tripDuration: 13,       // psychedelic powerdown: colors go wild, hard to see
@@ -94,8 +102,9 @@ export const CONFIG = {
   cheatItemMultiplier: 3, // how many times as many gems/powerups spawn
   cheatDuration: 20,      // seconds every timed powerup/powerdown lasts in cheat mode
 
-  // Death: fall this far below the last platform you touched and it's game over
-  fallMargin: 22,
+  // Death: game over only once you fall this far below the LOWEST floor still
+  // drawn near you (i.e. there's genuinely nothing left to land on).
+  fallMargin: 16,
 
   // Starter platform
   starterLength: 56,

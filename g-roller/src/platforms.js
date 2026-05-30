@@ -10,20 +10,31 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 // Telegraphed pickups: each has its own color, shape and glyph so you always
 // know what you're about to touch. GOOD = cool colors, BAD (powerdowns) = warm.
+// weight = spawn frequency: simpler / milder effects are common, powerful or
+// harsh ones (flight, trip) are rare.
 const POWERUP_DEFS = {
-  shield:     { color: 0x9fe0ff, shape: "ring",  icon: "🛡️", good: true },
-  magnet:     { color: 0x4a78ff, shape: "ring",  icon: "🧲", good: true },
-  slow:       { color: 0x2fd9c0, shape: "ico",   icon: "🐢", good: true },
-  doublejump: { color: 0xc6ff3a, shape: "knot",  icon: "⏫", good: true },
-  flight:     { color: 0xffd24a, shape: "octa",  icon: "🕊️", good: true },
-  reverse:    { color: 0xff9f1c, shape: "box",   icon: "🔄", good: false },
-  surge:      { color: 0xff3b3b, shape: "cone",  icon: "⚡", good: false },
-  morph:      { color: 0xff4bd6, shape: "ico",   icon: "🌀", good: false },
-  splat:      { color: 0x8a5a2b, shape: "box",   icon: "💦", good: false },
-  trip:       { color: 0xa94bff, shape: "tetra", icon: "🌈", good: false },
+  shield:     { color: 0x9fe0ff, shape: "ring",  icon: "🛡️", good: true,  weight: 5 },
+  slow:       { color: 0x2fd9c0, shape: "ico",   icon: "🐢", good: true,  weight: 5 },
+  magnet:     { color: 0x4a78ff, shape: "ring",  icon: "🧲", good: true,  weight: 4 },
+  doublejump: { color: 0xc6ff3a, shape: "knot",  icon: "⏫", good: true,  weight: 3 },
+  flight:     { color: 0xffd24a, shape: "octa",  icon: "🕊️", good: true,  weight: 1.3 },
+  reverse:    { color: 0xff9f1c, shape: "box",   icon: "🔄", good: false, weight: 5 },
+  surge:      { color: 0xff3b3b, shape: "cone",  icon: "⚡", good: false, weight: 3 },
+  splat:      { color: 0x8a5a2b, shape: "box",   icon: "💦", good: false, weight: 3 },
+  morph:      { color: 0xff4bd6, shape: "ico",   icon: "🌀", good: false, weight: 2.5 },
+  trip:       { color: 0xa94bff, shape: "tetra", icon: "🌈", good: false, weight: 1.3 },
 };
 const GOOD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => POWERUP_DEFS[k].good);
 const BAD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => !POWERUP_DEFS[k].good);
+
+// Pick a pickup type from a list, weighted by its spawn frequency.
+function weightedPick(keys) {
+  let total = 0;
+  for (const k of keys) total += POWERUP_DEFS[k].weight;
+  let r = Math.random() * total;
+  for (const k of keys) { r -= POWERUP_DEFS[k].weight; if (r <= 0) return k; }
+  return keys[keys.length - 1];
+}
 
 // One floating board. The root is an unscaled Group at the board's center so we
 // can hang correctly-sized obstacles off it; the visual shape is a scaled child.
@@ -55,12 +66,14 @@ export class PlatformField {
     this._geoCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 28);
     this._geoHex = new THREE.CylinderGeometry(0.5, 0.5, 1, 6);
     this._gemGeo = new THREE.OctahedronGeometry(0.55);
+    this._ringGeo = new THREE.TorusGeometry(CONFIG.tunnelRadius, 0.35, 12, 32);
 
     this._time = 0;
     this._difficulty = 0;  // hazard ramp (slow)
     this._spreadD = 0;     // spread ramp (fast)
     this.itemMultiplier = 1; // cheat code bumps this to spawn extra gems/powerups
     this._stepIndex = 0;
+    this._stepsSinceTunnel = 0;
     this._cursor = { x: 0, y: 0, z: 0 };
     this._drift = { x: 0, y: 0 };  // wandering target the critical path heads toward
     this._driftSteps = 0;
@@ -77,6 +90,7 @@ export class PlatformField {
     this._difficulty = 0;
     this._spreadD = 0;
     this._stepIndex = 0;
+    this._stepsSinceTunnel = 0;
     this._drift = { x: 0, y: 0 };
     this._driftSteps = CONFIG.safeStraight;
 
@@ -159,7 +173,56 @@ export class PlatformField {
     // Slide distance grows with difficulty (gentle wander early, big swings late).
     const base = ramp(CONFIG.moveAmp, this._difficulty);
     const amp = big ? base * 1.3 : rand(base * 0.6, base);
-    p.mover = { axis: chance(0.78) ? "x" : "y", amp, speed: rand(0.7, 1.5), phase: rand(0, Math.PI * 2), baseX: p.pos.x, baseY: p.pos.y };
+    // Direction: mostly horizontal/vertical, sometimes a crazy diagonal.
+    const roll = Math.random();
+    let dirX, dirY;
+    if (roll < 0.42) { dirX = 1; dirY = 0; }                 // horizontal slide
+    else if (roll < 0.74) { dirX = 0; dirY = 1; }            // vertical lift
+    else {                                                    // diagonal!
+      dirX = 0.707 * (chance(0.5) ? 1 : -1);
+      dirY = 0.707 * (chance(0.5) ? 1 : -1);
+    }
+    p.mover = { dirX, dirY, amp, speed: rand(0.7, 1.5), phase: rand(0, Math.PI * 2), baseX: p.pos.x, baseY: p.pos.y };
+  }
+
+  // A short glowing ring tunnel. The floor is a normal (landable) flat platform;
+  // the rings are see-through decor positioned below camera height, so the
+  // third-person view still sees the exit past the end of the tunnel.
+  _spawnTunnel(forwardSpeed) {
+    const reach = jumpReach();
+    const maxGap = forwardSpeed * reach.airTime * CONFIG.pathGapSafety;
+    const gap = clamp(rand(4, maxGap * 0.4), 3, maxGap);
+    const len = CONFIG.tunnelLength;
+    const w = 11;
+    const band = ramp(CONFIG.bandX, this._spreadD);
+    const x = clamp(this._cursor.x, -band, band);
+    const y = this._cursor.y; // flat all the way through
+    const z = this._cursor.z + gap + len / 2;
+
+    const p = this._addBoard({ x, y, z, w, len, hy: 0.5, geoType: "box", type: "normal", texName: "concrete" });
+    this._addTunnelRings(p, len);
+    this._cursor = { x, y, z: z + len / 2 };
+    this._stepsSinceTunnel = 0;
+    this._stepIndex++;
+
+    // A line of gems down the middle as a reward for taking the tunnel.
+    for (let k = 0; k < 4; k++) this._addGem(x, y + 1.4, z - len / 2 + (k + 0.7) * (len / 5));
+  }
+
+  _addTunnelRings(p, len) {
+    const count = CONFIG.tunnelRings;
+    const spacing = len / count;
+    const r = CONFIG.tunnelRadius;
+    for (let k = 0; k < count; k++) {
+      const hue = ((k / count) * 0.55 + 0.55) % 1; // gradient purple -> cyan down the tube
+      const col = new THREE.Color().setHSL(hue, 0.8, 0.6);
+      const ring = new THREE.Mesh(this._ringGeo, new THREE.MeshStandardMaterial({
+        color: col, emissive: col, emissiveIntensity: 0.9, metalness: 0.4, roughness: 0.3,
+        transparent: true, opacity: 0.7,
+      }));
+      ring.position.set(0, r - 1.4, -p.hz + (k + 0.5) * spacing);
+      p.mesh.add(ring);
+    }
   }
 
   _addGem(x, y, z) {
@@ -176,7 +239,7 @@ export class PlatformField {
   // ramp in with difficulty.
   _addPowerup(x, y, z, d = 0) {
     const good = chance(ramp(CONFIG.goodPowerupChance, d));
-    const type = pick(good ? GOOD_POWERUPS : BAD_POWERUPS);
+    const type = weightedPick(good ? GOOD_POWERUPS : BAD_POWERUPS);
     const def = POWERUP_DEFS[type];
 
     const group = new THREE.Group();
@@ -267,6 +330,14 @@ export class PlatformField {
     // The first few pads run straight ahead (spread pinned to 0); after that the
     // field opens up fast on the SPREAD ramp while hazards stay on the slow one.
     const safe = this._stepIndex < CONFIG.safeStraight;
+
+    // Occasionally the next stretch is a glowing ring tunnel.
+    if (!safe && this._stepsSinceTunnel >= CONFIG.tunnelCooldown && chance(ramp(CONFIG.tunnelChance, hd))) {
+      this._spawnTunnel(forwardSpeed);
+      return;
+    }
+    this._stepsSinceTunnel++;
+
     const sd = safe ? 0 : this._spreadD;
     const dd = safe ? 0 : hd;
     const band = ramp(CONFIG.bandX, sd);
@@ -388,11 +459,10 @@ export class PlatformField {
       if (!p.mover) { p.dx = 0; p.dy = 0; continue; }
       const m = p.mover;
       const o = Math.sin(this._time * m.speed + m.phase) * m.amp;
-      if (m.axis === "x") {
-        const nx = m.baseX + o; p.dx = nx - p.pos.x; p.dy = 0; p.pos.x = nx;
-      } else {
-        const ny = m.baseY + o; p.dy = ny - p.pos.y; p.dx = 0; p.pos.y = ny;
-      }
+      const nx = m.baseX + o * m.dirX;
+      const ny = m.baseY + o * m.dirY;
+      p.dx = nx - p.pos.x; p.dy = ny - p.pos.y;
+      p.pos.x = nx; p.pos.y = ny;
     }
 
     for (const g of this.gems) {
@@ -417,6 +487,18 @@ export class PlatformField {
       if (this.gems[i].mesh.position.z < cullZ) { this.scene.remove(this.gems[i].mesh); this.gems.splice(i, 1); }
     for (let i = this.powerups.length - 1; i >= 0; i--)
       if (this.powerups[i].mesh.position.z < cullZ) { this.scene.remove(this.powerups[i].mesh); this.powerups.splice(i, 1); }
+  }
+
+  // Lowest platform top among the floors currently drawn around the player.
+  // Death is measured against this so you never die while a tile you could have
+  // landed on is still on screen below you. Returns -Infinity if none nearby.
+  lowestTopNear(z) {
+    let min = Infinity;
+    for (const p of this.platforms) {
+      if (p.pos.z < z - 25 || p.pos.z > z + 110) continue; // roughly what's on screen
+      if (p.topY < min) min = p.topY;
+    }
+    return min === Infinity ? -Infinity : min;
   }
 
   // Pull uncollected gems toward the player while a magnet is active. The pull

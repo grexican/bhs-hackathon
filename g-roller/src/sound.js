@@ -4,12 +4,54 @@
 // until a user gesture, start() must be called from a key/tap (the game's start
 // press handles that).
 
-// A-minor synthwave progression: Am - F - C - G. Each entry is one bar.
-const PROG = [
-  { bass: 110.0, arp: [220.0, 261.63, 329.63, 261.63] }, // Am
-  { bass: 87.31, arp: [174.61, 220.0, 261.63, 220.0] },  // F
-  { bass: 130.81, arp: [261.63, 329.63, 392.0, 329.63] },// C
-  { bass: 98.0, arp: [196.0, 246.94, 293.66, 246.94] },  // G
+// Five soundtracks to cycle through. Each is a tempo, oscillator timbres, and a
+// chord progression (one entry per bar: a bass root + a 4-note arpeggio).
+const TRACKS = [
+  {
+    name: "Neon Drive", tempo: 128, bassWave: "sawtooth", arpWave: "square",
+    prog: [
+      { bass: 110.0, arp: [220.0, 261.63, 329.63, 261.63] }, // Am
+      { bass: 87.31, arp: [174.61, 220.0, 261.63, 220.0] },  // F
+      { bass: 130.81, arp: [261.63, 329.63, 392.0, 329.63] },// C
+      { bass: 98.0, arp: [196.0, 246.94, 293.66, 246.94] },  // G
+    ],
+  },
+  {
+    name: "Midnight Cruise", tempo: 106, bassWave: "triangle", arpWave: "triangle",
+    prog: [
+      { bass: 110.0, arp: [220.0, 261.63, 329.63, 261.63] }, // Am
+      { bass: 73.42, arp: [146.83, 174.61, 220.0, 174.61] }, // Dm
+      { bass: 98.0, arp: [196.0, 246.94, 293.66, 246.94] },  // G
+      { bass: 130.81, arp: [261.63, 329.63, 392.0, 329.63] },// C
+    ],
+  },
+  {
+    name: "Outrun", tempo: 142, bassWave: "sawtooth", arpWave: "sawtooth",
+    prog: [
+      { bass: 110.0, arp: [220.0, 261.63, 329.63, 440.0] }, // Am
+      { bass: 87.31, arp: [174.61, 220.0, 261.63, 349.23] },// F
+      { bass: 98.0, arp: [196.0, 246.94, 293.66, 392.0] },  // G
+      { bass: 110.0, arp: [220.0, 329.63, 440.0, 329.63] }, // Am
+    ],
+  },
+  {
+    name: "Cyber Dawn", tempo: 122, bassWave: "sawtooth", arpWave: "square",
+    prog: [
+      { bass: 130.81, arp: [261.63, 329.63, 392.0, 329.63] },// C
+      { bass: 98.0, arp: [196.0, 246.94, 293.66, 246.94] },  // G
+      { bass: 110.0, arp: [220.0, 261.63, 329.63, 261.63] }, // Am
+      { bass: 87.31, arp: [174.61, 220.0, 261.63, 220.0] },  // F
+    ],
+  },
+  {
+    name: "Dark Sector", tempo: 116, bassWave: "square", arpWave: "triangle",
+    prog: [
+      { bass: 82.41, arp: [164.81, 196.0, 246.94, 196.0] },  // Em
+      { bass: 130.81, arp: [261.63, 329.63, 392.0, 329.63] },// C
+      { bass: 98.0, arp: [196.0, 246.94, 293.66, 246.94] },  // G
+      { bass: 73.42, arp: [146.83, 220.0, 293.66, 220.0] },  // D
+    ],
+  },
 ];
 
 export class Sound {
@@ -20,7 +62,7 @@ export class Sound {
     this._stepCount = 0;
     this._nextStepTime = 0;
     this._timer = null;
-    this._tempo = 128;
+    this._trackIndex = 0;
   }
 
   // Lazily create the audio graph. Safe to call repeatedly; only builds once.
@@ -50,10 +92,21 @@ export class Sound {
 
       this._distortion = this._makeDistortionCurve(28);
       this._noise = this._makeNoiseBuffer();
-      this._sec16 = 60 / this._tempo / 4; // length of a sixteenth note
     }
     if (this.ctx.state === "suspended") this.ctx.resume();
     this._startMusic();
+  }
+
+  // Switch to the next soundtrack. Works even before audio has started (it just
+  // sets which track will play). Returns the new track's name.
+  nextTrack() {
+    this._trackIndex = (this._trackIndex + 1) % TRACKS.length;
+    if (this.ctx && this._musicOn) this._startMusic(); // restart sequencer on the new track
+    return TRACKS[this._trackIndex].name;
+  }
+
+  trackName() {
+    return TRACKS[this._trackIndex].name;
   }
 
   toggleMute() {
@@ -66,7 +119,10 @@ export class Sound {
   // --- Music sequencer ------------------------------------------------------
 
   _startMusic() {
-    if (this._musicOn) return;
+    clearInterval(this._timer); // restart cleanly (used on first start and track switch)
+    const track = TRACKS[this._trackIndex];
+    this._sec16 = 60 / track.tempo / 4; // sixteenth-note length at this track's tempo
+    this._stepCount = 0;
     this._musicOn = true;
     this._nextStepTime = this.ctx.currentTime + 0.1;
     this._timer = setInterval(() => this._scheduler(), 25);
@@ -81,12 +137,14 @@ export class Sound {
   }
 
   _scheduleStep(step, t) {
-    const bar = Math.floor(step / 16) % PROG.length;
+    const track = TRACKS[this._trackIndex];
+    const prog = track.prog;
+    const bar = Math.floor(step / 16) % prog.length;
     const s = step % 16;
-    const chord = PROG[bar];
+    const chord = prog[bar];
 
-    if (s % 2 === 0) this._bass(t, chord.bass);          // driving 8th-note bass
-    this._arp(t, chord.arp[s % chord.arp.length]);        // 16th arpeggio
+    if (s % 2 === 0) this._bass(t, chord.bass, track.bassWave); // driving 8th-note bass
+    this._arp(t, chord.arp[s % chord.arp.length], track.arpWave); // 16th arpeggio
     if (s % 4 === 0) this._kick(t);                       // four on the floor
     if (s === 4 || s === 12) this._snare(t);              // backbeat
     if (s % 2 === 1) this._hat(t);                        // offbeat hats
@@ -94,7 +152,7 @@ export class Sound {
 
   // --- Music voices ---------------------------------------------------------
 
-  _bass(t, freq) {
+  _bass(t, freq, wave = "sawtooth") {
     const dur = this._sec16 * 1.7;
     const shaper = this.ctx.createWaveShaper();
     shaper.curve = this._distortion;
@@ -103,18 +161,18 @@ export class Sound {
     const g = this.ctx.createGain();
     this._env(g, t, 0.5, 0.005, dur);
     shaper.connect(lp); lp.connect(g); g.connect(this.musicGain);
-    // two slightly detuned saws for a thick, gritty low end
+    // two slightly detuned oscillators for a thick, gritty low end
     for (const det of [-6, 6]) {
       const o = this.ctx.createOscillator();
-      o.type = "sawtooth"; o.frequency.value = freq; o.detune.value = det;
+      o.type = wave; o.frequency.value = freq; o.detune.value = det;
       o.connect(shaper); o.start(t); o.stop(t + dur + 0.02);
     }
   }
 
-  _arp(t, freq) {
+  _arp(t, freq, wave = "square") {
     const dur = this._sec16 * 0.9;
     const o = this.ctx.createOscillator();
-    o.type = "square"; o.frequency.value = freq;
+    o.type = wave; o.frequency.value = freq;
     const hp = this.ctx.createBiquadFilter();
     hp.type = "highpass"; hp.frequency.value = 400;
     const g = this.ctx.createGain();

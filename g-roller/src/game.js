@@ -27,6 +27,8 @@ export class Game {
     this._seenStart = 0;   // tracks Input.startPresses for the start gate
     this._cheat = false;
     this._konami = [];
+    this._firstPerson = false;
+    this._restartLock = 0; // brief input-dead window after dying (no instant restart)
     this.gems = 0;
     this._shake = 0;
     this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0 };
@@ -61,10 +63,20 @@ export class Game {
     this._resetWorld();
     this._refreshHud();
 
-    // 'M' mutes/unmutes the audio.
+    // 'M' mutes/unmutes the audio; 'V' toggles first-person view.
     window.addEventListener("keydown", (e) => {
       if (e.code === "KeyM") this._toast(this.sound.toggleMute() ? "🔇 SOUND OFF" : "🔊 SOUND ON", "#bcd0ff");
+      if (e.code === "KeyV") this._toggleView();
+      if (e.code === "KeyN") {
+        // First press starts the music (this keydown is the needed gesture) so
+        // you can audition tracks on the title screen; later presses cycle.
+        if (!this.sound.ctx) { this.sound.start(); this._toast(`🎵 ${this.sound.trackName()}`, "#a94bff"); }
+        else this._toast(`🎵 ${this.sound.nextTrack()}`, "#a94bff");
+      }
     });
+    const viewBtn = document.getElementById("view-btn");
+    if (viewBtn) viewBtn.addEventListener("click", () => this._toggleView());
+    this._viewBtn = viewBtn;
 
     // Secret cheat code, entered on the start / game-over screen.
     window.addEventListener("keydown", (e) => {
@@ -142,6 +154,12 @@ export class Game {
     return this._cheat ? CONFIG.cheatDuration : CONFIG[EFFECT_DURATIONS[key]];
   }
 
+  _toggleView() {
+    this._firstPerson = !this._firstPerson;
+    if (this._viewBtn) this._viewBtn.textContent = this._firstPerson ? "👁 3rd person" : "👁 1st person";
+    this._followCamera(true); // snap so the switch isn't jarring
+  }
+
   _toggleCheat() {
     this._cheat = !this._cheat;
     this.field.itemMultiplier = this._cheat ? CONFIG.cheatItemMultiplier : 1;
@@ -157,13 +175,16 @@ export class Game {
 
     if (this.state === "playing") {
       this._tickPlaying(dt);
+    } else if (this._restartLock > 0) {
+      this._restartLock -= dt;
+      this._seenStart = this.input.startPresses; // swallow any presses during the grace
     } else if (this.input.startPresses !== this._seenStart) {
       this._seenStart = this.input.startPresses;
       this._startGame();
     }
 
     this.particles.update(dt);
-    this.background.update(this.player.position.z);
+    this.background.update(this.player.position.z, dt, this.state === "playing");
     this._followCamera(false);
     this._tickCamera(dt);
     this.renderer.render(this.scene, this.camera);
@@ -211,6 +232,9 @@ export class Game {
     if (ev.jumped) this.sound.jump();
     this._onLanded(ev);
     if (ev.hit) this._onHit(ev.hit);
+
+    // Show every active effect on the ball (wings, hover board, orbiting glyphs).
+    this.player.updateVisuals(this._effects, dt);
 
     // Ball speed-trail.
     const tp = this.player.position.clone(); tp.y -= this.player.radius * 0.6;
@@ -290,7 +314,7 @@ export class Game {
   _splat() {
     const layer = document.getElementById("splats");
     const colors = ["#5a3a1c", "#3a2a14", "#6b4a22", "#2c3a18"];
-    const n = 5 + Math.floor(Math.random() * 3);
+    const n = 10 + Math.floor(Math.random() * 5); // doubled — really gunk up the screen
     for (let i = 0; i < n; i++) {
       const b = document.createElement("div");
       b.className = "splat";
@@ -313,6 +337,7 @@ export class Game {
   _die() {
     if (this.state === "dead") return;
     this.state = "dead";
+    this._restartLock = 0.5; // 500 ms where no input restarts (no accidental instant replay)
     this._shake = 0.6;
     this.canvas.classList.remove("is-tripping");
     this.particles.burst(this.player.position, 0xffd34e, 40);
@@ -373,15 +398,31 @@ export class Game {
   _followCamera(snap) {
     const p = this.player.position;
     const k = snap ? 1 : 0.12;
-    this.camera.position.x += (p.x - this.camera.position.x) * k;
-    this.camera.position.y += (p.y + 9 - this.camera.position.y) * k;
-    this.camera.position.z = p.z - 16;
 
-    if (this._shake > 0) {
-      this.camera.position.x += (Math.random() - 0.5) * this._shake;
-      this.camera.position.y += (Math.random() - 0.5) * this._shake;
+    // Hide the ball when we're seeing through its eyes.
+    this.player.mesh.visible = !this._firstPerson;
+
+    if (this._firstPerson) {
+      // Sit just above the ball's center and look down the track.
+      const eyeY = p.y + this.player.radius * 0.6;
+      this.camera.position.x += (p.x - this.camera.position.x) * k;
+      this.camera.position.y += (eyeY - this.camera.position.y) * k;
+      this.camera.position.z = p.z + this.player.radius * 0.5;
+      if (this._shake > 0) {
+        this.camera.position.x += (Math.random() - 0.5) * this._shake;
+        this.camera.position.y += (Math.random() - 0.5) * this._shake;
+      }
+      this.camera.lookAt(p.x, eyeY + 1, p.z + 16);
+    } else {
+      this.camera.position.x += (p.x - this.camera.position.x) * k;
+      this.camera.position.y += (p.y + 9 - this.camera.position.y) * k;
+      this.camera.position.z = p.z - 16;
+      if (this._shake > 0) {
+        this.camera.position.x += (Math.random() - 0.5) * this._shake;
+        this.camera.position.y += (Math.random() - 0.5) * this._shake;
+      }
+      this.camera.lookAt(p.x, p.y + 1.5, p.z + 12);
     }
-    this.camera.lookAt(p.x, p.y + 1.5, p.z + 12);
 
     this.sun.position.set(p.x - 30, p.y + 60, p.z - 20);
     this.sun.target.position.set(p.x, p.y, p.z + 10);
