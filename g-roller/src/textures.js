@@ -123,11 +123,11 @@ const PAINTERS = {
     }
   },
 
-  // Speed-boost pad — glowing forward chevrons.
+  // Speed-boost pad — glowing forward chevrons (green = "go fast").
   boost(ctx, s) {
-    fill(ctx, "#10243a", s);
-    ctx.fillStyle = "#2bd6ff";
-    ctx.shadowColor = "#2bd6ff"; ctx.shadowBlur = 18;
+    fill(ctx, "#0c2a18", s);
+    ctx.fillStyle = "#39ff7a";
+    ctx.shadowColor = "#39ff7a"; ctx.shadowBlur = 18;
     for (let i = 0; i < 4; i++) {
       const y = i * (s / 4) + 10;
       ctx.beginPath();

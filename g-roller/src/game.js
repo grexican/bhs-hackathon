@@ -5,6 +5,14 @@ import { Player } from "./player.js";
 import { PlatformField } from "./platforms.js";
 import { Particles } from "./effects.js";
 import { Background } from "./background.js";
+import { Sound } from "./sound.js";
+
+// Maps a timed effect's state key to its CONFIG duration key.
+const EFFECT_DURATIONS = {
+  magnet: "magnetDuration", slow: "slowDuration", doublejump: "doubleJumpDuration",
+  flight: "flightDuration", reverse: "reverseDuration", surge: "surgeDuration",
+  morph: "morphDuration", trip: "tripDuration",
+};
 
 // The conductor. Builds the 3D world, runs the game loop, owns the Start ->
 // Playing -> Dead state machine, scoring, powerups, the chase camera, and the
@@ -16,16 +24,19 @@ export class Game {
     this.baseSpeed = CONFIG.forwardSpeed;
     this._speedTimer = 0;
     this._boostTimer = 0;
-    this._prevJumpHeld = false;
+    this._seenStart = 0;   // tracks Input.startPresses for the start gate
+    this._cheat = false;
+    this._konami = [];
     this.gems = 0;
     this._shake = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0 };
     this._invuln = 0;
 
     this._buildRenderer();
     this._buildScene();
 
     this.background = new Background(this.scene);
+    this.sound = new Sound();
     this.input = new Input(canvas);
     this.player = new Player(this.scene);
     this.field = new PlatformField(this.scene);
@@ -49,6 +60,22 @@ export class Game {
 
     this._resetWorld();
     this._refreshHud();
+
+    // 'M' mutes/unmutes the audio.
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "KeyM") this._toast(this.sound.toggleMute() ? "🔇 SOUND OFF" : "🔊 SOUND ON", "#bcd0ff");
+    });
+
+    // Secret cheat code, entered on the start / game-over screen.
+    window.addEventListener("keydown", (e) => {
+      if (this.state === "playing" || e.repeat) return; // arrows steer during play; ignore key-repeat
+      this._konami.push(e.code);
+      if (this._konami.length > CONFIG.cheatCode.length) this._konami.shift();
+      if (CONFIG.cheatCode.every((k, i) => this._konami[i] === k)) {
+        this._konami = [];
+        this._toggleCheat();
+      }
+    });
 
     window.addEventListener("resize", () => this._onResize());
     this._clock = new THREE.Clock();
@@ -94,8 +121,9 @@ export class Game {
     this._boostTimer = 0;
     this.gems = 0;
     this._invuln = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0 };
     this._clearSplats();
+    this.canvas.classList.remove("is-tripping");
     this.field.reset();
     this.player.reset();
     this._followCamera(true);
@@ -109,10 +137,18 @@ export class Game {
     return s;
   }
 
-  _jumpPressed() {
-    const pressed = this.input.jumpHeld && !this._prevJumpHeld;
-    this._prevJumpHeld = this.input.jumpHeld;
-    return pressed;
+  // Duration a timed effect lasts right now (cheat mode overrides everything).
+  _dur(key) {
+    return this._cheat ? CONFIG.cheatDuration : CONFIG[EFFECT_DURATIONS[key]];
+  }
+
+  _toggleCheat() {
+    this._cheat = !this._cheat;
+    this.field.itemMultiplier = this._cheat ? CONFIG.cheatItemMultiplier : 1;
+    this._toast(
+      this._cheat ? `🎮 CHEAT ON · ${CONFIG.cheatItemMultiplier}× items · ${CONFIG.cheatDuration}s power` : "CHEAT OFF",
+      "#ffd34e"
+    );
   }
 
   _loop() {
@@ -120,9 +156,9 @@ export class Game {
     const dt = Math.min(this._clock.getDelta(), 1 / 30);
 
     if (this.state === "playing") {
-      this._prevJumpHeld = this.input.jumpHeld;
       this._tickPlaying(dt);
-    } else if (this._jumpPressed()) {
+    } else if (this.input.startPresses !== this._seenStart) {
+      this._seenStart = this.input.startPresses;
       this._startGame();
     }
 
@@ -134,8 +170,10 @@ export class Game {
   }
 
   _startGame() {
+    this.sound.start(); // this runs from a keypress/tap, so audio is allowed
     if (this.state === "dead") this._resetWorld();
     this.player.jumpCount = 0;
+    this.player._seenPresses = this.input.jumpPresses; // don't let the start press auto-jump
     this.gems = 0;
     this.state = "playing";
     this._hud.overlay.classList.add("is-hidden");
@@ -151,12 +189,13 @@ export class Game {
     }
     if (this._boostTimer > 0) this._boostTimer -= dt;
     if (this._invuln > 0) this._invuln -= dt;
-    for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph"])
+    for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip"])
       if (this._effects[k] > 0) this._effects[k] -= dt;
+    // Psychedelic powerdown: recolor the whole view via an animated CSS filter.
+    this.canvas.classList.toggle("is-tripping", this._effects.trip > 0);
 
     const speed = this._effectiveSpeed();
     this.field.update(dt, this.player.position.z, speed);
-    if (this._effects.magnet > 0) this.field.attract(this.player.position, dt);
 
     const ctx = {
       forwardSpeed: speed,
@@ -169,21 +208,27 @@ export class Game {
     };
     const ev = this.player.update(dt, this.input, ctx, this.field);
 
+    if (ev.jumped) this.sound.jump();
     this._onLanded(ev);
     if (ev.hit) this._onHit(ev.hit);
 
     // Ball speed-trail.
     const tp = this.player.position.clone(); tp.y -= this.player.radius * 0.6;
-    this.particles.trail(tp, this._boostTimer > 0 || this._effects.surge > 0 ? 0x2bd6ff : 0xffc24e);
+    this.particles.trail(tp, this._boostTimer > 0 || this._effects.surge > 0 ? 0x2bff6a : 0xffc24e);
 
     // Depth grid follows underneath.
     this.grid.position.z = Math.round(this.player.position.z / 5) * 5;
     this.grid.position.x = Math.round(this.player.position.x / 5) * 5;
 
-    for (const pos of this.field.harvestGems(this.player.position, this.player.radius)) {
+    // Magnet pulls gems toward the player's current (post-move) position, then
+    // we harvest — so they get yanked in and eaten instead of trailing behind.
+    if (this._effects.magnet > 0) this.field.attract(this.player.position, dt);
+    const grabbed = this.field.harvestGems(this.player.position, this.player.radius);
+    for (const pos of grabbed) {
       this.gems += 1;
       this.particles.burst(pos, 0x66f0ff, 16);
     }
+    if (grabbed.length) this.sound.gem();
     for (const u of this.field.harvestPowerups(this.player.position, this.player.radius)) {
       this._applyPowerup(u);
     }
@@ -197,11 +242,11 @@ export class Game {
     if (!ev.landed) return;
     const p = ev.pos.clone(); p.y -= this.player.radius;
     if (ev.landed === "bouncy") {
-      this.particles.burst(p, 0xff3f7a, 22); this._shake = 0.35; this._toast("BOING!", "#ff3f7a");
+      this.particles.burst(p, 0xff3f7a, 22); this._shake = 0.35; this._toast("BOING!", "#ff3f7a"); this.sound.bounce();
     } else if (ev.landed === "boost") {
-      this._boostTimer = CONFIG.boostDuration; this.particles.burst(p, 0x2bd6ff, 20); this._shake = 0.25; this._toast("BOOST!", "#2bd6ff");
+      this._boostTimer = CONFIG.boostDuration; this.particles.burst(p, 0x2bff6a, 20); this._shake = 0.25; this._toast("BOOST!", "#2bff6a"); this.sound.boost();
     } else {
-      this.particles.burst(p, 0xbfc6d8, 7);
+      this.particles.burst(p, 0xbfc6d8, 7); this.sound.land();
     }
   }
 
@@ -214,6 +259,7 @@ export class Game {
       this.particles.burst(this.player.position, 0x35e0ff, 26);
       this._shake = 0.4;
       this._toast("BLOCKED!", "#35e0ff");
+      this.sound.clang();
     } else {
       this.particles.burst(this.player.position, 0xff3b3b, 30);
       this._die();
@@ -225,20 +271,17 @@ export class Game {
       shield: ["🛡️ SHIELD", "#35e0ff"], magnet: ["🧲 MAGNET", "#b06bff"], slow: ["🐢 SLOW-MO", "#4dff8a"],
       doublejump: ["⏫ DOUBLE JUMP", "#7cff5a"], flight: ["🕊️ FLIGHT — hold jump!", "#ffe14d"],
       reverse: ["🔄 REVERSED!", "#ff9f1c"], surge: ["⚡ SURGE!", "#ff3b3b"],
-      morph: ["🌀 MORPH!", "#c04bff"], splat: ["💦 SPLAT!", "#8a5a2b"],
+      morph: ["🌀 MORPH!", "#ff4bd6"], splat: ["💦 SPLAT!", "#8a5a2b"], trip: ["🌈 TRIPPING!", "#a94bff"],
     };
+    // Different effects stack (run at once). Re-grabbing the same one tops its
+    // timer back up without ever shortening it.
     if (u.type === "shield") this._effects.shield = true;
-    else if (u.type === "magnet") this._effects.magnet = CONFIG.magnetDuration;
-    else if (u.type === "slow") this._effects.slow = CONFIG.slowDuration;
-    else if (u.type === "doublejump") this._effects.doublejump = CONFIG.doubleJumpDuration;
-    else if (u.type === "flight") this._effects.flight = CONFIG.flightDuration;
-    else if (u.type === "reverse") this._effects.reverse = CONFIG.reverseDuration;
-    else if (u.type === "surge") this._effects.surge = CONFIG.surgeDuration;
-    else if (u.type === "morph") this._effects.morph = CONFIG.morphDuration;
     else if (u.type === "splat") this._splat();
+    else this._effects[u.type] = Math.max(this._effects[u.type] || 0, this._dur(u.type));
 
     this.particles.burst(u.pos, u.good ? 0x66f0ff : 0xff7a1c, 20);
     this._toast(map[u.type][0], map[u.type][1]);
+    this.sound.power(u.good);
     if (!u.good) this._shake = 0.3;
   }
 
@@ -271,7 +314,9 @@ export class Game {
     if (this.state === "dead") return;
     this.state = "dead";
     this._shake = 0.6;
+    this.canvas.classList.remove("is-tripping");
     this.particles.burst(this.player.position, 0xffd34e, 40);
+    this.sound.die();
 
     const dist = Math.max(0, Math.floor(this.player.position.z));
     const jumps = Math.max(0, this.player.jumpCount);
@@ -296,17 +341,24 @@ export class Game {
 
   _renderEffects() {
     const e = this._effects;
-    const chips = [];
-    if (e.shield) chips.push(["🛡️", "", "#35e0ff"]);
-    if (e.magnet > 0) chips.push(["🧲", Math.ceil(e.magnet), "#b06bff"]);
-    if (e.slow > 0) chips.push(["🐢", Math.ceil(e.slow), "#4dff8a"]);
-    if (e.doublejump > 0) chips.push(["⏫", Math.ceil(e.doublejump), "#7cff5a"]);
-    if (e.flight > 0) chips.push(["🕊️", Math.ceil(e.flight), "#ffe14d"]);
-    if (e.reverse > 0) chips.push(["🔄", Math.ceil(e.reverse), "#ff9f1c"]);
-    if (e.surge > 0) chips.push(["⚡", Math.ceil(e.surge), "#ff3b3b"]);
-    if (e.morph > 0) chips.push(["🌀", Math.ceil(e.morph), "#c04bff"]);
-    this._hud.effects.innerHTML = chips
-      .map(([icon, t, c]) => `<span class="chip" style="border-color:${c};color:${c}">${icon}${t ? ` ${t}s` : ""}</span>`)
+    const rows = [];
+    if (e.shield) rows.push(["🛡️", "Shield", "#9fe0ff", 1]); // no timer — lasts till hit
+    const add = (key, icon, color) => {
+      if (e[key] > 0) rows.push([icon, `${Math.ceil(e[key])}s`, color, e[key] / this._dur(key)]);
+    };
+    add("magnet", "🧲", "#4a78ff");
+    add("slow", "🐢", "#2fd9c0");
+    add("doublejump", "⏫", "#c6ff3a");
+    add("flight", "🕊️", "#ffd24a");
+    add("reverse", "🔄", "#ff9f1c");
+    add("surge", "⚡", "#ff3b3b");
+    add("morph", "🌀", "#ff4bd6");
+    add("trip", "🌈", "#a94bff");
+    this._hud.effects.innerHTML = rows
+      .map(([icon, label, color, frac]) => {
+        const w = Math.max(0, Math.min(1, frac)) * 100;
+        return `<span class="chip" style="--c:${color}"><span class="chip__top">${icon} <b>${label}</b></span><span class="chip__bar"><span class="chip__fill" style="width:${w}%"></span></span></span>`;
+      })
       .join("");
   }
 

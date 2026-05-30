@@ -7,6 +7,12 @@ export class Input {
     this.steer = 0;
     // jumpHeld: true while the jump key/touch is down (jump uses "hold for height")
     this.jumpHeld = false;
+    // jumpPresses: increments on every fresh press. The player buffers off this
+    // so even a tap shorter than one frame can't be missed.
+    this.jumpPresses = 0;
+    // startPresses: only Space / W / tap (NOT ArrowUp), so the arrow keys are
+    // free to enter the cheat code on the start screen without starting the game.
+    this.startPresses = 0;
 
     this._left = false;
     this._right = false;
@@ -17,6 +23,7 @@ export class Input {
     // Touch / mouse: left half of screen steers left, right half steers right,
     // and any press also counts as "jump" so one-thumb play works.
     const press = (clientX) => {
+      if (!this.jumpHeld) { this.jumpPresses++; this.startPresses++; }
       this.jumpHeld = true;
       if (clientX < window.innerWidth / 2) { this._left = true; this._right = false; }
       else { this._right = true; this._left = false; }
@@ -43,10 +50,18 @@ export class Input {
       case "KeyD":
         this._right = down; break;
       case "Space":
-      case "ArrowUp":
       case "KeyW":
+        // Space / W jump AND start the game.
+        if (down && !this.jumpHeld) { this.jumpPresses++; this.startPresses++; }
         this.jumpHeld = down;
         e.preventDefault(); // stop Space from scrolling the page
+        break;
+      case "ArrowUp":
+        // ArrowUp jumps in-game, but does NOT start the game — that frees it for
+        // the cheat code on the start screen.
+        if (down && !this.jumpHeld) this.jumpPresses++;
+        this.jumpHeld = down;
+        e.preventDefault();
         break;
       default:
         return;

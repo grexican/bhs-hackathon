@@ -3,6 +3,26 @@ import { CONFIG } from "./config.js";
 
 const ONE = new THREE.Vector3(1, 1, 1);
 
+// A gold checker-grid skin for the ball so you can read its spin under the light.
+function ballTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#ffce3a";
+  ctx.fillRect(0, 0, 256, 256);
+  const n = 8, t = 256 / n;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    if ((x + y) % 2 === 0) { ctx.fillStyle = "#ff9f1c"; ctx.fillRect(x * t, y * t, t, t); }
+  }
+  ctx.strokeStyle = "rgba(40,28,8,0.55)";
+  ctx.lineWidth = 3;
+  for (let i = 0; i <= n; i++) {
+    ctx.beginPath(); ctx.moveTo(i * t, 0); ctx.lineTo(i * t, 256); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i * t); ctx.lineTo(256, i * t); ctx.stroke();
+  }
+  return new THREE.CanvasTexture(c);
+}
+
 // The rolling ball. Owns its own kinematic physics: we move it by hand each
 // frame (no physics engine) to match the Unity PlayerController feel, plus
 // riding moving platforms and bumping into obstacles.
@@ -13,21 +33,11 @@ export class Player {
     const group = new THREE.Group();
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(this.radius, 32, 24),
-      new THREE.MeshStandardMaterial({ color: 0xffd34e, roughness: 0.25, metalness: 0.25, emissive: 0xffae00, emissiveIntensity: 0.15 })
+      new THREE.MeshStandardMaterial({ map: ballTexture(), roughness: 0.4, metalness: 0.15 })
     );
     ball.castShadow = true;
     this._ball = ball;
-    const cap = new THREE.Mesh(
-      new THREE.SphereGeometry(this.radius * 0.42, 18, 12),
-      new THREE.MeshStandardMaterial({ color: 0x1a1e2b, roughness: 0.5 })
-    );
-    cap.position.set(0, this.radius * 0.8, 0);
-    const stripe = new THREE.Mesh(
-      new THREE.TorusGeometry(this.radius * 0.98, this.radius * 0.12, 10, 28),
-      new THREE.MeshStandardMaterial({ color: 0x1a1e2b, roughness: 0.5 })
-    );
-    stripe.rotation.x = Math.PI / 2;
-    group.add(ball, cap, stripe);
+    group.add(ball);
 
     // A shield bubble that we toggle on when the shield powerup is active.
     this.shieldMesh = new THREE.Mesh(
@@ -45,7 +55,9 @@ export class Player {
     this.jumpCount = 0;
     this.lastGroundedY = 0;
     this._ridePlat = null;
-    this._prevJump = false;
+    this._seenPresses = 0;
+    this._coyote = 0;     // grace time left to still jump after leaving a ledge
+    this._jumpBuffer = 0; // time left on a remembered jump press
     this.airJumps = 0;
     this._t = 0;
   }
@@ -59,7 +71,8 @@ export class Player {
     this.jumpCount = -1; // first landing bumps it to 0, matching the original
     this.lastGroundedY = 0;
     this._ridePlat = null;
-    this._prevJump = false;
+    this._coyote = 0;
+    this._jumpBuffer = 0;
     this.airJumps = 0;
   }
 
@@ -80,15 +93,26 @@ export class Player {
 
     // --- Jump: ground jump, optional mid-air jump (double-jump), or flight ---
     this._t += dt;
-    const pressed = input.jumpHeld && !this._prevJump;
-    this._prevJump = input.jumpHeld;
 
+    // Buffer a fresh press for a short window so a jump pressed just before/at
+    // landing still fires the moment we touch down.
+    if (input.jumpPresses !== this._seenPresses) {
+      this._seenPresses = input.jumpPresses;
+      this._jumpBuffer = CONFIG.jumpBufferTime;
+    }
+    this._jumpBuffer = Math.max(0, this._jumpBuffer - dt);
+
+    // Coyote time: count "grounded" as true for a moment after leaving a ledge.
+    const canGroundJump = this.grounded || this._coyote > 0;
+
+    let jumped = false;
     if (ctx.flight && input.jumpHeld) {
       v.y = CONFIG.flightLift; this.grounded = false; // hold jump to soar
-    } else if (this.grounded && pressed) {
+    } else if (this._jumpBuffer > 0 && canGroundJump) {
       v.y = CONFIG.jumpSpeed; this.grounded = false; this.airJumps = 0;
-    } else if (!this.grounded && pressed && this.airJumps < ctx.maxAirJumps) {
-      v.y = CONFIG.jumpSpeed; this.airJumps++;
+      this._coyote = 0; this._jumpBuffer = 0; jumped = true;
+    } else if (this._jumpBuffer > 0 && this.airJumps < ctx.maxAirJumps) {
+      v.y = CONFIG.jumpSpeed; this.airJumps++; this._jumpBuffer = 0; jumped = true; // double jump
     } else if (!input.jumpHeld && v.y > 0 && !this.grounded) {
       v.y /= CONFIG.quickDescentDivisor; // release early to drop fast
     }
@@ -162,8 +186,12 @@ export class Player {
 
     this._roll(dt);
 
+    // Refresh coyote time from this frame's grounded state (read next frame).
+    if (this.grounded) this._coyote = CONFIG.coyoteTime;
+    else this._coyote = Math.max(0, this._coyote - dt);
+
     const died = !this.grounded && p.y < this.lastGroundedY - CONFIG.fallMargin;
-    return { died, landed, hit, pos: p };
+    return { died, landed, hit, jumped, pos: p };
   }
 
   _roll(dt) {

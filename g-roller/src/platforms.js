@@ -3,8 +3,27 @@ import { CONFIG, jumpReach, ramp, smoothstep } from "./config.js";
 import { makeTextureLibrary, GROUND_TEXTURES } from "./textures.js";
 
 const rand = (a, b) => a + Math.random() * (b - a);
+const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const chance = (p) => Math.random() < p;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// Telegraphed pickups: each has its own color, shape and glyph so you always
+// know what you're about to touch. GOOD = cool colors, BAD (powerdowns) = warm.
+const POWERUP_DEFS = {
+  shield:     { color: 0x9fe0ff, shape: "ring",  icon: "🛡️", good: true },
+  magnet:     { color: 0x4a78ff, shape: "ring",  icon: "🧲", good: true },
+  slow:       { color: 0x2fd9c0, shape: "ico",   icon: "🐢", good: true },
+  doublejump: { color: 0xc6ff3a, shape: "knot",  icon: "⏫", good: true },
+  flight:     { color: 0xffd24a, shape: "octa",  icon: "🕊️", good: true },
+  reverse:    { color: 0xff9f1c, shape: "box",   icon: "🔄", good: false },
+  surge:      { color: 0xff3b3b, shape: "cone",  icon: "⚡", good: false },
+  morph:      { color: 0xff4bd6, shape: "ico",   icon: "🌀", good: false },
+  splat:      { color: 0x8a5a2b, shape: "box",   icon: "💦", good: false },
+  trip:       { color: 0xa94bff, shape: "tetra", icon: "🌈", good: false },
+};
+const GOOD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => POWERUP_DEFS[k].good);
+const BAD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => !POWERUP_DEFS[k].good);
 
 // One floating board. The root is an unscaled Group at the board's center so we
 // can hang correctly-sized obstacles off it; the visual shape is a scaled child.
@@ -38,9 +57,13 @@ export class PlatformField {
     this._gemGeo = new THREE.OctahedronGeometry(0.55);
 
     this._time = 0;
-    this._difficulty = 0;
+    this._difficulty = 0;  // hazard ramp (slow)
+    this._spreadD = 0;     // spread ramp (fast)
+    this.itemMultiplier = 1; // cheat code bumps this to spawn extra gems/powerups
     this._stepIndex = 0;
     this._cursor = { x: 0, y: 0, z: 0 };
+    this._drift = { x: 0, y: 0 };  // wandering target the critical path heads toward
+    this._driftSteps = 0;
   }
 
   reset() {
@@ -52,7 +75,10 @@ export class PlatformField {
     this.powerups.length = 0;
     this._time = 0;
     this._difficulty = 0;
+    this._spreadD = 0;
     this._stepIndex = 0;
+    this._drift = { x: 0, y: 0 };
+    this._driftSteps = CONFIG.safeStraight;
 
     const starter = this._addBoard({
       x: 0, y: -0.5, z: CONFIG.starterLength / 2 - 4,
@@ -80,7 +106,7 @@ export class PlatformField {
       map: tex,
       roughness: type === "bouncy" ? 0.4 : 0.85,
       metalness: 0.05,
-      emissive: type === "bouncy" ? 0xff1f5a : type === "boost" ? 0x14a0d0 : 0x000000,
+      emissive: type === "bouncy" ? 0xff1f5a : type === "boost" ? 0x1fdd5a : 0x000000,
       emissiveIntensity: type === "bouncy" ? 0.5 : type === "boost" ? 0.6 : 0,
     });
     const geo = geoType === "cyl" ? this._geoCyl : geoType === "hex" ? this._geoHex : this._geoBox;
@@ -145,32 +171,63 @@ export class PlatformField {
     this.gems.push({ mesh, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
   }
 
-  // Floating power pickup. Good ones help, bad ones (powerdowns) you want to
-  // dodge. Early on pickups are almost all good; powerdowns ramp in with difficulty.
+  // Floating power pickup, telegraphed by color + shape + a glyph sprite so you
+  // can read it from a distance. Early on pickups are almost all good; powerdowns
+  // ramp in with difficulty.
   _addPowerup(x, y, z, d = 0) {
-    const goodTypes = ["shield", "magnet", "slow", "doublejump", "flight"];
-    const badTypes = ["reverse", "surge", "morph", "splat"];
     const good = chance(ramp(CONFIG.goodPowerupChance, d));
-    const type = good ? pick(goodTypes) : pick(badTypes);
+    const type = pick(good ? GOOD_POWERUPS : BAD_POWERUPS);
+    const def = POWERUP_DEFS[type];
 
-    const colors = {
-      shield: 0x35e0ff, magnet: 0xb06bff, slow: 0x4dff8a, doublejump: 0x7cff5a, flight: 0xffe14d,
-      reverse: 0xff9f1c, surge: 0xff3b3b, morph: 0xc04bff, splat: 0x8a5a2b,
-    };
-    let geo;
-    if (type === "shield" || type === "magnet") geo = new THREE.TorusGeometry(0.7, 0.22, 12, 20);
-    else if (type === "slow" || type === "morph") geo = new THREE.IcosahedronGeometry(0.8);
-    else if (type === "doublejump") geo = new THREE.TorusKnotGeometry(0.5, 0.18, 60, 8);
-    else if (type === "flight") geo = new THREE.OctahedronGeometry(0.85);
-    else if (type === "reverse" || type === "splat") geo = new THREE.BoxGeometry(1.1, 1.1, 1.1);
-    else geo = new THREE.ConeGeometry(0.7, 1.4, 8);
-
-    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-      color: colors[type], emissive: colors[type], emissiveIntensity: 0.85, roughness: 0.25, metalness: 0.3,
+    const group = new THREE.Group();
+    const mesh = new THREE.Mesh(this._powerGeo(def.shape), new THREE.MeshStandardMaterial({
+      color: def.color, emissive: def.color, emissiveIntensity: 0.85, roughness: 0.25, metalness: 0.3,
     }));
-    mesh.position.set(x, y, z);
-    this.scene.add(mesh);
-    this.powerups.push({ mesh, type, good, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
+    group.add(mesh);
+    group.add(this._iconSprite(def.icon)); // floating glyph above the shape
+    group.position.set(x, y, z);
+    this.scene.add(group);
+    this.powerups.push({ mesh: group, type, good, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
+  }
+
+  // Cached geometry per pickup shape.
+  _powerGeo(shape) {
+    if (!this._pgeo) this._pgeo = {};
+    if (this._pgeo[shape]) return this._pgeo[shape];
+    let g;
+    if (shape === "ring") g = new THREE.TorusGeometry(0.7, 0.22, 12, 20);
+    else if (shape === "ico") g = new THREE.IcosahedronGeometry(0.8);
+    else if (shape === "knot") g = new THREE.TorusKnotGeometry(0.48, 0.17, 64, 8);
+    else if (shape === "octa") g = new THREE.OctahedronGeometry(0.85);
+    else if (shape === "box") g = new THREE.BoxGeometry(1.1, 1.1, 1.1);
+    else if (shape === "cone") g = new THREE.ConeGeometry(0.7, 1.4, 8);
+    else g = new THREE.TetrahedronGeometry(0.95);
+    this._pgeo[shape] = g;
+    return g;
+  }
+
+  // A camera-facing emoji glyph that hovers above a pickup. Material is cached.
+  _iconSprite(emoji) {
+    if (!this._iconCache) this._iconCache = {};
+    let mat = this._iconCache[emoji];
+    if (!mat) {
+      const c = document.createElement("canvas"); c.width = c.height = 64;
+      const ctx = c.getContext("2d");
+      ctx.font = "46px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(emoji, 32, 36);
+      mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false });
+      this._iconCache[emoji] = mat;
+    }
+    const s = new THREE.Sprite(mat);
+    s.scale.set(1.5, 1.5, 1);
+    s.position.set(0, 1.5, 0);
+    return s;
+  }
+
+  // Pickups either sit just above the pad (collected while rolling) or float
+  // clearly overhead (an obvious jump) — never in the ambiguous in-between.
+  _floatY(top) {
+    return top + (chance(0.5) ? rand(0.9, 1.3) : rand(4.3, 5.6));
   }
 
   // Does a candidate box overlap any nearby existing platform?
@@ -196,94 +253,118 @@ export class PlatformField {
     return { geoType: "hex", hy: rand(0.5, 1.0) };                  // hex pad
   }
 
+  // Extend the world by one step: lay the next GUARANTEED-REACHABLE critical
+  // platform (it wanders toward a roaming target — up, over and across — but
+  // every step stays within jump reach), then strew a cloud of branch platforms
+  // around it so the field sprawls into a journey with many possible routes.
   _extendPath(forwardSpeed) {
-    const d = this._difficulty;
+    const hd = this._difficulty;   // hazard ramp (slow)
     const reach = jumpReach();
     const maxRise = reach.height * CONFIG.pathRiseSafety;
     const maxGap = forwardSpeed * reach.airTime * CONFIG.pathGapSafety;
     const maxLateral = CONFIG.sideSpeed * reach.airTime * CONFIG.pathLateralSafety;
 
-    // During the safe intro, pin difficulty to 0 so the first pads are long,
-    // wide, flat and close together no matter what — a gentle on-ramp.
-    const safe = this._stepIndex < CONFIG.safeSteps;
-    const dd = safe ? 0 : d;
+    // The first few pads run straight ahead (spread pinned to 0); after that the
+    // field opens up fast on the SPREAD ramp while hazards stay on the slow one.
+    const safe = this._stepIndex < CONFIG.safeStraight;
+    const sd = safe ? 0 : this._spreadD;
+    const dd = safe ? 0 : hd;
+    const band = ramp(CONFIG.bandX, sd);
+
+    // Roaming target: every few steps, pick a new far-off (x, y) for the path to
+    // head toward. This is what turns a straight line into a sweeping journey.
+    if (!safe && --this._driftSteps <= 0) {
+      this._driftSteps = randInt(CONFIG.driftEvery[0], CONFIG.driftEvery[1]);
+      this._drift.x = clamp(rand(-band, band), -band, band);
+      const vy = ramp(CONFIG.driftY, sd);
+      this._drift.y = clamp(this._cursor.y + rand(-vy * 0.7, vy), -30, 55);
+    }
 
     const g = this._randGeo();
     const round = g.geoType !== "box";
-
-    // Pads start long & wide, then shrink as difficulty climbs.
     const w = rand(ramp(CONFIG.padWidthLo, dd), ramp(CONFIG.padWidthHi, dd));
     let len = rand(ramp(CONFIG.padLenLo, dd), ramp(CONFIG.padLenHi, dd));
-    if (round) len = Math.min(len, rand(8, 14)); // round pads stay compact
+    if (round) len = Math.min(len, rand(8, 14));
 
-    // Forward gap, sideways step and height change all grow toward the
-    // reachable maximum as difficulty climbs (clamped so it stays jumpable).
-    const gap = THREE.MathUtils.clamp(
-      rand(maxGap * ramp(CONFIG.gapFracLo, dd), maxGap * ramp(CONFIG.gapFracHi, dd)), 3, maxGap
-    );
-    const lateral = maxLateral * ramp(CONFIG.lateralFrac, dd);
-    const dyUp = maxRise * ramp(CONFIG.riseFrac, dd);
-    const dy = rand(ramp(CONFIG.dropDepth, dd), dyUp);
+    // Reachable step budgets (open up with SPREAD).
+    const gap = clamp(rand(maxGap * ramp(CONFIG.gapFracLo, sd), maxGap * ramp(CONFIG.gapFracHi, sd)), 3, maxGap);
+    const lateral = maxLateral * ramp(CONFIG.lateralFrac, sd);
+    const dyUp = maxRise * ramp(CONFIG.riseFrac, sd);
+    const dyDown = ramp(CONFIG.dropDepth, sd);
 
-    // Sudden lateral path change ("last minute" swerve) vs. a gentle drift.
-    const sharp = !safe && chance(ramp(CONFIG.sharpTurnChance, d));
-    const dx = sharp ? (chance(0.5) ? 1 : -1) * rand(lateral * 0.7, lateral)
-                     : rand(-lateral, lateral);
+    // Bias the step toward the roaming target, then add randomness — but always
+    // clamp to what a jump can actually clear, so the critical path stays solvable.
+    let dx, dy;
+    if (safe) {
+      dx = rand(-1, 1) * 0.5;
+      dy = rand(-1.2, 1.2);
+    } else {
+      const toX = clamp(this._drift.x - this._cursor.x, -lateral, lateral);
+      const sharp = chance(ramp(CONFIG.sharpTurnChance, hd));
+      dx = sharp ? clamp(toX + (chance(0.5) ? 1 : -1) * rand(lateral * 0.5, lateral), -lateral, lateral)
+                 : toX * 0.6 + rand(-lateral, lateral) * 0.4;
+      const toY = clamp(this._drift.y - this._cursor.y, dyDown, dyUp);
+      dy = toY * 0.6 + rand(dyDown, dyUp) * 0.4;
+    }
 
-    const x = THREE.MathUtils.clamp(this._cursor.x + dx, -CONFIG.maxBandX, CONFIG.maxBandX);
+    const x = clamp(this._cursor.x + dx, -band - 4, band + 4);
     const y = this._cursor.y + dy;
     const z = this._cursor.z + gap + len / 2;
 
     const type = !safe && chance(0.1) ? "boost" : "normal";
     const texName = type === "boost" ? "boost" : pick(GROUND_TEXTURES);
-
     const p = this._addBoard({ x, y, z, w, len, hy: g.hy, geoType: g.geoType, type, texName });
     this._cursor = { x, y, z: z + len / 2 };
 
     if (!safe) {
-      if (chance(ramp(CONFIG.movingChance, d))) this._makeMover(p, false);
-      if (type === "normal" && len > 12 && chance(ramp(CONFIG.obstacleChance, d))) {
+      if (chance(ramp(CONFIG.movingChance, hd))) this._makeMover(p, false);
+      if (type === "normal" && len > 12 && chance(ramp(CONFIG.obstacleChance, hd))) {
         this._addObstacle(p, chance(0.55) ? "barrier" : "spikes");
       }
     }
+    // Item multiplier (1 normally, more with the cheat code) spawns extra
+    // gems/powerups, spread sideways so they don't pile up.
+    for (let k = 0; k < this.itemMultiplier; k++) {
+      const ox = (k - (this.itemMultiplier - 1) / 2) * 3;
+      if (chance(0.4)) this._addGem(x + ox, this._floatY(y + p.hy), z);
+      if (chance(CONFIG.powerupChance)) this._addPowerup(x + ox, this._floatY(y + p.hy), z + rand(-len * 0.3, len * 0.3), hd);
+    }
 
-    if (chance(0.4)) this._addGem(x, y + p.hy + 2.4, z);
-    if (chance(CONFIG.powerupChance)) this._addPowerup(x, y + p.hy + 3.2, z + rand(-len * 0.3, len * 0.3), d);
-
-    // Fork: an alternate branch on the other side (overlap-checked).
-    if (!safe && chance(ramp(CONFIG.forkChance, d))) this._spawnBranch(x, y, z, maxLateral);
-    // Plain bonus side platform.
-    else if (chance(0.45)) this._spawnSide(x, y, z);
-
+    if (!safe) this._scatterCloud(x, y, z, sd, hd);
     this._stepIndex++;
   }
 
-  _spawnBranch(x, y, z, maxLateral) {
-    const side = chance(0.5) ? 1 : -1;
-    const bx = THREE.MathUtils.clamp(x + side * rand(maxLateral * 0.8, maxLateral * 1.3), -CONFIG.maxBandX - 6, CONFIG.maxBandX + 6);
-    const by = y + rand(-3, 4);
-    const blen = rand(10, 18), bw = rand(6, 9);
-    if (this._overlaps(bx, by, z, bw / 2, 0.5, blen / 2)) return;
-    const g = this._randGeo();
-    const p = this._addBoard({ x: bx, y: by, z, w: bw, len: blen, hy: g.hy, geoType: g.geoType, type: "normal", texName: pick(GROUND_TEXTURES) });
-    if (chance(0.6)) this._addGem(bx, by + p.hy + 2.4, z); // reward the risky branch
-    if (chance(0.3)) this._addPowerup(bx, by + p.hy + 3.2, z);
-  }
+  // Strew a handful of branch platforms around the front. They aren't on the
+  // guaranteed path — they're the parallax sprawl: alternate routes, high
+  // perches, low ledges. Overlap-checked so nothing spawns inside anything else.
+  _scatterCloud(cx, cy, cz, sd, hd) {
+    const n = Math.round(ramp(CONFIG.cloudCount, sd));
+    const rx = ramp(CONFIG.cloudRadiusX, sd);
+    const ry = ramp(CONFIG.cloudRadiusY, sd);
+    for (let i = 0; i < n; i++) {
+      const x = clamp(cx + rand(-rx, rx), -CONFIG.bandX[1] - 10, CONFIG.bandX[1] + 10);
+      const y = clamp(cy + rand(-ry, ry), -32, 58);
+      const z = cz + rand(-CONFIG.cloudZSpread * 0.55, CONFIG.cloudZSpread);
+      const g = this._randGeo();
+      const round = g.geoType !== "box";
+      const w = rand(ramp(CONFIG.padWidthLo, hd) * 0.7, ramp(CONFIG.padWidthHi, hd));
+      let len = rand(8, ramp(CONFIG.padLenHi, hd));
+      if (round) len = Math.min(len, rand(8, 14));
+      if (this._overlaps(x, y, z, w / 2, g.hy, len / 2)) continue;
 
-  _spawnSide(x, y, z) {
-    const side = chance(0.5) ? 1 : -1;
-    const sx = THREE.MathUtils.clamp(x + side * rand(9, 16), -CONFIG.maxBandX - 8, CONFIG.maxBandX + 8);
-    const sy = y + rand(-3, 5), sLen = rand(7, 14), sW = rand(6, 9), sz = z + rand(-6, 6);
-    if (this._overlaps(sx, sy, sz, sW / 2, 0.5, sLen / 2)) return;
-    const bouncy = chance(0.4);
-    const g = this._randGeo();
-    const p = this._addBoard({
-      x: sx, y: sy, z: sz, w: sW, len: sLen, hy: bouncy ? 0.5 : g.hy,
-      geoType: bouncy ? "box" : g.geoType,
-      type: bouncy ? "bouncy" : "normal",
-      texName: bouncy ? "rubber" : pick(GROUND_TEXTURES),
-    });
-    this._addGem(sx, sy + p.hy + 2.4, sz);
+      const bouncy = chance(0.16);
+      const p = this._addBoard({
+        x, y, z, w, len, hy: bouncy ? 0.5 : g.hy,
+        geoType: bouncy ? "box" : g.geoType,
+        type: bouncy ? "bouncy" : "normal",
+        texName: bouncy ? "rubber" : pick(GROUND_TEXTURES),
+      });
+      for (let m = 0; m < this.itemMultiplier; m++) {
+        const ox = (m - (this.itemMultiplier - 1) / 2) * 2.5;
+        if (chance(0.5)) this._addGem(x + ox, this._floatY(y + p.hy), z); // reward exploring off-path
+        if (chance(0.12)) this._addPowerup(x + ox, this._floatY(y + p.hy), z, hd);
+      }
+    }
   }
 
   _disposePlatform(p) {
@@ -297,6 +378,7 @@ export class PlatformField {
   update(dt, playerZ, forwardSpeed) {
     this._time += dt;
     this._difficulty = smoothstep(playerZ / CONFIG.difficultyDistance);
+    this._spreadD = smoothstep(playerZ / CONFIG.spreadDistance);
 
     while (this._cursor.z < playerZ + CONFIG.keepAheadDistance) this._extendPath(forwardSpeed);
 
@@ -320,7 +402,8 @@ export class PlatformField {
     }
     for (const u of this.powerups) {
       if (u.collected) continue;
-      u.mesh.rotation.y += dt * 1.8; u.mesh.rotation.z += dt * 0.9;
+      u.mesh.rotation.y += dt * 1.6;             // spin the group; glyph sits on the y-axis so it stays put
+      u.mesh.children[0].rotation.x += dt * 1.3; // tumble just the shape
       u.mesh.position.y = u.baseY + Math.sin(this._time * 2 + u.phase) * 0.4;
     }
 
@@ -336,12 +419,15 @@ export class PlatformField {
       if (this.powerups[i].mesh.position.z < cullZ) { this.scene.remove(this.powerups[i].mesh); this.powerups.splice(i, 1); }
   }
 
-  // Pull uncollected gems toward the player while a magnet is active.
+  // Pull uncollected gems toward the player while a magnet is active. The pull
+  // is strong enough that gems accelerate in and catch up to the moving player
+  // (instead of trailing behind in an uncatchable tail).
   attract(playerPos, dt) {
+    const k = Math.min(1, dt * CONFIG.magnetPull);
     for (const g of this.gems) {
       if (g.collected) continue;
-      if (g.mesh.position.distanceTo(playerPos) < 22) {
-        g.mesh.position.lerp(playerPos, Math.min(1, dt * 6));
+      if (g.mesh.position.distanceTo(playerPos) < CONFIG.magnetRadius) {
+        g.mesh.position.lerp(playerPos, k);
       }
     }
   }

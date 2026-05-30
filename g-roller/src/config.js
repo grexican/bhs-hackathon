@@ -4,74 +4,95 @@
 
 export const CONFIG = {
   // Player movement (units per second)
-  sideSpeed: 19,
-  forwardSpeed: 22,         // starting auto-run speed (eases up from here)
-  maxForwardSpeed: 60,
-  jumpSpeed: 25,
+  sideSpeed: 20,
+  forwardSpeed: 25.2,       // starting auto-run speed (eases up from here)
+  maxForwardSpeed: 66,
+  jumpSpeed: 26.5,          // ~12% higher arc than before
   gravity: 34,
   playerRadius: 0.9,
 
   // Variable jump: releasing jump while rising chops upward speed for a fast drop
   quickDescentDivisor: 1.7,
 
+  // Forgiveness so edge/just-landed jumps always register:
+  coyoteTime: 0.1,       // still jump for this long after rolling off a ledge
+  jumpBufferTime: 0.13,  // a jump pressed this soon before landing still fires
+
   // Speed boost pads
   boostAmount: 14,
   boostDuration: 1.6,
 
-  // Difficulty ramp. EVERYTHING below is an [easy, hard] pair: it interpolates
-  // from EASY (difficulty 0, the very start) to HARD (difficulty 1, reached at
-  // difficultyDistance). The curve is eased (smoothstep), so the opening stretch
-  // stays calm and the chaos builds in gradually instead of being random from
-  // step one.
+  // Two eased ramps drive everything. SPREAD opens the field up FAST (degrees of
+  // freedom — the path starts to wander wide, up and over, through a scattered
+  // cloud of branch platforms). HAZARD ramps the danger in SLOWLY (obstacles,
+  // movers, shrinking pads, powerdowns). Each [easy, hard] pair interpolates from
+  // its ramp's value 0 -> 1. So the world sprawls into a journey early while
+  // staying gentle, and only gets genuinely dangerous deep into a run.
   speedRampEvery: 7,
   speedRampAmount: 1.2,
-  difficultyDistance: 2200, // metres travelled before difficulty hits its peak
+  spreadDistance: 650,      // metres before the field is fully "spread out"
+  difficultyDistance: 1500, // metres before hazards hit their peak (ramps in sooner)
 
-  // Platform path generation. The main path is a guaranteed-reachable chain of
-  // stepping stones; side platforms are optional bonus routes.
-  keepAheadDistance: 155,
-  cullBehindDistance: 60,
+  keepAheadDistance: 175,
+  cullBehindDistance: 65,
   pathRiseSafety: 0.6,      // fraction of max jump height a step may rise
   pathGapSafety: 0.5,       // fraction of jump distance a forward gap may span
   pathLateralSafety: 0.42,  // fraction of strafe reach a sideways step may take
-  maxBandX: 30,             // keep the path within this horizontal band
+  safeStraight: 4,          // first few pads run straight ahead, no spread
 
-  // Pad size: starts long & wide, gets shorter & narrower as you go.
+  // --- Critical path (the guaranteed-reachable chain). Opens up with SPREAD. ---
+  gapFracLo: [0.18, 0.5],
+  gapFracHi: [0.4, 1.0],
+  lateralFrac: [0.3, 1.0],  // how much of the reachable strafe a step may use
+  riseFrac: [0.35, 1.0],    // how much of the reachable rise a step may use
+  dropDepth: [-3, -9],      // how far a step may drop
+  bandX: [18, 64],          // how far the path may wander left/right (grows wide)
+  driftEvery: [4, 8],       // steps between picking a new wander target
+  driftY: [16, 46],         // vertical reach of wander targets (the up-and-over)
+
+  // --- Scatter cloud: branch platforms strewn around the path for the sprawl. ---
+  cloudCount: [1, 4],       // extra platforms per step (grows with spread)
+  cloudRadiusX: [12, 50],   // how wide the cloud scatters
+  cloudRadiusY: [7, 26],    // how tall the cloud scatters (parallax layers)
+  cloudZSpread: 28,         // depth jitter of cloud platforms around the front
+
+  // --- Pad size: starts long & wide, gets shorter & narrower with HAZARD. ---
   padLenLo: [24, 8],
   padLenHi: [34, 13],
   padWidthLo: [13, 6],
   padWidthHi: [16, 8.5],
 
-  // Navigation: gaps, sideways steps and height changes all start tiny and grow
-  // toward the reachable maximum (fractions of the computed jump reach).
-  gapFracLo: [0.15, 0.5],
-  gapFracHi: [0.34, 1.0],
-  lateralFrac: [0.1, 1.0],
-  riseFrac: [0.25, 1.0],
-  dropDepth: [-2.5, -8],
-
-  // Hazards: all start at (near) zero and ramp in with difficulty.
-  obstacleChance: [0.0, 0.5],    // chance a path platform carries an obstacle
-  movingChance: [0.0, 0.4],      // chance a path platform slides around
-  moveAmp: [3, 10],              // how far a moving platform slides
-  sharpTurnChance: [0.0, 0.34],  // chance of a sudden lateral path change
-  forkChance: [0.0, 0.2],        // chance of an alternate branch platform
-  goodPowerupChance: [0.9, 0.5], // pickups start almost all good, then sour
+  // --- Hazards: a small floor right after the safe intro (so spikes, obstacles
+  // and moving platforms show up early), ramping to their peak. ---
+  obstacleChance: [0.14, 0.6],
+  movingChance: [0.12, 0.45],
+  moveAmp: [4, 10],
+  sharpTurnChance: [0.08, 0.38],
+  goodPowerupChance: [0.9, 0.5],
 
   // Powerups / powerdowns
   powerupChance: 0.18,    // chance a path platform floats a power pickup
-  magnetDuration: 7,
-  slowDuration: 5,
+  magnetDuration: 12,
+  magnetRadius: 32,       // gems within this distance get sucked in
+  magnetPull: 22,         // how hard the magnet yanks gems (higher = they catch up)
+  slowDuration: 9,
   slowFactor: 0.6,        // forward speed multiplier while slowed
-  reverseDuration: 5,
-  surgeDuration: 4,
+  reverseDuration: 8,
+  surgeDuration: 7,
   surgeAmount: 16,        // extra forward speed while surged (a powerdown)
   invulnTime: 1.2,        // brief mercy window after a shielded hit
-  doubleJumpDuration: 9,  // grants one mid-air jump
-  flightDuration: 5,      // hold jump to soar
-  flightLift: 13,         // upward speed while flying
-  morphDuration: 6,       // ball deforms and steering goes wobbly
+  doubleJumpDuration: 16, // grants one mid-air jump
+  flightDuration: 9,      // hold jump to soar
+  flightLift: 14.5,       // upward speed while flying
+  morphDuration: 11,      // ball deforms and steering goes wobbly
   morphWobble: 7,         // strength of the steering wobble while morphed
+  tripDuration: 13,       // psychedelic powerdown: colors go wild, hard to see
+
+  // Secret cheat code (half-Contra, no A/B) entered on the start/game-over
+  // screen: spawns extra items and makes every timed power last cheatDuration.
+  cheatCode: ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight"],
+  cheatItemMultiplier: 3, // how many times as many gems/powerups spawn
+  cheatDuration: 20,      // seconds every timed powerup/powerdown lasts in cheat mode
 
   // Death: fall this far below the last platform you touched and it's game over
   fallMargin: 22,
@@ -79,7 +100,6 @@ export const CONFIG = {
   // Starter platform
   starterLength: 56,
   starterWidth: 16,
-  safeSteps: 7, // long, flat, close-together pads with no hazards to start
 };
 
 // Peak height of a full jump and the air time it grants — used by the platform
