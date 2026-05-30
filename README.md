@@ -1,5 +1,7 @@
 # BHS Hackathon Starter
 
+> **Eli's build** — _My hackathon project_
+
 Welcome to the **Barcelona High School AI Builder Hackathon**.
 
 This is the starter repo every student forks. In the next 24 hours you will turn it into your own working web app — a flashcard trainer, a workout tracker, a study planner, a game, whatever you want — and ship it to a real URL you can share.
