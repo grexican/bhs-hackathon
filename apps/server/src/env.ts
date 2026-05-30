@@ -1,7 +1,10 @@
+import { resolve } from "node:path";
 import dotenv from "dotenv";
 
-// Load .env from the repo root (two levels up from apps/server/).
+// Load .env. The server runs from apps/server/, so the shared config lives two
+// levels up at the repo root — load that, then a local one if present.
 // Defaults are inline at every call site so the server still runs without one.
+dotenv.config({ path: resolve(process.cwd(), "../../.env") });
 dotenv.config();
 
 export const env = {

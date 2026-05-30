@@ -1,46 +1,27 @@
-import { TodoForm } from "./components/TodoForm";
-import { TodoList } from "./components/TodoList";
-import { useTodos } from "./hooks/useTodos";
+import { AppShell } from "./AppShell";
+import { useAuth } from "./auth";
+import { Login } from "./pages/Login";
+import { NavProvider } from "./router";
 
-// Top-level page. Shows the title, the form to add a todo, and the list.
-// This is the file you'll most often edit when adding new features —
-// drop in new components or replace the whole layout for your own app.
+// Top-level switch: if nobody is "logged in" (no persona picked yet) show the
+// login screen; otherwise show the full app inside its navigation shell.
 export function App() {
-  const { todos, loading, error, addTodo, toggleTodo, deleteTodo } = useTodos();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="splash">
+        <span className="splash__logo">🏐</span>
+        <p className="muted">Loading RotationIQ…</p>
+      </div>
+    );
+  }
+
+  if (!user) return <Login />;
 
   return (
-    <main className="page">
-      <header className="page__header">
-        <h1>BHS Hackathon Starter</h1>
-        <p>
-          A working React + Express + SQLite app. Edit it, replace it, build whatever you want on
-          top of it.
-        </p>
-      </header>
-
-      <section className="card">
-        <h2>Demo: todos</h2>
-        <p className="muted">
-          Add, toggle, and delete todos. The data is stored in SQLite — refresh the page and
-          everything is still there.
-        </p>
-
-        <TodoForm onAdd={addTodo} />
-
-        {error && <div className="error">Error: {error}</div>}
-        {loading && todos.length === 0 ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <TodoList todos={todos} onToggle={toggleTodo} onDelete={deleteTodo} />
-        )}
-      </section>
-
-      <footer className="page__footer">
-        <p>
-          Edit <code>apps/client/src/App.tsx</code> to change this page. Edit{" "}
-          <code>apps/server/src/routes/</code> to change the API.
-        </p>
-      </footer>
-    </main>
+    <NavProvider>
+      <AppShell />
+    </NavProvider>
   );
 }
