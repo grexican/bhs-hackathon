@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QUANTUM! — The Astonishing Adventures of Eli the Electron</title>
+<meta name="description" content="A scrollable comic-book story about quantum physics, starring a wisecracking electron. Ben-Day halftone, speech bubbles, and a whole lot of POW." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:ital,wght@0,400;0,700;1,700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#15110d;
+    --paper:#fff7e6;
+    --red:#ff3b30;
+    --blue:#2b6cff;
+    --yellow:#ffd23f;
+    --pink:#ff5db1;
+    --teal:#19c3b2;
+    --dot:rgba(21,17,13,.20);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--ink);
+    color:var(--ink);
+    font-family:"Comic Neue",system-ui,sans-serif;
+    font-weight:700;
+    overflow-x:hidden;
+  }
+  /* the comic "page" gutter */
+  .reel{
+    max-width:980px;margin:0 auto;
+    background:var(--paper);
+    /* faint ben-day dots over the whole paper */
+    background-image:radial-gradient(var(--dot) 1.1px, transparent 1.3px);
+    background-size:13px 13px;
+    border-left:6px solid #000;border-right:6px solid #000;
+  }
+  section{padding:34px 26px;position:relative;}
+
+  /* ---------------- PANELS ---------------- */
+  .grid{display:grid;gap:20px;grid-template-columns:repeat(6,1fr);}
+  .panel{
+    grid-column:span 6;
+    position:relative;overflow:hidden;
+    border:5px solid #000;border-radius:4px;
+    background:var(--paper);
+    box-shadow:8px 8px 0 #000;
+    padding:24px;min-height:200px;
+    display:flex;flex-direction:column;justify-content:flex-end;gap:14px;
+    /* enter animation base state */
+    opacity:0;transform:translateY(48px) rotate(var(--rot,0deg)) scale(.96);
+    transition:opacity .5s ease, transform .55s cubic-bezier(.2,1.1,.3,1);
+  }
+  .panel.in{opacity:1;transform:translateY(0) rotate(var(--rot,0deg)) scale(1);}
+  .c3{grid-column:span 3;} .c4{grid-column:span 4;} .c2{grid-column:span 2;}
+  @media(max-width:720px){ .panel,.c2,.c3,.c4{grid-column:span 6;} }
+
+  /* colored panels get bigger ben-day dots in the matching hue */
+  .p-red{background:var(--red);color:#fff;}
+  .p-blue{background:var(--blue);color:#fff;}
+  .p-yellow{background:var(--yellow);}
+  .p-teal{background:var(--teal);color:#04201d;}
+  .p-pink{background:var(--pink);color:#2a0518;}
+  .p-dark{background:#1a1530;color:#fff;}
+  .halftone::before{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background-image:radial-gradient(rgba(0,0,0,.18) 2.2px, transparent 2.4px);
+    background-size:11px 11px;
+    -webkit-mask-image:linear-gradient(135deg,#000,transparent 70%);
+    mask-image:linear-gradient(135deg,#000,transparent 70%);
+  }
+  /* action/motion lines sweeping into a panel */
+  .speedlines::after{
+    content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+    background:repeating-linear-gradient(115deg, rgba(0,0,0,.0) 0 16px, rgba(0,0,0,.16) 16px 18px);
+    -webkit-mask-image:linear-gradient(90deg,#000,transparent 55%);
+    mask-image:linear-gradient(90deg,#000,transparent 55%);
+  }
+
+  /* ---------------- LETTERING ---------------- */
+  .cap{ /* narration box */
+    align-self:flex-start;
+    background:var(--yellow);border:3px solid #000;
+    padding:8px 12px;font-weight:700;font-size:1.02rem;line-height:1.15;
+    max-width:80%;box-shadow:4px 4px 0 rgba(0,0,0,.5);
+    transform:rotate(-1.2deg);
+  }
+  .cap b{ text-transform:uppercase; }
+  .bubble{ /* speech */
+    position:relative;align-self:flex-start;
+    background:#fff;color:#111;border:3px solid #000;border-radius:22px;
+    padding:13px 17px;font-size:1.12rem;line-height:1.18;max-width:88%;
+    box-shadow:3px 4px 0 rgba(0,0,0,.35);
+  }
+  .bubble::after{ /* tail */
+    content:"";position:absolute;left:30px;bottom:-17px;
+    border-width:18px 14px 0 0;border-style:solid;
+    border-color:#000 transparent transparent transparent;
+  }
+  .bubble::before{
+    content:"";position:absolute;left:32px;bottom:-11px;z-index:1;
+    border-width:12px 9px 0 0;border-style:solid;
+    border-color:#fff transparent transparent transparent;
+  }
+  .bubble.right{align-self:flex-end;}
+  .bubble.right::after{left:auto;right:30px;border-width:18px 0 0 14px;border-color:#000 transparent transparent transparent;}
+  .bubble.right::before{left:auto;right:32px;border-width:12px 0 0 9px;border-color:#fff transparent transparent transparent;}
+  .bubble.think{border-radius:50% / 42%;}
+  .bubble.think::after,.bubble.think::before{display:none;}
+  .bubble.shout{background:#fff;border-width:4px;font-family:"Bangers",cursive;font-size:1.7rem;letter-spacing:1px;
+    border-radius:6px;transform:rotate(-1deg);
+    clip-path:polygon(0 8%,8% 0,18% 8%,30% 0,44% 8%,58% 0,72% 8%,86% 0,100% 9%,95% 30%,100% 52%,95% 74%,100% 96%,84% 92%,70% 100%,55% 92%,42% 100%,28% 92%,14% 100%,3% 90%,0 64%,5% 44%,0 24%);}
+  .bubble.shout::after,.bubble.shout::before{display:none;}
+  .em{color:var(--red);font-style:normal;}
+  .em-b{color:var(--blue);} .em-y{background:var(--yellow);padding:0 4px;}
+
+  /* big onomatopoeia SFX */
+  .sfx{
+    font-family:"Bangers",cursive;line-height:.86;
+    font-size:clamp(3rem,11vw,7rem);letter-spacing:2px;
+    color:var(--yellow);-webkit-text-stroke:4px #000;text-stroke:4px #000;
+    text-shadow:7px 7px 0 var(--red);
+    transform:rotate(-7deg);align-self:center;text-align:center;
+    pointer-events:none;
+  }
+  .sfx.alt{color:#fff;text-shadow:7px 7px 0 var(--blue);transform:rotate(5deg);}
+  .sfx.small{font-size:clamp(2rem,6vw,3.4rem);}
+
+  /* ---------------- THE HERO (Eli the electron) ---------------- */
+  .hero-cell{align-self:center;display:flex;justify-content:center;align-items:center;}
+  .hero{width:clamp(120px,30vw,190px);aspect-ratio:1;filter:drop-shadow(5px 6px 0 rgba(0,0,0,.45));}
+  .spin-orbit{animation:orbit 6s linear infinite;transform-origin:60px 60px;}
+  @keyframes orbit{to{transform:rotate(360deg);}}
+
+  /* ---------------- COVER ---------------- */
+  .cover{
+    min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;
+    text-align:center;gap:10px;padding:40px 24px 60px;position:relative;overflow:hidden;
+    background:var(--blue);
+    background-image:
+      radial-gradient(rgba(255,255,255,.16) 2.5px, transparent 2.7px),
+      radial-gradient(rgba(0,0,0,.12) 2.5px, transparent 2.7px);
+    background-size:18px 18px,18px 18px;background-position:0 0,9px 9px;
+    color:#fff;
+  }
+  .cover .burst{
+    position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;
+    background:
+      conic-gradient(from 0deg, rgba(255,255,255,.12) 0 6deg, transparent 6deg 18deg);
+    -webkit-mask-image:radial-gradient(circle at 50% 42%, #000 0, transparent 60%);
+    mask-image:radial-gradient(circle at 50% 42%, #000 0, transparent 60%);
+    animation:slowspin 60s linear infinite;
+  }
+  @keyframes slowspin{to{transform:rotate(360deg);}}
+  .cover h1{
+    font-family:"Bangers",cursive;font-weight:400;letter-spacing:3px;
+    font-size:clamp(4.2rem,22vw,12rem);line-height:.82;color:var(--yellow);
+    -webkit-text-stroke:5px #000;text-stroke:5px #000;
+    text-shadow:10px 10px 0 var(--red);transform:rotate(-3deg);position:relative;z-index:2;
+  }
+  .cover .sub{font-family:"Bangers",cursive;font-size:clamp(1.4rem,5vw,2.6rem);letter-spacing:1px;
+    background:var(--red);border:4px solid #000;padding:6px 18px;transform:rotate(1.5deg);
+    box-shadow:6px 6px 0 #000;position:relative;z-index:2;color:#fff;}
+  .cover .tagline{max-width:34ch;font-size:1.15rem;margin-top:10px;position:relative;z-index:2;}
+  .corner-badge{
+    position:absolute;top:18px;right:18px;width:104px;height:104px;border-radius:50%;
+    background:var(--yellow);border:4px solid #000;color:#111;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:"Bangers",cursive;line-height:1;transform:rotate(12deg);box-shadow:5px 5px 0 #000;z-index:3;text-align:center;}
+  .corner-badge .big{font-size:2.2rem;}
+  .price-badge{left:18px;right:auto;transform:rotate(-12deg);background:var(--red);color:#fff;}
+  .scrollcue{position:relative;z-index:2;margin-top:30px;font-family:"Bangers",cursive;font-size:1.6rem;
+    letter-spacing:1px;color:#fff;animation:bounce 1.3s ease-in-out infinite;}
+  @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}
+
+  /* ---------------- CHAPTER BANNERS ---------------- */
+  .chapter{padding:48px 26px 8px;}
+  .chapter .band{
+    border:5px solid #000;background:var(--ink);color:var(--yellow);
+    box-shadow:8px 8px 0 var(--red);
+    padding:18px 22px;transform:rotate(-1deg);
+    display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+    opacity:0;translate:0 30px;transition:opacity .5s ease, translate .5s ease;
+  }
+  .chapter .band.in{opacity:1;translate:0 0;}
+  .chapter .num{font-family:"Bangers",cursive;font-size:clamp(1.4rem,4vw,2.2rem);color:#fff;letter-spacing:1px;}
+  .chapter .title{font-family:"Bangers",cursive;font-size:clamp(2.2rem,8vw,4rem);letter-spacing:1px;line-height:.9;}
+
+  .lead{font-size:1.18rem;line-height:1.2;}
+  .lead .big{font-family:"Bangers",cursive;font-size:1.5rem;letter-spacing:.5px;}
+
+  /* ---------------- ENDING ---------------- */
+  .ending{background:var(--ink);color:var(--paper);text-align:center;padding:80px 26px 70px;}
+  .ending h2{font-family:"Bangers",cursive;font-size:clamp(3rem,16vw,8rem);letter-spacing:2px;color:var(--yellow);
+    -webkit-text-stroke:4px #000;text-shadow:8px 8px 0 var(--red);line-height:.85;transform:rotate(-2deg);}
+  .ending .tc{font-family:"Bangers",cursive;font-size:clamp(1.4rem,5vw,2.4rem);color:#fff;margin-top:18px;}
+  .ending .credit{font-size:.95rem;opacity:.7;margin-top:26px;}
+  .ending .restart{display:inline-block;margin-top:22px;font-family:"Bangers",cursive;font-size:1.3rem;letter-spacing:1px;
+    background:var(--yellow);color:#111;border:4px solid #fff;padding:8px 20px;cursor:pointer;box-shadow:5px 5px 0 var(--red);text-decoration:none;}
+
+  /* progress bar (a little "page" meter) */
+  .progress{position:fixed;top:0;left:0;height:7px;width:0;z-index:50;
+    background:repeating-linear-gradient(90deg,var(--red) 0 14px,var(--yellow) 14px 28px);
+    border-bottom:2px solid #000;}
+
+  @media (prefers-reduced-motion: reduce){
+    .panel{opacity:1;transform:none;} .chapter .band{opacity:1;translate:0 0;}
+    .spin-orbit,.cover .burst,.scrollcue{animation:none;}
+  }
+</style>
+</head>
+<body>
+  <div class="progress" id="prog"></div>
+
+  <div class="reel">
+
+    <!-- ============ COVER ============ -->
+    <header class="cover">
+      <div class="burst"></div>
+      <div class="corner-badge"><span>ISSUE</span><span class="big">#4</span></div>
+      <div class="corner-badge price-badge"><span class="big">10¢</span><span>ONLY!</span></div>
+      <h1>QUANTUM!</h1>
+      <div class="sub">The Astonishing Adventures of ELI the ELECTRON</div>
+      <p class="tagline">He's smaller than small. He breaks every rule of reality. And he is about to ruin your common sense — one panel at a time.</p>
+      <div class="scrollcue">SCROLL TO BEGIN ↓</div>
+    </header>
+
+    <!-- ============ CH 1 — WAVE/PARTICLE ============ -->
+    <div class="chapter"><div class="band"><span class="num">CH. 1</span><span class="title">TWO-FACED!</span></div></div>
+    <section class="grid">
+      <div class="panel p-blue halftone c3" style="--rot:-1deg">
+        <div class="hero-cell"><div class="hero" data-mood="cool"></div></div>
+        <div class="bubble">Name's <b>Eli</b>. Am I a particle? A wave? &hellip;<span class="em">Yes.</span></div>
+      </div>
+      <div class="panel c3" style="--rot:1deg">
+        <div class="cap"><b>Our hero travels like a wave</b> — spread out, rippling, everywhere at once&hellip;</div>
+        <div class="sfx alt">ZWOOM!</div>
+        <div class="cap" style="align-self:flex-end;transform:rotate(1.5deg)">&hellip;then <b>lands like a dot.</b> One spot. Bam.</div>
+      </div>
+      <div class="panel p-yellow halftone speedlines" style="--rot:-.5deg">
+        <div class="bubble shout">"WAVE OR PARTICLE?" IS THE WRONG QUESTION, PAL.</div>
+        <div class="lead"><span class="big">Ask about my path</span> and I act like a wave. Ask <span class="em">where I hit</span> and I'm a single point. Two faces, no contradiction.</div>
+      </div>
+    </section>
+
+    <!-- ============ CH 2 — DOUBLE SLIT ============ -->
+    <div class="chapter"><div class="band"><span class="num">CH. 2</span><span class="title">THE IMPOSSIBLE TRICK</span></div></div>
+    <section class="grid">
+      <div class="panel p-dark halftone c4" style="--rot:.6deg">
+        <div class="cap"><b>They fired me at a wall</b> with two thin slits. <b>One</b> of me. At a time.</div>
+        <div class="bubble right">So naturally&hellip; I went through <span class="em">BOTH.</span></div>
+      </div>
+      <div class="panel p-red halftone c2" style="--rot:-2deg">
+        <div class="sfx">BLISH!</div>
+      </div>
+      <div class="panel c3" style="--rot:-1deg">
+        <div class="cap"><b>Fire a thousand of me</b> and the dots stack into <span class="em-y">stripes</span> — bright, dark, bright, dark.</div>
+        <div class="lead">That's interference. I lined up&hellip; <span class="big">with myself.</span></div>
+      </div>
+      <div class="panel p-pink halftone c3" style="--rot:1.4deg">
+        <div class="bubble think">But the second you <i>peek</i> to see which slit I used&hellip;</div>
+        <div class="sfx small alt">POOF!</div>
+        <div class="cap" style="transform:rotate(-1deg)">&hellip;the stripes <b>vanish.</b> Looking changes the story.</div>
+      </div>
+    </section>
+
+    <!-- ============ CH 3 — SUPERPOSITION ============ -->
+    <div class="chapter"><div class="band"><span class="num">CH. 3</span><span class="title">BOTH! AT! ONCE!</span></div></div>
+    <section class="grid">
+      <div class="panel p-teal halftone c3" style="--rot:-1deg">
+        <div class="hero-cell"><div class="hero" data-mood="dizzy"></div></div>
+        <div class="bubble">Before you check, I'm not a 0. I'm not a 1. I'm <span class="em">both</span>, blended.</div>
+      </div>
+      <div class="panel c3" style="--rot:1deg">
+        <div class="sfx small">SHIMMER~</div>
+        <div class="cap"><b>It isn't "we don't know yet."</b> The blend is <i>real</i>. I'm genuinely living every option.</div>
+        <div class="bubble shout right">THEN YOU OPEN THE BOX&hellip;</div>
+        <div class="cap" style="align-self:flex-end">&hellip;and I <span class="em">SLAM</span> into a single answer.</div>
+      </div>
+    </section>
+
+    <!-- ============ CH 4 — UNCERTAINTY ============ -->
+    <div class="chapter"><div class="band"><span class="num">CH. 4</span><span class="title">CAN'T PIN ME DOWN</span></div></div>
+    <section class="grid">
+      <div class="panel p-yellow halftone c4 speedlines" style="--rot:.5deg">
+        <div class="bubble">Wanna know <span class="em-b">exactly where</span> I am <i>and</i> <span class="em">exactly how fast</span> I'm going?</div>
+        <div class="lead big">Yeah&hellip; about that.</div>
+      </div>
+      <div class="panel p-dark halftone c2" style="--rot:-1.5deg">
+        <div class="sfx alt">WOBBLE</div>
+      </div>
+      <div class="panel" style="--rot:.8deg">
+        <div class="cap"><b>Pin my position</b> and my speed goes wild. Pin my speed and my position smears out.</div>
+        <div class="lead">It's not bad equipment. It's the <span class="em">law</span> — Heisenberg's uncertainty principle. Squeeze one, the other explodes.</div>
+      </div>
+    </section>
+
+    <!-- ============ CH 5 — QUANTIZATION ============ -->
+    <div class="chapter"><div class="band"><span class="num">CH. 5</span><span class="title">JUMPING THE STEPS</span></div></div>
+    <section class="grid">
+      <div class="panel p-blue halftone c3" style="--rot:-1deg">
+        <div class="hero-cell"><div class="hero" data-mood="happy"></div></div>
+        <div class="bubble">Round an atom I can't hover just <i>anywhere</i>. Only certain <span class="em-y">rungs.</span></div>
+      </div>
+      <div class="panel p-red halftone c3" style="--rot:1.2deg">
+        <div class="cap"><b>Jump DOWN a rung</b> and I pay the difference&hellip;</div>
+        <div class="sfx small">PING!</div>
+        <div class="lead">&hellip;by spitting out a photon of <span class="em-y">one exact color.</span> That's why neon signs glow and stars have barcodes of light.</div>
+      </div>
+    </section>
+
+    <!-- ============ CH 6 — ENTANGLEMENT ============ -->
+    <div class="chapter"><div class="band"><span class="num">CH. 6</span><span class="title">THE SPOOKY TWIN</span></div></div>
+    <section class="grid">
+      <div class="panel p-pink halftone c3" style="--rot:.7deg">
+        <div class="cap"><b>I've got a twin.</b> Born linked. Now we're galaxies apart.</div>
+        <div class="bubble">Measure me <span class="em-b">UP</span>&hellip; and instantly my twin is <span class="em">DOWN.</span> No signal. No delay.</div>
+      </div>
+      <div class="panel p-dark halftone c3" style="--rot:-1.4deg">
+        <div class="bubble shout">SPOOKY ACTION AT A DISTANCE!</div>
+        <div class="cap" style="align-self:flex-end;transform:rotate(1deg)">&mdash; some guy named <b>Einstein</b>, who <i>hated</i> this</div>
+        <div class="lead">Real, though. Proven. <span class="em">But</span> — we still can't text with it. Sorry.</div>
+      </div>
+    </section>
+
+    <!-- ============ CH 7 — TUNNELING ============ -->
+    <div class="chapter"><div class="band"><span class="num">CH. 7</span><span class="title">WALKIN' THROUGH WALLS</span></div></div>
+    <section class="grid">
+      <div class="panel c2" style="--rot:-1deg">
+        <div class="cap"><b>A wall too tall to climb?</b> A barrier I've got no business crossing?</div>
+        <div class="bubble">Watch this.</div>
+      </div>
+      <div class="panel p-yellow halftone c2 speedlines" style="--rot:2deg">
+        <div class="sfx">BLIP!</div>
+      </div>
+      <div class="panel p-blue halftone c2" style="--rot:-1.5deg">
+        <div class="hero-cell"><div class="hero" data-mood="cool"></div></div>
+        <div class="bubble right">&hellip;and I'm on the <span class="em-y">other side.</span></div>
+      </div>
+      <div class="panel" style="--rot:.6deg">
+        <div class="lead"><span class="big">No, I didn't break the wall.</span> My wave leaks a little way in, so there's a real chance I just <i>appear</i> beyond it. It's how the <span class="em">Sun</span> burns and how a <span class="em-b">USB stick</span> remembers your homework.</div>
+      </div>
+    </section>
+
+    <!-- ============ CH 8 — SPIN ============ -->
+    <div class="chapter"><div class="band"><span class="num">CH. 8</span><span class="title">SPLIT DECISION</span></div></div>
+    <section class="grid">
+      <div class="panel p-teal halftone c3" style="--rot:1deg">
+        <div class="cap"><b>Shoot me through a lopsided magnet.</b> You'd expect a smeared smudge, right?</div>
+        <div class="bubble">Nope. I split. <span class="em">Clean.</span> Two sharp dots. Up&hellip; or down. Nothing between.</div>
+      </div>
+      <div class="panel p-red halftone c3 speedlines" style="--rot:-1.2deg">
+        <div class="sfx alt">SHK-SHK!</div>
+        <div class="cap" style="align-self:flex-end">My "spin" only ever gives <b>two answers.</b> Quantized, baby.</div>
+      </div>
+    </section>
+
+    <!-- ============ CH 9 — MEASUREMENT ============ -->
+    <div class="chapter"><div class="band"><span class="num">CH. 9</span><span class="title">THE MOMENT YOU LOOK</span></div></div>
+    <section class="grid">
+      <div class="panel p-dark halftone c4" style="--rot:-.6deg">
+        <div class="hero-cell"><div class="hero" data-mood="dizzy"></div></div>
+        <div class="bubble">Here's the secret hiding under <i>everything</i> you just read&hellip;</div>
+        <div class="lead big">Until you look, I'm a <span class="em-y">fog of maybe.</span> A cloud of every possibility at once.</div>
+      </div>
+      <div class="panel p-red halftone c2" style="--rot:2deg">
+        <div class="sfx">SNAP!</div>
+      </div>
+      <div class="panel" style="--rot:.8deg">
+        <div class="cap"><b>The instant you measure me</b>&hellip; the whole cloud freezes into <span class="em">one</span> fact.</div>
+        <div class="lead">The math nails the <i>odds</i> perfectly. But <span class="em-b">why</span> you only ever see one outcome? Even the greatest minds are still arguing. That's not a gap in <i>you</i> — it's the honest edge of reality.</div>
+      </div>
+    </section>
+
+    <!-- ============ ENDING ============ -->
+    <section class="ending">
+      <h2>THE END?</h2>
+      <div class="tc">Nah. Every time you <i>look</i>&hellip; it all starts again.</div>
+      <p style="max-width:40ch;margin:18px auto 0;font-size:1.05rem;">You just scrolled through wave-particle duality, the double slit, superposition, uncertainty, quantization, entanglement, tunneling, spin, and measurement — the nine weirdest rules in the universe. Not bad for a comic.</p>
+      <a class="restart" href="#top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">&uarr; READ IT AGAIN</a>
+      <div class="credit">QUANTUM! Issue #4 &middot; Starring Eli the Electron &middot; Built for the BHS AI Builder Hackathon.</div>
+    </section>
+
+  </div>
+
+  <!-- BHS-DEMO-BANNER -->
+  <div id="bhs-demo-banner" style="position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:#0b0d12;color:#e7e9ee;border-top:2px solid #ffd23f;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;box-shadow:0 -8px 24px rgba(0,0,0,.45)">
+    <div style="max-width:1100px;margin:0 auto;padding:10px 48px 10px 16px;position:relative">
+      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#ffd23f;font-weight:700;margin-bottom:4px">
+        BHS Hackathon &middot; Prompting demo &middot; v4 &mdash; this site was built from exactly this prompt
+      </div>
+      <div style="color:#cdd2db;white-space:pre-wrap;word-break:break-word">Build me v4 in a super comic style. Make it a story that scrolls like an (infinite) scrollable story, with comic strip blocks, really stylized.</div>
+      <button onclick="document.getElementById('bhs-demo-banner').style.display='none'" aria-label="Hide" style="position:absolute;top:8px;right:10px;background:transparent;border:1px solid #3a3f4b;color:#9aa1ad;border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:14px;line-height:1">&times;</button>
+    </div>
+  </div>
+  <!-- /BHS-DEMO-BANNER -->
+
+<script>
+  // ---- draw Eli the electron (reused mascot, expression varies) ----
+  function eli(mood){
+    const mouths = {
+      cool:   '<path d="M44 78 q16 10 32 0" fill="none" stroke="#0a1838" stroke-width="4" stroke-linecap="round"/>',
+      happy:  '<path d="M42 74 q18 20 36 0 q-18 6 -36 0 z" fill="#0a1838"/>',
+      dizzy:  '<path d="M46 80 q8 -8 14 0 q6 8 14 0" fill="none" stroke="#0a1838" stroke-width="4" stroke-linecap="round"/>'
+    };
+    const eyes = mood==='dizzy'
+      ? '<g stroke="#0a1838" stroke-width="3" fill="none"><path d="M40 54 l12 0 M40 54 l0 -2"/><path d="M68 54 l12 0"/></g>'+
+        '<text x="44" y="58" font-family="Bangers" font-size="16" fill="#0a1838">x</text>'+
+        '<text x="72" y="58" font-family="Bangers" font-size="16" fill="#0a1838">x</text>'
+      : '<circle cx="48" cy="54" r="9" fill="#fff" stroke="#0a1838" stroke-width="3"/>'+
+        '<circle cx="74" cy="54" r="9" fill="#fff" stroke="#0a1838" stroke-width="3"/>'+
+        '<circle cx="50" cy="56" r="4" fill="#0a1838"/><circle cx="76" cy="56" r="4" fill="#0a1838"/>'+
+        (mood==='cool' ? '<rect x="36" y="44" width="28" height="6" rx="3" fill="#0a1838"/><rect x="62" y="44" width="28" height="6" rx="3" fill="#0a1838"/>' : '');
+    return '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">'+
+      '<ellipse class="spin-orbit" cx="60" cy="60" rx="54" ry="20" fill="none" stroke="#fff" stroke-width="3" opacity=".55" transform="rotate(-22 60 60)"/>'+
+      '<circle class="spin-orbit" cx="108" cy="56" r="7" fill="#ffd23f" stroke="#0a1838" stroke-width="2"/>'+
+      '<circle cx="60" cy="62" r="36" fill="#3b82ff" stroke="#0a1838" stroke-width="5"/>'+
+      '<circle cx="48" cy="50" r="11" fill="rgba(255,255,255,.35)"/>'+
+      '<rect x="50" y="86" width="20" height="5" rx="2.5" fill="#0a1838"/>'+  /* minus sign (charge) */
+      eyes + (mouths[mood]||mouths.cool) +
+      '</svg>';
+  }
+  document.querySelectorAll('.hero[data-mood]').forEach(h=>{ h.innerHTML = eli(h.dataset.mood); });
+
+  // ---- scroll-reveal panels + chapter bands ----
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, {threshold:.18, rootMargin:'0px 0px -8% 0px'});
+  // stagger panels within each grid
+  document.querySelectorAll('.grid').forEach(g=>{
+    [...g.querySelectorAll('.panel')].forEach((p,i)=>{ p.style.transitionDelay=(i*0.08)+'s'; io.observe(p); });
+  });
+  document.querySelectorAll('.chapter .band').forEach(b=>io.observe(b));
+
+  // ---- reading progress meter ----
+  const prog=document.getElementById('prog');
+  addEventListener('scroll',()=>{
+    const h=document.documentElement;
+    const pct=(h.scrollTop)/(h.scrollHeight-h.clientHeight)*100;
+    prog.style.width=pct+'%';
+  },{passive:true});
+</script>
+<a id="top"></a>
+</body>
+</html>
