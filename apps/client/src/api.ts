@@ -45,3 +45,21 @@ export type Todo = {
   done: 0 | 1;
   created_at: string;
 };
+
+// One item in the unified dashboard feed (mirrors the server's FeedItem).
+export type FeedItem = {
+  id: number;
+  source: string;
+  source_id: string;
+  title: string;
+  sender: string | null;
+  body: string | null;
+  url: string | null;
+  occurred_at: string;
+  is_school: 0 | 1 | null;
+  category: string | null;
+  summary: string | null;
+  relevance: number | null;
+  deadline: string | null;
+  created_at: string;
+};

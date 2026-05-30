@@ -5,6 +5,7 @@ import morgan from "morgan";
 import { env } from "./env.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { notFoundHandler } from "./middleware/notFoundHandler.js";
+import { feedRouter } from "./routes/feed.js";
 import { healthRouter } from "./routes/health.js";
 import { todosRouter } from "./routes/todos.js";
 
@@ -27,6 +28,7 @@ export function buildApp(): Express {
   // Mount the routes.
   app.use("/api/health", healthRouter);
   app.use("/api/todos", todosRouter);
+  app.use("/api/feed", feedRouter);
 
   // 404 + error handlers run after every other route. Order matters.
   app.use(notFoundHandler);
