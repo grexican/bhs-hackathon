@@ -20,25 +20,31 @@ export class Input {
     window.addEventListener("keydown", (e) => this._onKey(e, true));
     window.addEventListener("keyup", (e) => this._onKey(e, false));
 
-    // Touch / mouse: left half of screen steers left, right half steers right,
-    // and any press also counts as "jump" so one-thumb play works.
-    const press = (clientX) => {
-      if (!this.jumpHeld) { this.jumpPresses++; this.startPresses++; }
-      this.jumpHeld = true;
-      if (clientX < window.innerWidth / 2) { this._left = true; this._right = false; }
-      else { this._right = true; this._left = false; }
+    // Touch zones: LEFT third steers left, RIGHT third steers right, CENTER
+    // third jumps. Multi-touch (tracked per pointer id) so you can steer AND
+    // jump at the same time — and steering taps no longer trigger a jump.
+    this._touch = new Map(); // pointerId -> "left" | "right" | "jump"
+    const zoneOf = (x) => {
+      const w = window.innerWidth;
+      return x < w / 3 ? "left" : x > (2 * w) / 3 ? "right" : "jump";
+    };
+    const recomputeTouch = () => {
+      let l = false, r = false, j = false;
+      for (const z of this._touch.values()) {
+        if (z === "left") l = true; else if (z === "right") r = true; else j = true;
+      }
+      this._left = l; this._right = r; this.jumpHeld = j;
       this._recompute();
     };
-    const release = () => {
-      this.jumpHeld = false;
-      this._left = this._right = false;
-      this._recompute();
-    };
-
-    canvas.addEventListener("pointerdown", (e) => press(e.clientX));
-    canvas.addEventListener("pointerup", release);
-    canvas.addEventListener("pointercancel", release);
-    canvas.addEventListener("pointerleave", release);
+    canvas.addEventListener("pointerdown", (e) => {
+      const zone = zoneOf(e.clientX);
+      if (zone === "jump" && !this.jumpHeld) { this.jumpPresses++; this.startPresses++; }
+      this._touch.set(e.pointerId, zone);
+      recomputeTouch();
+    });
+    const lift = (e) => { this._touch.delete(e.pointerId); recomputeTouch(); };
+    window.addEventListener("pointerup", lift);
+    window.addEventListener("pointercancel", lift);
   }
 
   _onKey(e, down) {
