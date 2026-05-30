@@ -101,6 +101,8 @@ export class Sound {
   constructor() {
     this.ctx = null;
     this.muted = false;
+    this.reactive = true; // music reacts to active effects (toggleable)
+    this._staticDet = 0;
     this._musicOn = false;
     this._stepCount = 0;
     this._nextStepTime = 0;
@@ -140,21 +142,63 @@ export class Sound {
       this.spaceIn.gain.value = 1;
       const delayA = this.ctx.createDelay(1.0); delayA.delayTime.value = 0.27;
       const delayB = this.ctx.createDelay(1.0); delayB.delayTime.value = 0.41; // second tap = lusher tail
-      const fb = this.ctx.createGain(); fb.gain.value = 0.42; // feedback amount
+      const fb = this.ctx.createGain(); fb.gain.value = 0.26; // feedback (kept well under 1 so it can't build up)
       const tone = this.ctx.createBiquadFilter();
       tone.type = "lowpass"; tone.frequency.value = 2600; // darken the echoes
-      const spaceOut = this.ctx.createGain(); spaceOut.gain.value = 0.9;
+      const spaceOut = this.ctx.createGain(); spaceOut.gain.value = 0.7;
       this.spaceIn.connect(delayA); this.spaceIn.connect(delayB);
       delayA.connect(tone); delayB.connect(tone);
-      tone.connect(fb); fb.connect(delayA); fb.connect(delayB); // feed back for a long tail
+      // Feed back through ONLY delayA — feeding both taps roughly doubled the loop
+      // gain, so it accumulated all the note/SFX sends and rang louder and louder.
+      tone.connect(fb); fb.connect(delayA);
       tone.connect(spaceOut); spaceOut.connect(this.musicGain);
       this._spaceTone = tone;
 
       this._distortion = this._makeDistortionCurve(12); // softened from 28
       this._noise = this._makeNoiseBuffer();
+
+      // Reactive-music LFO: a slow sine whose gain (warble depth in cents) is
+      // driven by active gameplay effects (e.g. trip => pitch warbles in waves).
+      // Its output is patched into every note's detune param as it's created.
+      this._lfo = this.ctx.createOscillator();
+      this._lfo.type = "sine";
+      this._lfo.frequency.value = 3; // ~3 Hz waves
+      this._lfoGain = this.ctx.createGain();
+      this._lfoGain.gain.value = 0;
+      this._lfo.connect(this._lfoGain);
+      this._lfo.start();
     }
     if (this.ctx.state === "suspended") this.ctx.resume();
     this._startMusic();
+  }
+
+  // --- Reactive music (effect layering, toggleable) -------------------------
+
+  // Called each frame with the live effects state. Maps effects to a warble
+  // depth (LFO) + a static pitch offset so the music morphs WITH the gameplay
+  // instead of switching tracks. trip = big psychedelic waves; morph = wobble;
+  // slow = pitched down; surge = pitched up.
+  setEffects(e) {
+    if (!this.ctx) return;
+    const on = this.reactive && !this.muted;
+    const warble = on ? (e.trip > 0 ? 200 : 0) + (e.morph > 0 ? 90 : 0) : 0;
+    this._lfoGain.gain.setTargetAtTime(warble, this.ctx.currentTime, 0.12);
+    this._staticDet = on ? (e.slow > 0 ? -120 : 0) + (e.surge > 0 ? 90 : 0) : 0;
+  }
+
+  toggleReactive() {
+    this.reactive = !this.reactive;
+    if (this.ctx && !this.reactive) {
+      this._lfoGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      this._staticDet = 0;
+    }
+    return this.reactive;
+  }
+
+  // Patch the reactive LFO into a note oscillator's detune, plus the static offset.
+  _react(o) {
+    o.detune.value += this._staticDet || 0;
+    if (this._lfoGain) this._lfoGain.connect(o.detune);
   }
 
   // Switch to the next soundtrack. Works even before audio has started (it just
@@ -242,6 +286,7 @@ export class Sound {
       for (const d of [-det, det]) {
         const o = this.ctx.createOscillator();
         o.type = track.padWave || "triangle"; o.frequency.value = f; o.detune.value = d;
+        this._react(o);
         o.connect(lp); o.start(t); o.stop(t + dur + 0.05);
       }
     }
@@ -269,6 +314,7 @@ export class Sound {
     for (const det of [-5, 5]) {
       const o = this.ctx.createOscillator();
       o.type = track.bassWave || "triangle"; o.frequency.value = freq; o.detune.value = det;
+      this._react(o);
       o.connect(head); o.start(t); o.stop(t + dur + 0.02);
     }
   }
@@ -294,6 +340,7 @@ export class Sound {
     for (const d of [-det, det]) {
       const o = this.ctx.createOscillator();
       o.type = track.arpWave || "triangle"; o.frequency.value = freq; o.detune.value = d;
+      this._react(o);
       o.connect(lp); o.start(t); o.stop(t + dur + 0.03);
     }
   }
@@ -415,6 +462,9 @@ export class Sound {
   }
 
   gem() { this._blip(880, 1320, 0.1, "triangle", 0.15); }
+  // Near-miss = a quick airy "whoosh"; combo riser pitches up with the multiplier.
+  nearMiss() { this._blip(1500, 500, 0.16, "sine", 0.13); }
+  combo(level) { const f = 500 + level * 55; this._blip(f, f * 1.5, 0.12, "triangle", 0.15); }
   bounce() { this._blip(200, 900, 0.22, "sine", 0.26); }
   boost() { this._blip(300, 1200, 0.3, "triangle", 0.2); }
   clang() { this._blip(1100, 320, 0.18, "triangle", 0.18); }

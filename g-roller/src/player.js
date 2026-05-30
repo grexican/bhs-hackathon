@@ -189,23 +189,23 @@ export class Player {
       v.y = Math.max(v.y, prevRide.slopeZ * v.z * CONFIG.rampLaunch);
     }
 
-    // --- Obstacle collision ---
-    let hit = null;
-    if (!ctx.invuln) {
-      for (const plat of field.platforms) {
-        if (!plat.obstacles.length) continue;
-        if (Math.abs(p.z - plat.pos.z) > plat.hz + 4) continue;
-        for (const o of plat.obstacles) {
-          const ox = plat.pos.x + o.lx, oy = plat.pos.y + o.ly, oz = plat.pos.z + o.lz;
-          if (Math.abs(p.x - ox) <= o.hx + this.radius &&
-              Math.abs(p.z - oz) <= o.hz + this.radius &&
-              Math.abs(p.y - oy) <= o.hy + this.radius) {
-            hit = { platform: plat, obstacle: o };
-            break;
-          }
+    // --- Obstacle collision + near-miss detection ---
+    let hit = null, nearMiss = false;
+    const r = this.radius;
+    for (const plat of field.platforms) {
+      if (!plat.obstacles.length) continue;
+      if (Math.abs(p.z - plat.pos.z) > plat.hz + 4) continue;
+      for (const o of plat.obstacles) {
+        const ox = plat.pos.x + o.lx, oy = plat.pos.y + o.ly, oz = plat.pos.z + o.lz;
+        const dx = Math.abs(p.x - ox), dy = Math.abs(p.y - oy), dz = Math.abs(p.z - oz);
+        if (dz > o.hz + r || dy > o.hy + r) continue;     // not alongside it
+        if (dx <= o.hx + r) {
+          if (!ctx.invuln) { hit = { platform: plat, obstacle: o }; break; }
+        } else if (dx <= o.hx + r + CONFIG.nearMissMargin && !o._nm) {
+          o._nm = true; nearMiss = true; // grazed it — counts once per obstacle
         }
-        if (hit) break;
       }
+      if (hit) break;
     }
 
     // Morph powerdown: squash-and-stretch the ball so it visibly rolls weird.
@@ -226,7 +226,7 @@ export class Player {
     // truly nothing left to land on (not just below the last pad we stood on).
     const floor = field.lowestTopNear(p.z);
     const died = !this.grounded && p.y < floor - CONFIG.fallMargin;
-    return { died, landed, hit, jumped, pos: p };
+    return { died, landed, hit, nearMiss, jumped, pos: p };
   }
 
   // Surface height of a platform under the player: flat, sloped (ramp, varies

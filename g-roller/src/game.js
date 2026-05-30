@@ -1,5 +1,8 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { CONFIG, BIOMES, biomeAt } from "./config.js";
 import { Input } from "./input.js";
 import { Player } from "./player.js";
 import { PlatformField } from "./platforms.js";
@@ -31,12 +34,20 @@ export class Game {
     this._firstPerson = false;
     this._restartLock = 0; // brief input-dead window after dying (no instant restart)
     this.gems = 0;
+    this.score = 0;
+    this.multiplier = 1;
+    this._comboTimer = 0;
+    this._freeze = 0;      // hit-stop timer
+    this._biome = 0;
+    this._reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    this._lean = 0; // smoothed steer for a soft camera lean
     this._shake = 0;
     this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0 };
     this._invuln = 0;
 
     this._buildRenderer();
     this._buildScene();
+    this._buildComposer();
 
     this.background = new Background(this.scene);
     this.sound = new Sound();
@@ -46,9 +57,12 @@ export class Game {
     this.particles = new Particles(this.scene);
 
     this._hud = {
+      score: document.getElementById("score"),
+      mult: document.getElementById("mult"),
       distance: document.getElementById("distance"),
       jumps: document.getElementById("jumps"),
       gems: document.getElementById("gems"),
+      bestScore: document.getElementById("best-score"),
       bestDistance: document.getElementById("best-distance"),
       bestJumps: document.getElementById("best-jumps"),
       overlay: document.getElementById("overlay"),
@@ -58,6 +72,7 @@ export class Game {
       effects: document.getElementById("effects"),
     };
 
+    this.bestScore = Number(localStorage.getItem("gr_bestScore") || 0);
     this.bestDistance = Number(localStorage.getItem("gr_bestDistance") || 0);
     this.bestJumps = Number(localStorage.getItem("gr_bestJumps") || 0);
 
@@ -73,6 +88,11 @@ export class Game {
         // you can audition tracks on the title screen; later presses cycle.
         if (!this.sound.ctx) { this.sound.start(); this._toast(`🎵 ${this.sound.trackName()}`, "#a94bff"); }
         else this._toast(`🎵 ${this.sound.nextTrack()}`, "#a94bff");
+      }
+      if (e.code === "KeyX") this._toast(this.sound.toggleReactive() ? "🎚️ MUSIC FX ON" : "🎚️ MUSIC FX OFF", "#a94bff");
+      if (e.code === "KeyG") {
+        this._reducedMotion = !this._reducedMotion;
+        this._toast(this._reducedMotion ? "🌿 REDUCED MOTION ON" : "REDUCED MOTION OFF", "#4dff8a");
       }
     });
     const viewBtn = document.getElementById("view-btn");
@@ -102,6 +122,21 @@ export class Game {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  }
+
+  // Post-processing: a tightly thresholded bloom so only the bright emissive
+  // things (gems, rings, boost pads, powerups, neon) glow — textured platforms
+  // stay crisp.
+  _buildComposer() {
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloom = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.6,   // strength
+      0.5,   // radius
+      0.72   // threshold — only the brightest pixels bloom
+    );
+    this.composer.addPass(this.bloom);
   }
 
   _buildScene() {
@@ -134,10 +169,16 @@ export class Game {
     this._speedTimer = 0;
     this._boostTimer = 0;
     this.gems = 0;
+    this.score = 0;
+    this.multiplier = 1;
+    this._comboTimer = 0;
+    this._biome = 0;
     this._invuln = 0;
     this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0 };
     this._clearSplats();
     this.canvas.classList.remove("is-tripping");
+    this.scene.fog.color.setHex(BIOMES[0].fog);
+    this.sun.color.setHex(BIOMES[0].sun);
     this.field.reset();
     this.player.reset();
     this._followCamera(true);
@@ -173,7 +214,9 @@ export class Game {
 
   _loop() {
     requestAnimationFrame(this._loop);
-    const dt = Math.min(this._clock.getDelta(), 1 / 30);
+    let dt = Math.min(this._clock.getDelta(), 1 / 30);
+    // Hit-stop: briefly near-freeze time on impactful moments for punch.
+    if (this._freeze > 0) { this._freeze -= dt; dt *= 0.12; }
 
     if (this.state === "playing") {
       this._tickPlaying(dt);
@@ -189,7 +232,7 @@ export class Game {
     this.background.update(this.player.position.z, dt, this.state === "playing");
     this._followCamera(false);
     this._tickCamera(dt);
-    this.renderer.render(this.scene, this.camera);
+    this.composer.render(); // bloom (was wrongly blamed for the flip — that was the camera roll)
   }
 
   _startGame() {
@@ -214,8 +257,12 @@ export class Game {
     if (this._invuln > 0) this._invuln -= dt;
     for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip"])
       if (this._effects[k] > 0) this._effects[k] -= dt;
-    // Psychedelic powerdown: recolor the whole view via an animated CSS filter.
-    this.canvas.classList.toggle("is-tripping", this._effects.trip > 0);
+    // Psychedelic powerdown: recolor the view (gentle variant if reduced-motion).
+    const tripping = this._effects.trip > 0;
+    this.canvas.classList.toggle("is-tripping", tripping && !this._reducedMotion);
+    this.canvas.classList.toggle("is-tripping--gentle", tripping && this._reducedMotion);
+    // Let the music react to whatever's active (trip warble, etc.).
+    this.sound.setEffects(this._effects);
 
     // Ease the actual speed toward the target so boost/slow ramp in and out over
     // ~1s instead of snapping.
@@ -223,6 +270,14 @@ export class Game {
     this._speed += (target - this._speed) * (1 - Math.exp(-dt / 0.33));
     const speed = this._speed;
     this.field.update(dt, this.player.position.z, speed);
+
+    // Score = distance * multiplier; the multiplier decays if you stop taking risks.
+    this.score += speed * dt * CONFIG.scorePerMeter * this.multiplier;
+    this._comboTimer += dt;
+    if (this._comboTimer >= CONFIG.comboDecay && this.multiplier > 1) {
+      this.multiplier -= 1; this._comboTimer = 0;
+    }
+    this._updateBiome(this.player.position.z);
 
     const ctx = {
       forwardSpeed: speed,
@@ -238,6 +293,7 @@ export class Game {
     if (ev.jumped) this.sound.jump();
     this._onLanded(ev);
     if (ev.hit) this._onHit(ev.hit);
+    if (ev.nearMiss) this._onNearMiss();
 
     // Show every active effect on the ball (wings, hover board, orbiting glyphs).
     this.player.updateVisuals(this._effects, dt);
@@ -256,6 +312,7 @@ export class Game {
     const grabbed = this.field.harvestGems(this.player.position, this.player.radius);
     for (const pos of grabbed) {
       this.gems += 1;
+      this.score += CONFIG.gemScore * this.multiplier;
       this.particles.burst(pos, 0x66f0ff, 16);
     }
     if (grabbed.length) this.sound.gem();
@@ -282,18 +339,44 @@ export class Game {
 
   _onHit(hit) {
     if (this._effects.shield) {
-      // Shield absorbs the hit, smashes the obstacle, and grants a mercy window.
+      // Shield absorbs the hit, smashes the obstacle, and grants a mercy window —
+      // but a survived mistake breaks your combo.
       this._effects.shield = false;
       this._invuln = CONFIG.invulnTime;
+      this.multiplier = 1; this._comboTimer = 0;
       this.field.removeObstacle(hit.platform, hit.obstacle);
       this.particles.burst(this.player.position, 0x35e0ff, 26);
-      this._shake = 0.4;
-      this._toast("BLOCKED!", "#35e0ff");
+      this._shake = 0.4; this._freeze = 0.07;
+      this._toast("BLOCKED! combo lost", "#35e0ff");
       this.sound.clang();
     } else {
       this.particles.burst(this.player.position, 0xff3b3b, 30);
       this._die();
     }
+  }
+
+  // A clean graze past a hazard: bonus, multiplier bump, juice.
+  _onNearMiss() {
+    this.multiplier = Math.min(CONFIG.multiplierMax, this.multiplier + 1);
+    this._comboTimer = 0;
+    this.score += CONFIG.nearMissBonus * this.multiplier;
+    this._freeze = 0.05;
+    if (!this._reducedMotion) this._shake = Math.max(this._shake, 0.2);
+    this._toast(`CLOSE! ×${this.multiplier}`, "#ffd34e");
+    this.sound.nearMiss();
+    this.sound.combo(this.multiplier);
+  }
+
+  // Crossfade fog + sun and swap the texture palette as you enter a new biome.
+  _updateBiome(z) {
+    const i = biomeAt(z);
+    if (i !== this._biome) {
+      this._biome = i;
+      this._toast(`Entering ${BIOMES[i].name}`, "#9fe0ff");
+    }
+    const b = BIOMES[i];
+    this.scene.fog.color.lerp(new THREE.Color(b.fog), 0.02);
+    this.sun.color.lerp(new THREE.Color(b.sun), 0.02);
   }
 
   _applyPowerup(u) {
@@ -320,7 +403,7 @@ export class Game {
   _splat() {
     const layer = document.getElementById("splats");
     const colors = ["#5a3a1c", "#3a2a14", "#6b4a22", "#2c3a18"];
-    const n = 10 + Math.floor(Math.random() * 5); // doubled — really gunk up the screen
+    const n = this._reducedMotion ? 3 : 10 + Math.floor(Math.random() * 5); // fewer if reduced-motion
     for (let i = 0; i < n; i++) {
       const b = document.createElement("div");
       b.className = "splat";
@@ -345,16 +428,19 @@ export class Game {
     this.state = "dead";
     this._restartLock = 0.5; // 500 ms where no input restarts (no accidental instant replay)
     this._shake = 0.6;
-    this.canvas.classList.remove("is-tripping");
+    this.canvas.classList.remove("is-tripping", "is-tripping--gentle");
     this.particles.burst(this.player.position, 0xffd34e, 40);
     this.sound.die();
 
     const dist = Math.max(0, Math.floor(this.player.position.z));
+    const score = Math.floor(this.score);
     const jumps = Math.max(0, this.player.jumpCount);
+    if (score > this.bestScore) { this.bestScore = score; localStorage.setItem("gr_bestScore", String(score)); }
     if (dist > this.bestDistance) { this.bestDistance = dist; localStorage.setItem("gr_bestDistance", String(dist)); }
     if (jumps > this.bestJumps) { this.bestJumps = jumps; localStorage.setItem("gr_bestJumps", String(jumps)); }
 
-    this._hud.subtitle.innerHTML = `You rolled <b>${dist} m</b> · ${jumps} jumps · ${this.gems} 💎`;
+    const best = score >= this.bestScore ? " · 🏆 NEW BEST!" : "";
+    this._hud.subtitle.innerHTML = `Score <b>${score.toLocaleString()}</b>${best}<br>${dist} m · ${jumps} jumps · ${this.gems} 💎`;
     this._hud.hint.textContent = "Press SPACE to roll again";
     this._hud.overlay.classList.remove("is-hidden");
     this._refreshHud();
@@ -394,9 +480,12 @@ export class Game {
   }
 
   _refreshHud() {
+    this._hud.score.textContent = Math.floor(this.score).toLocaleString();
+    this._hud.mult.textContent = `×${this.multiplier}`;
     this._hud.distance.textContent = Math.max(0, Math.floor(this.player.position.z));
     this._hud.jumps.textContent = Math.max(0, this.player.jumpCount);
     this._hud.gems.textContent = this.gems;
+    this._hud.bestScore.textContent = this.bestScore.toLocaleString();
     this._hud.bestDistance.textContent = this.bestDistance;
     this._hud.bestJumps.textContent = this.bestJumps;
   }
@@ -420,14 +509,21 @@ export class Game {
       }
       this.camera.lookAt(p.x, eyeY + 1, p.z + 16);
     } else {
-      this.camera.position.x += (p.x - this.camera.position.x) * k;
+      // Smooth the steer input so the lean eases gently in and out of turns
+      // instead of snapping to it.
+      this._lean += (this.input.steer - this._lean) * (snap ? 1 : 0.05);
+      this.camera.position.x += (p.x - this._lean * 1.1 - this.camera.position.x) * k;
       this.camera.position.y += (p.y + 9 - this.camera.position.y) * k;
       this.camera.position.z = p.z - 16;
-      if (this._shake > 0) {
-        this.camera.position.x += (Math.random() - 0.5) * this._shake;
-        this.camera.position.y += (Math.random() - 0.5) * this._shake;
+      const shake = this._reducedMotion ? this._shake * 0.35 : this._shake;
+      if (shake > 0) {
+        this.camera.position.x += (Math.random() - 0.5) * shake;
+        this.camera.position.y += (Math.random() - 0.5) * shake;
       }
       this.camera.lookAt(p.x, p.y + 1.5, p.z + 12);
+      // Roll RELATIVE to the look direction (rotateZ), not by setting rotation.z —
+      // setting the absolute Euler z flips the backward-looking lookAt upside down.
+      this.camera.rotateZ(-this._lean * 0.016);
     }
 
     this.sun.position.set(p.x - 30, p.y + 60, p.z - 20);
@@ -448,5 +544,6 @@ export class Game {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.composer.setSize(window.innerWidth, window.innerHeight);
   }
 }

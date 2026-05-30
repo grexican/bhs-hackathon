@@ -32,6 +32,13 @@
         100% { filter: hue-rotate(360deg) saturate(3) contrast(1.4) brightness(1.1); transform: scale(1.02) skew(1deg, 0); }
       }
 
+      /* Reduced-motion variant: just a gentle colour sway, no skew/invert/strobe. */
+      #game-canvas.is-tripping--gentle { animation: trip-gentle 2.4s ease-in-out infinite; }
+      @keyframes trip-gentle {
+        0%, 100% { filter: hue-rotate(0deg) saturate(1.6); }
+        50%      { filter: hue-rotate(40deg) saturate(2); }
+      }
+
       /* Gunk splatted on the screen by the "splat" powerdown — sits above the
          canvas but below the HUD so your score stays readable. */
       #splats { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
@@ -73,8 +80,13 @@
         border: 1px solid rgba(255, 255, 255, 0.08);
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
       }
-      .hud__dist { font-size: 30px; font-weight: 800; color: var(--accent); line-height: 1; }
-      .hud__dist span:last-child { font-size: 15px; opacity: 0.7; font-weight: 600; }
+      .hud__score { font-size: 34px; font-weight: 900; color: #fff; line-height: 1; letter-spacing: 0.5px; }
+      .hud__mult {
+        font-size: 18px; font-weight: 800; color: var(--accent); vertical-align: middle;
+        text-shadow: 0 0 14px rgba(255, 211, 78, 0.6);
+      }
+      .hud__dist { margin-top: 6px; font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1; opacity: 0.92; }
+      .hud__dist span:last-child { font-size: 13px; opacity: 0.7; font-weight: 600; }
       .hud__stats { margin-top: 8px; display: flex; gap: 14px; font-size: 15px; }
       .hud__stats b { color: #fff; }
       .hud__best { margin-top: 8px; font-size: 12px; opacity: 0.55; line-height: 1.5; }
@@ -151,13 +163,14 @@
 
     <div class="hud">
       <div class="hud__panel">
+        <div class="hud__score"><span id="score">0</span> <span class="hud__mult" id="mult">×1</span></div>
         <div class="hud__dist"><span id="distance">0</span> <span>m</span></div>
         <div class="hud__stats">
           <div>🦘 <b id="jumps">0</b></div>
           <div>💎 <b id="gems">0</b></div>
         </div>
         <div class="hud__best">
-          Best: <span id="best-distance">0</span> m · <span id="best-jumps">0</span> jumps
+          Best: <span id="best-score">0</span> pts · <span id="best-distance">0</span> m · <span id="best-jumps">0</span> jumps
         </div>
       </div>
 
@@ -174,14 +187,14 @@
         <div class="hud__controls">
           <kbd>Space</kbd> / <kbd>W</kbd> / <kbd>&uarr;</kbd> jump — hold for height, release early to drop fast<br />
           <kbd>A</kbd><kbd>D</kbd> / <kbd>&larr;</kbd><kbd>&rarr;</kbd> steer &nbsp;·&nbsp; on phone, tap a side of the screen<br />
-          <kbd>M</kbd> mute &nbsp;·&nbsp; <kbd>N</kbd> next track &nbsp;·&nbsp; <kbd>V</kbd> 1st-person &nbsp;·&nbsp; 🔊 5 soundtracks
+          <kbd>M</kbd> mute &nbsp;·&nbsp; <kbd>N</kbd> next track &nbsp;·&nbsp; <kbd>V</kbd> 1st-person &nbsp;·&nbsp; <kbd>X</kbd> music FX &nbsp;·&nbsp; <kbd>G</kbd> reduced motion
         </div>
         <div class="legend">
           <span><i style="background:#66f0ff"></i>gem</span>
           <span><i style="background:#39ff7a"></i>boost</span>
           <span><i style="background:#ff3f7a"></i>bouncy</span>
-          <span><i style="background:#9fe0ff"></i>powerup (cool)</span>
-          <span><i style="background:#ff4bd6"></i>powerdown (warm)</span>
+          <span><i style="background:#9fe0ff"></i>powerup</span>
+          <span><i style="background:#ff4bd6"></i>powerdown</span>
         </div>
       </div>
     </div>

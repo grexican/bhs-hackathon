@@ -110,6 +110,16 @@ export const CONFIG = {
   cheatItemMultiplier: 3, // how many times as many gems/powerups spawn
   cheatDuration: 20,      // seconds every timed powerup/powerdown lasts in cheat mode
 
+  // Score & combo economy. A single Score = distance * multiplier (+ gems and
+  // near-miss bonuses). The multiplier climbs as you take risks and decays if you
+  // play it safe; a survived mistake (shielded hit) resets it.
+  scorePerMeter: 1,
+  gemScore: 25,
+  nearMissBonus: 50,
+  nearMissMargin: 1.2,  // grazing an obstacle within this extra distance = near-miss
+  multiplierMax: 12,
+  comboDecay: 4,        // seconds without a combo event before the multiplier drops 1
+
   // Death: game over only once you fall this far below the LOWEST floor still
   // drawn near you (i.e. there's genuinely nothing left to land on).
   fallMargin: 16,
@@ -118,6 +128,20 @@ export const CONFIG = {
   starterLength: 56,
   starterWidth: 16,
 };
+
+// Themed zones the run passes through. Each retints the fog + sun and restricts
+// the platform texture set, so the world visibly changes as you go deeper.
+export const BIOMES = [
+  { name: "Neon City",    until: 600,      fog: 0x141a33, sun: 0xfff2d6, textures: ["concrete", "brick", "tile"] },
+  { name: "Sunset Dunes", until: 1300,     fog: 0x3a1d2a, sun: 0xffb066, textures: ["wood", "brick", "pebble"] },
+  { name: "Ice Caverns",  until: 2200,     fog: 0x123244, sun: 0xcfeaff, textures: ["marble", "tile", "concrete"] },
+  { name: "The Void",     until: Infinity, fog: 0x0a0614, sun: 0xb06bff, textures: ["pebble", "marble", "concrete"] },
+];
+
+export function biomeAt(z) {
+  for (let i = 0; i < BIOMES.length; i++) if (z < BIOMES[i].until) return i;
+  return BIOMES.length - 1;
+}
 
 // Peak height of a full jump and the air time it grants — used by the platform
 // generator to guarantee the next stepping stone is always reachable.

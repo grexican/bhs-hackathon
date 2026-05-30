@@ -1,0 +1,54 @@
+# Builds the G-Roller web game and deploys it to GitHub Pages.
+# The build happens here in CI — NOTHING built is committed to the repo, so there
+# are no artifacts to merge and no git drama. Triggers only on the g-roller branch.
+#
+# One-time setup (repo owner): Settings -> Pages -> Build and deployment ->
+# Source: "GitHub Actions". After that, every push to g-roller redeploys.
+name: Deploy G-Roller to Pages
+
+on:
+  push:
+    branches: [g-roller]
+    paths:
+      - "g-roller/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: g-roller
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: g-roller/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: g-roller/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

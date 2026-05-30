@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CONFIG, jumpReach, ramp, smoothstep } from "./config.js";
+import { CONFIG, jumpReach, ramp, smoothstep, BIOMES, biomeAt } from "./config.js";
 import { makeTextureLibrary, GROUND_TEXTURES } from "./textures.js";
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -75,6 +75,7 @@ export class PlatformField {
     this._difficulty = 0;  // hazard ramp (slow)
     this._spreadD = 0;     // spread ramp (fast)
     this.itemMultiplier = 1; // cheat code bumps this to spawn extra gems/powerups
+    this._biomeTextures = BIOMES[0].textures;
     this._stepIndex = 0;
     this._stepsSinceTunnel = 0;
     this._cursor = { x: 0, y: 0, z: 0 };
@@ -106,6 +107,9 @@ export class PlatformField {
   }
 
   // --- Construction helpers -------------------------------------------------
+
+  // Pick a ground texture from the current biome's palette.
+  _groundTex() { return pick(this._biomeTextures || GROUND_TEXTURES); }
 
   _texFor(name, w, len) {
     const t = this.tex[name].clone();
@@ -414,7 +418,7 @@ export class PlatformField {
     const z = this._cursor.z + gap + len / 2;
 
     const type = !safe && chance(0.1) ? "boost" : "normal";
-    const texName = type === "boost" ? "boost" : pick(GROUND_TEXTURES);
+    const texName = type === "boost" ? "boost" : this._groundTex();
 
     // Maybe make this a ramp (roll up/down + launch off the top) or a curved board.
     let slopeZ = 0, curve = 0, yCenter = y;
@@ -474,7 +478,7 @@ export class PlatformField {
         x, y, z, w, len, hy: bouncy ? 0.5 : g.hy,
         geoType: bouncy ? "box" : g.geoType,
         type: bouncy ? "bouncy" : "normal",
-        texName: bouncy ? "rubber" : pick(GROUND_TEXTURES),
+        texName: bouncy ? "rubber" : this._groundTex(),
       });
       for (let m = 0; m < this.itemMultiplier; m++) {
         const ox = (m - (this.itemMultiplier - 1) / 2) * 2.5;
@@ -497,6 +501,7 @@ export class PlatformField {
     this._time += dt;
     this._difficulty = smoothstep(playerZ / CONFIG.difficultyDistance);
     this._spreadD = smoothstep(playerZ / CONFIG.spreadDistance);
+    this._biomeTextures = BIOMES[biomeAt(playerZ)].textures; // platforms re-skin per biome
 
     while (this._cursor.z < playerZ + CONFIG.keepAheadDistance) this._extendPath(forwardSpeed);
 
