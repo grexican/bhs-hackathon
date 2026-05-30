@@ -22,6 +22,7 @@ export class Game {
     this.canvas = canvas;
     this.state = "start";
     this.baseSpeed = CONFIG.forwardSpeed;
+    this._speed = CONFIG.forwardSpeed; // smoothed actual speed (eases toward the target)
     this._speedTimer = 0;
     this._boostTimer = 0;
     this._seenStart = 0;   // tracks Input.startPresses for the start gate
@@ -129,6 +130,7 @@ export class Game {
 
   _resetWorld() {
     this.baseSpeed = CONFIG.forwardSpeed;
+    this._speed = CONFIG.forwardSpeed;
     this._speedTimer = 0;
     this._boostTimer = 0;
     this.gems = 0;
@@ -215,7 +217,11 @@ export class Game {
     // Psychedelic powerdown: recolor the whole view via an animated CSS filter.
     this.canvas.classList.toggle("is-tripping", this._effects.trip > 0);
 
-    const speed = this._effectiveSpeed();
+    // Ease the actual speed toward the target so boost/slow ramp in and out over
+    // ~1s instead of snapping.
+    const target = this._effectiveSpeed();
+    this._speed += (target - this._speed) * (1 - Math.exp(-dt / 0.33));
+    const speed = this._speed;
     this.field.update(dt, this.player.position.z, speed);
 
     const ctx = {
@@ -431,7 +437,7 @@ export class Game {
 
   _tickCamera(dt) {
     if (this._shake > 0) this._shake = Math.max(0, this._shake - dt * 1.6);
-    const targetFov = this._baseFov + Math.min(16, Math.max(0, this._effectiveSpeed() - CONFIG.forwardSpeed) * 0.45);
+    const targetFov = this._baseFov + Math.min(16, Math.max(0, this._speed - CONFIG.forwardSpeed) * 0.45);
     if (Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.camera.fov += (targetFov - this.camera.fov) * 0.08;
       this.camera.updateProjectionMatrix();

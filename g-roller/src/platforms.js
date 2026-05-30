@@ -44,9 +44,12 @@ class Platform {
     this.mesh = group; this.hx = hx; this.hy = hy; this.hz = hz;
     this.type = type;            // "normal" | "bouncy" | "boost"
     this.obstacles = [];         // {hx,hy,hz, lx,ly,lz, kind}
-    this.mover = null;           // {axis, amp, speed, phase, baseX, baseY}
+    this.mover = null;           // {dirX, dirY, amp, speed, phase, baseX, baseY}
     this.dx = 0; this.dy = 0;    // movement applied this frame (so riders move too)
+    this.slopeZ = 0;             // ramp: top rises this much per unit of z
+    this.curve = 0;              // curved board: + concave (funnels in), - convex (rolls off)
     this._tex = null;
+    this._geo = null;            // own geometry to dispose (curved boards only)
   }
   get pos() { return this.mesh.position; }
   get topY() { return this.mesh.position.y + this.hy; }
@@ -111,7 +114,7 @@ export class PlatformField {
     return t;
   }
 
-  _addBoard({ x, y, z, w, len, hy, geoType, type, texName }) {
+  _addBoard({ x, y, z, w, len, hy, geoType, type, texName, slopeZ = 0, curve = 0 }) {
     const group = new THREE.Group();
     group.position.set(x, y, z);
 
@@ -123,9 +126,19 @@ export class PlatformField {
       emissive: type === "bouncy" ? 0xff1f5a : type === "boost" ? 0x1fdd5a : 0x000000,
       emissiveIntensity: type === "bouncy" ? 0.5 : type === "boost" ? 0.6 : 0,
     });
-    const geo = geoType === "cyl" ? this._geoCyl : geoType === "hex" ? this._geoHex : this._geoBox;
-    const visual = new THREE.Mesh(geo, mat);
-    visual.scale.set(w, hy * 2, len);
+
+    let visual, ownGeo = null;
+    if (curve) {
+      // Curved board: a parabolic surface across its width.
+      ownGeo = this._makeCurvedGeo(w, len, curve);
+      mat.side = THREE.DoubleSide;
+      visual = new THREE.Mesh(ownGeo, mat);
+    } else {
+      const geo = geoType === "cyl" ? this._geoCyl : geoType === "hex" ? this._geoHex : this._geoBox;
+      visual = new THREE.Mesh(geo, mat);
+      visual.scale.set(w, hy * 2, len);
+      if (slopeZ) visual.rotation.x = Math.atan(slopeZ); // tilt into a ramp
+    }
     visual.castShadow = true;
     visual.receiveShadow = true;
     group.add(visual);
@@ -133,8 +146,26 @@ export class PlatformField {
 
     const p = new Platform(group, w / 2, hy, len / 2, type);
     p._tex = tex;
+    p._geo = ownGeo;
+    p.slopeZ = slopeZ;
+    p.curve = curve;
     this.platforms.push(p);
     return p;
+  }
+
+  // A flat plane bent into a parabola across its width (x). +curve = concave
+  // (valley, funnels you to the middle); -curve = convex (dome, rolls you off).
+  _makeCurvedGeo(w, len, curve) {
+    const g = new THREE.PlaneGeometry(w, len, 16, 1);
+    g.rotateX(-Math.PI / 2); // lay flat in the xz-plane, facing up
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const px = pos.getX(i);
+      pos.setY(i, curve * px * px);
+    }
+    pos.needsUpdate = true;
+    g.computeVertexNormals();
+    return g;
   }
 
   // Hang an obstacle off a platform. "barrier" = a low wall you jump; "spikes" =
@@ -384,24 +415,39 @@ export class PlatformField {
 
     const type = !safe && chance(0.1) ? "boost" : "normal";
     const texName = type === "boost" ? "boost" : pick(GROUND_TEXTURES);
-    const p = this._addBoard({ x, y, z, w, len, hy: g.hy, geoType: g.geoType, type, texName });
-    this._cursor = { x, y, z: z + len / 2 };
+
+    // Maybe make this a ramp (roll up/down + launch off the top) or a curved board.
+    let slopeZ = 0, curve = 0, yCenter = y;
+    if (!safe && type === "normal" && !round) {
+      if (chance(ramp(CONFIG.rampChance, sd))) {
+        slopeZ = (chance(0.5) ? 1 : -1) * rand(CONFIG.rampSlope[0], CONFIG.rampSlope[1]);
+        yCenter = this._cursor.y + slopeZ * (len / 2); // near edge meets the incoming height
+      } else if (chance(ramp(CONFIG.curveChance, sd))) {
+        curve = (chance(0.6) ? 1 : -1) * CONFIG.curveAmount; // + concave (in), - convex (out)
+      }
+    }
+
+    const p = this._addBoard({ x, y: yCenter, z, w, len, hy: g.hy, geoType: g.geoType, type, texName, slopeZ, curve });
+    const exitY = slopeZ ? yCenter + slopeZ * (len / 2) : yCenter;
+    this._cursor = { x, y: exitY, z: z + len / 2 };
 
     if (!safe) {
-      if (chance(ramp(CONFIG.movingChance, hd))) this._makeMover(p, false);
-      if (type === "normal" && len > 12 && chance(ramp(CONFIG.obstacleChance, hd))) {
+      // Keep movers and obstacles on plain flat boards (no ramps/curves).
+      if (!slopeZ && !curve && chance(ramp(CONFIG.movingChance, hd))) this._makeMover(p, false);
+      if (type === "normal" && !slopeZ && !curve && len > 12 && chance(ramp(CONFIG.obstacleChance, hd))) {
         this._addObstacle(p, chance(0.55) ? "barrier" : "spikes");
       }
     }
     // Item multiplier (1 normally, more with the cheat code) spawns extra
     // gems/powerups, spread sideways so they don't pile up.
+    const py = p.pos.y;
     for (let k = 0; k < this.itemMultiplier; k++) {
       const ox = (k - (this.itemMultiplier - 1) / 2) * 3;
-      if (chance(0.4)) this._addGem(x + ox, this._floatY(y + p.hy), z);
-      if (chance(CONFIG.powerupChance)) this._addPowerup(x + ox, this._floatY(y + p.hy), z + rand(-len * 0.3, len * 0.3), hd);
+      if (chance(0.4)) this._addGem(x + ox, this._floatY(py + p.hy), z);
+      if (chance(CONFIG.powerupChance)) this._addPowerup(x + ox, this._floatY(py + p.hy), z + rand(-len * 0.3, len * 0.3), hd);
     }
 
-    if (!safe) this._scatterCloud(x, y, z, sd, hd);
+    if (!safe) this._scatterCloud(x, exitY, z, sd, hd);
     this._stepIndex++;
   }
 
@@ -442,6 +488,7 @@ export class PlatformField {
     this.scene.remove(p.mesh);
     p.mesh.traverse((o) => { if (o.isMesh) o.material.dispose(); });
     if (p._tex) p._tex.dispose();
+    if (p._geo) p._geo.dispose();
   }
 
   // --- Per-frame ------------------------------------------------------------

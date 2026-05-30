@@ -78,6 +78,14 @@ export const CONFIG = {
   tunnelRings: 7,
   tunnelRadius: 4.5,
 
+  // --- Ramps & curved boards ---
+  rampChance: [0.0, 0.2],    // tilted boards you roll up/down (and launch off the top)
+  rampSlope: [0.24, 0.5],    // rise/run (tan of the ramp angle)
+  rampLaunch: 0.8,           // fraction of climb speed kept as a hop off an up-ramp
+  curveChance: [0.0, 0.16],  // boards curved across their width
+  curveAmount: 0.055,        // parabola steepness (concave funnels in, convex rolls off)
+  curveForce: 17,            // how hard a curved board pushes you sideways
+
   // Powerups / powerdowns
   powerupChance: 0.18,    // chance a path platform floats a power pickup
   magnetDuration: 12,

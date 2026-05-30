@@ -107,9 +107,10 @@ export class Player {
     const v = this.vel;
     this.shieldMesh.visible = ctx.shield;
 
-    // Ride a moving platform: carry over the delta it moved last/this frame.
+    // Ride a moving platform's VERTICAL motion (so you go up/down with it), but
+    // NOT its horizontal motion — a sideways-sliding board slides out from under
+    // you, so you have to actively steer to stay on it or you'll roll off the edge.
     if (this._ridePlat && this._ridePlat.mesh.parent) {
-      p.x += this._ridePlat.dx;
       p.y += this._ridePlat.dy;
     }
 
@@ -152,31 +153,40 @@ export class Player {
     p.y += v.y * dt;
     p.z += v.z * dt;
 
-    // --- Land on platforms (only from above; pass through from below) ---
+    // --- Land on platforms (flat, ramp, or curved; pass through from below) ---
     let landed = null;
+    const prevRide = this._ridePlat;
     this.grounded = false;
     this._ridePlat = null;
     if (v.y <= 0) {
       const newBottom = p.y - this.radius;
+      let bestTop = -Infinity, best = null;
       for (const plat of field.platforms) {
         if (Math.abs(p.z - plat.pos.z) > plat.hz + 4) continue;
-        const withinX = Math.abs(p.x - plat.pos.x) <= plat.hx + this.radius * 0.5;
-        const withinZ = Math.abs(p.z - plat.pos.z) <= plat.hz + this.radius * 0.5;
-        if (!withinX || !withinZ) continue;
-
-        const top = plat.topY;
-        if (prevBottom >= top - 0.05 && newBottom <= top) {
-          if (plat.type === "bouncy") {
-            v.y = CONFIG.jumpSpeed * 1.55; this.airJumps = 0; // bouncy launch re-arms double jump
-          } else {
-            p.y = top + this.radius; v.y = 0; this.grounded = true; this._ridePlat = plat; this.airJumps = 0;
-          }
-          this.lastGroundedY = top;
-          this.jumpCount += 1;
-          landed = plat.type;
-          break;
-        }
+        if (Math.abs(p.x - plat.pos.x) > plat.hx + this.radius * 0.5) continue;
+        if (Math.abs(p.z - plat.pos.z) > plat.hz + this.radius * 0.5) continue;
+        const top = this._topAt(plat, p.x, p.z);
+        // Only stand on a surface we were above (pass-through from below), unless
+        // we were already riding it — that lets us hug a ramp as it climbs.
+        if (prevBottom < top - 0.6 && plat !== prevRide) continue;
+        if (newBottom <= top + 0.05 && top > bestTop) { bestTop = top; best = plat; }
       }
+      if (best) {
+        if (best.type === "bouncy") {
+          v.y = CONFIG.jumpSpeed * 1.55; this.airJumps = 0; // bouncy launch re-arms double jump
+        } else {
+          p.y = bestTop + this.radius; v.y = 0; this.grounded = true; this._ridePlat = best; this.airJumps = 0;
+          // Curved board: drift toward the middle (concave) or off the sides (convex).
+          if (best.curve) p.x += -CONFIG.curveForce * best.curve * (p.x - best.pos.x) * dt;
+        }
+        this.lastGroundedY = bestTop;
+        if (!prevRide) this.jumpCount += 1; // count fresh landings only, not every grounded frame
+        landed = best.type;
+      }
+    }
+    // Launch off the top of an up-ramp: keep some of the climb as a hop.
+    if (!this.grounded && prevRide && prevRide.slopeZ > 0 && prevRide !== this._ridePlat && v.y <= 0) {
+      v.y = Math.max(v.y, prevRide.slopeZ * v.z * CONFIG.rampLaunch);
     }
 
     // --- Obstacle collision ---
@@ -217,6 +227,15 @@ export class Player {
     const floor = field.lowestTopNear(p.z);
     const died = !this.grounded && p.y < floor - CONFIG.fallMargin;
     return { died, landed, hit, jumped, pos: p };
+  }
+
+  // Surface height of a platform under the player: flat, sloped (ramp, varies
+  // with z) or curved (varies with x across the board's width).
+  _topAt(plat, x, z) {
+    let top = plat.topY;
+    if (plat.slopeZ) top += plat.slopeZ * (z - plat.pos.z);
+    if (plat.curve) top += plat.curve * (x - plat.pos.x) * (x - plat.pos.x);
+    return top;
   }
 
   _roll(dt) {
