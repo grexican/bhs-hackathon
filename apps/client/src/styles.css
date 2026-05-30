@@ -164,3 +164,447 @@ body,
 .todo__delete:hover {
   background: #fef2f2;
 }
+
+/* ===== BiciCheck ===== */
+
+/* Persona switch (Rider / Operator) */
+.persona-switch {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-top: 1rem;
+  background: var(--border);
+  padding: 0.25rem;
+  border-radius: 999px;
+}
+
+.persona-switch__btn {
+  border: 0;
+  background: transparent;
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.persona-switch__btn--on {
+  background: var(--card-bg);
+  color: var(--fg);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* Little "someone just reviewed a bike" toast after a simulated ride */
+.flash {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+}
+
+/* Health pills */
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge--good {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge--warn {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.badge--bad {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badge--neutral {
+  background: var(--border);
+  color: var(--muted);
+}
+
+/* Star ratings */
+.stars {
+  display: inline-flex;
+  gap: 1px;
+  line-height: 1;
+}
+
+.stars__star {
+  color: #d4d4d4;
+  font-size: 1.05rem;
+}
+
+.stars__star--on {
+  color: #f59e0b;
+}
+
+.stars--input .stars__star {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 1.5rem;
+  padding: 0 1px;
+}
+
+/* Pick-a-number scan simulator */
+.number-scan {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 1rem 0;
+  padding: 0.9rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.number-scan__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.number-scan__row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.number-scan input {
+  width: 5rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.number-scan button {
+  padding: 0.55rem 1rem;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.number-scan button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The "#3" badge in the corner of a QR card */
+.qr-card__num {
+  align-self: flex-end;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+}
+
+/* Grid of tappable fake QR cards */
+.scan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.qr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.9rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, transform 0.05s;
+}
+
+.qr-card:hover {
+  border-color: var(--accent);
+}
+
+.qr-card:active {
+  transform: scale(0.99);
+}
+
+.qr-card__qr {
+  font-size: 1.6rem;
+  letter-spacing: -2px;
+  color: var(--fg);
+}
+
+.qr-card__code {
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+}
+
+.qr-card__meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.qr-card__rating {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+
+/* Text-style buttons (back link, simulate) */
+.link-btn {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.35rem 0;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.primary-btn {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: 0;
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  margin: 0.5rem 0;
+}
+
+.primary-btn:hover {
+  filter: brightness(0.95);
+}
+
+.primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Stars + "Tap to rate" hint sitting on one line */
+.review-form__rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Bike detail header */
+.bike-detail__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.bike-detail__code {
+  margin: 0;
+  font-family: ui-monospace, monospace;
+}
+
+.bike-detail__stats {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.5rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+.verdict {
+  margin: 0.25rem 0 0.5rem;
+  font-weight: 600;
+}
+
+.verdict--good {
+  color: #166534;
+}
+.verdict--warn {
+  color: #854d0e;
+}
+.verdict--bad {
+  color: #991b1b;
+}
+.verdict--neutral {
+  color: var(--muted);
+}
+
+/* Review form */
+.review-form {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.review-form h3 {
+  margin: 0 0 0.75rem;
+}
+
+.review-form__row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.review-form__row > span:first-child {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.review-form__row input {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+/* Issue / filter chips */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.chip--on {
+  background: var(--fg);
+  color: #fff;
+  border-color: var(--fg);
+}
+
+.chip--issue.chip--on {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Review list */
+.review-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.review {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: flex-start;
+}
+
+.review:last-child {
+  border-bottom: 0;
+}
+
+.review__top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.review__rider {
+  font-weight: 600;
+}
+
+.review__issues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.review__comment {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* Collapsed "before last service" review history */
+.history {
+  margin-top: 1rem;
+  border-top: 1px dashed var(--border);
+  padding-top: 0.75rem;
+}
+
+.history summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.history .review {
+  opacity: 0.7;
+}
+
+/* Operator fleet list */
+.fleet-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.fleet-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.fleet-row:last-child {
+  border-bottom: 0;
+}
+
+.fleet-row__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  flex: 1;
+}
+
+.fleet-row__code {
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+}
+
+.fleet-row__stats {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fleet-row__actions {
+  display: flex;
+  gap: 0.35rem;
+}

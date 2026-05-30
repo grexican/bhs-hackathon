@@ -1,44 +1,81 @@
-import { TodoForm } from "./components/TodoForm";
-import { TodoList } from "./components/TodoList";
-import { useTodos } from "./hooks/useTodos";
+import { useState } from "react";
 
-// Top-level page. Shows the title, the form to add a todo, and the list.
-// This is the file you'll most often edit when adding new features —
-// drop in new components or replace the whole layout for your own app.
+import { BikeDetail } from "./components/BikeDetail";
+import { OperatorDashboard } from "./components/OperatorDashboard";
+import { ScanScreen } from "./components/ScanScreen";
+import { useBikes } from "./hooks/useBikes";
+
+// Top-level page for BiciCheck. A persona switch flips between the two sides:
+// riders (scan a bike, read/leave reviews) and operators (fleet health, service
+// bikes). All the data lives in the useBikes() hook.
 export function App() {
-  const { todos, loading, error, addTodo, toggleTodo, deleteTodo } = useTodos();
+  const [persona, setPersona] = useState<"rider" | "operator">("rider");
+  const { bikes, detail, loading, error, flash, openBike, closeBike, addReview, serviceBike, simulate } =
+    useBikes();
 
   return (
     <main className="page">
       <header className="page__header">
-        <h1>BHS Hackathon Starter</h1>
-        <p>
-          A working React + Express + SQLite app. Edit it, replace it, build whatever you want on
-          top of it.
-        </p>
+        <h1>🚲 BiciCheck</h1>
+        <p>Scan a Bicing bike before you ride — see its reviews, dodge the broken ones.</p>
+
+        <div className="persona-switch" role="tablist" aria-label="Choose your view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={persona === "rider"}
+            className={persona === "rider" ? "persona-switch__btn persona-switch__btn--on" : "persona-switch__btn"}
+            onClick={() => {
+              setPersona("rider");
+              closeBike();
+            }}
+          >
+            🚴 Rider
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={persona === "operator"}
+            className={persona === "operator" ? "persona-switch__btn persona-switch__btn--on" : "persona-switch__btn"}
+            onClick={() => {
+              setPersona("operator");
+              closeBike();
+            }}
+          >
+            🔧 Operator
+          </button>
+        </div>
       </header>
 
-      <section className="card">
-        <h2>Demo: todos</h2>
-        <p className="muted">
-          Add, toggle, and delete todos. The data is stored in SQLite — refresh the page and
-          everything is still there.
-        </p>
+      {error && <div className="error">Error: {error}</div>}
+      {flash && <div className="flash">{flash}</div>}
+      {loading && bikes.length === 0 && <p className="muted">Loading bikes…</p>}
 
-        <TodoForm onAdd={addTodo} />
-
-        {error && <div className="error">Error: {error}</div>}
-        {loading && todos.length === 0 ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <TodoList todos={todos} onToggle={toggleTodo} onDelete={deleteTodo} />
-        )}
-      </section>
+      {/* A scanned/inspected bike takes over the screen in either persona. */}
+      {detail ? (
+        <BikeDetail
+          bike={detail.bike}
+          reviews={detail.reviews}
+          persona={persona}
+          onBack={closeBike}
+          onAddReview={(review) => addReview(detail.bike.code, review)}
+          onService={serviceBike}
+        />
+      ) : persona === "rider" ? (
+        <ScanScreen bikes={bikes} onScan={openBike} onSimulate={simulate} />
+      ) : (
+        <OperatorDashboard
+          bikes={bikes}
+          onInspect={openBike}
+          onService={serviceBike}
+          onSimulate={simulate}
+        />
+      )}
 
       <footer className="page__footer">
         <p>
-          Edit <code>apps/client/src/App.tsx</code> to change this page. Edit{" "}
-          <code>apps/server/src/routes/</code> to change the API.
+          Fake bikes + reviews are seeded in SQLite so the demo works offline. Edit{" "}
+          <code>apps/server/src/seed.ts</code> to change them.
         </p>
       </footer>
     </main>
