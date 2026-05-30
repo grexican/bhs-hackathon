@@ -79,7 +79,9 @@ export const CONFIG = {
   tunnelRadius: 4.5,
 
   // --- Ramps & curved boards ---
-  rampChance: [0.0, 0.2],    // tilted boards you roll up/down (and launch off the top)
+  // Ramps temporarily disabled: the sloped surface collision isn't following the
+  // slant yet (you fall through instead of rolling up/down). Re-enable once fixed.
+  rampChance: [0.0, 0.0],    // tilted boards you roll up/down (and launch off the top)
   rampSlope: [0.24, 0.5],    // rise/run (tan of the ramp angle)
   rampLaunch: 0.8,           // fraction of climb speed kept as a hop off an up-ramp
   curveChance: [0.0, 0.16],  // boards curved across their width

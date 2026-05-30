@@ -3,6 +3,16 @@
 Ideas we've decided to do later (parked here on purpose so the current pass stays
 focused on the moment-to-moment experience). Pull any of these forward anytime.
 
+## Known bugs
+
+### Ramp collision doesn't follow the slant
+Ramps are visually tilted (`_addBoard` rotates the mesh by `atan(slopeZ)`) but the
+player falls through instead of rolling up/down. The ground-follow in
+`player.js` uses `_topAt` (which adds `slopeZ * (z - pos.z)`), so the math is
+there — likely the `wasAbove`/landing-tolerance logic doesn't hug the rising
+surface, or the entry handoff from the previous board is off. Currently DISABLED
+via `rampChance: [0,0]`. Re-enable and fix together (curved boards are fine).
+
 ## Deferred (explicitly)
 
 ### Momentum / speed expression
