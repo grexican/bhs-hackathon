@@ -24,7 +24,7 @@ export const CONFIG = {
 
   // Manual throttle (Up/Down arrows or the thumbstick Y axis): a slight, eased
   // speed nudge. Kept small so the path stays reachable (gaps have 50% headroom).
-  manualSpeed: 6,
+  manualSpeed: 8,
   minSpeed: 15,    // speed never eases below this (so you can't stall)
 
   // Two eased ramps drive everything. SPREAD opens the field up FAST (degrees of

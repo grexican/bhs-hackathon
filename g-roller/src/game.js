@@ -41,6 +41,7 @@ export class Game {
     this._biome = 0;
     this._reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     this._lean = 0; // smoothed steer for a soft camera lean
+    this._throttleSmooth = 0; // smoothed Up/Down throttle for the speed camera response
     this._shake = 0;
     this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0 };
     this._invuln = 0;
@@ -173,6 +174,7 @@ export class Game {
     this.multiplier = 1;
     this._comboTimer = 0;
     this._biome = 0;
+    this._throttleSmooth = 0;
     this._invuln = 0;
     this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0 };
     this._clearSplats();
@@ -515,7 +517,9 @@ export class Game {
       this._lean += (this.input.steer - this._lean) * (snap ? 1 : 0.05);
       this.camera.position.x += (p.x - this._lean * 0.55 - this.camera.position.x) * k;
       this.camera.position.y += (p.y + 9 - this.camera.position.y) * k;
-      this.camera.position.z = p.z - 16;
+      // Pull the camera back a touch when accelerating, in when braking — adds
+      // a felt "g-force" to the Up/Down throttle.
+      this.camera.position.z = p.z - 16 - this._throttleSmooth * 3;
       const shake = this._reducedMotion ? this._shake * 0.35 : this._shake;
       if (shake > 0) {
         this.camera.position.x += (Math.random() - 0.5) * shake;
@@ -534,7 +538,11 @@ export class Game {
 
   _tickCamera(dt) {
     if (this._shake > 0) this._shake = Math.max(0, this._shake - dt * 1.6);
-    const targetFov = this._baseFov + Math.min(16, Math.max(0, this._speed - CONFIG.forwardSpeed) * 0.45);
+    // Smooth the throttle and use it for a clear, bidirectional FOV punch:
+    // accelerating widens the view, braking narrows it.
+    this._throttleSmooth += (this.input.throttle - this._throttleSmooth) * 0.1;
+    const speedFov = Math.min(14, Math.max(0, this._speed - CONFIG.forwardSpeed) * 0.4);
+    const targetFov = this._baseFov + speedFov + this._throttleSmooth * 9;
     if (Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.camera.fov += (targetFov - this.camera.fov) * 0.08;
       this.camera.updateProjectionMatrix();
