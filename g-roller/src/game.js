@@ -145,7 +145,7 @@ export class Game {
     this.scene.fog = new THREE.Fog(0x141a33, 80, 230);
 
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 1200);
-    this._baseFov = 62;
+    this._updateBaseFov();
 
     this.scene.add(new THREE.HemisphereLight(0xbcd0ff, 0x202840, 0.85));
     this.sun = new THREE.DirectionalLight(0xfff2d6, 1.15);
@@ -549,9 +549,19 @@ export class Game {
     }
   }
 
+  // FOV is vertical, so a tall/narrow (portrait/phone) screen would show a tiny
+  // horizontal slice and feel zoomed-in. Widen the vertical FOV as the screen
+  // gets narrower so the view stays roughly as wide as desktop.
+  _updateBaseFov() {
+    const aspect = window.innerWidth / window.innerHeight;
+    this._baseFov = Math.min(86, 62 + Math.max(0, 1 / aspect - 1) * 26);
+    this.camera.fov = this._baseFov;
+    this.camera.updateProjectionMatrix();
+  }
+
   _onResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.updateProjectionMatrix();
+    this._updateBaseFov();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.composer.setSize(window.innerWidth, window.innerHeight);
   }
