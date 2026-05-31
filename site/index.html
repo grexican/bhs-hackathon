@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BHS AI Builder Hackathon — Demos</title>
+    <meta
+      name="description"
+      content="Live demos from the Barcelona High School AI Builder Hackathon: the G-Roller browser game and four iterations of an interactive quantum physics explainer."
+    />
+    <!-- One landing page that links out to everything published from this repo:
+         the G-Roller game and each quantum-physics demo. Pure static HTML so it
+         needs no build step of its own. -->
+    <style>
+      :root {
+        --bg: #0b0d17;
+        --bg-soft: #151829;
+        --card: #1b1f33;
+        --card-hover: #232844;
+        --text: #eef0fb;
+        --muted: #9aa0bd;
+        --accent: #7c5cff;
+        --accent-2: #28d9c7;
+        --border: #2a2f4a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: radial-gradient(1200px 600px at 70% -10%, #1d2142 0%, var(--bg) 55%);
+        color: var(--text);
+        min-height: 100vh;
+        line-height: 1.5;
+      }
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 64px 24px 80px;
+      }
+      header {
+        margin-bottom: 48px;
+      }
+      .eyebrow {
+        display: inline-block;
+        font-size: 13px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent-2);
+        font-weight: 600;
+        margin-bottom: 12px;
+      }
+      h1 {
+        font-size: clamp(32px, 6vw, 52px);
+        line-height: 1.1;
+        margin: 0 0 16px;
+        background: linear-gradient(90deg, var(--text), var(--accent));
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      header p {
+        color: var(--muted);
+        font-size: 18px;
+        max-width: 620px;
+        margin: 0;
+      }
+      .section-label {
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 600;
+        margin: 44px 0 16px;
+      }
+      .grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      }
+      .card {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 22px;
+        transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+      }
+      .card:hover {
+        background: var(--card-hover);
+        border-color: var(--accent);
+        transform: translateY(-3px);
+      }
+      .card__badge {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: rgba(124, 92, 255, 0.18);
+        color: #c9bdff;
+        margin-bottom: 12px;
+      }
+      .card__title {
+        font-size: 19px;
+        font-weight: 700;
+        margin: 0 0 6px;
+      }
+      .card__desc {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 0;
+      }
+      .card--feature {
+        grid-column: 1 / -1;
+        background: linear-gradient(120deg, #221d4a 0%, #1b1f33 60%);
+        border-color: #3a2f7a;
+      }
+      .card--feature .card__badge {
+        background: rgba(40, 217, 199, 0.18);
+        color: var(--accent-2);
+      }
+      .card--feature .card__title {
+        font-size: 26px;
+      }
+      footer {
+        margin-top: 64px;
+        padding-top: 24px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 14px;
+      }
+      footer a {
+        color: var(--accent-2);
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <span class="eyebrow">Barcelona High School · AI Builder Hackathon</span>
+        <h1>Demo Gallery</h1>
+        <p>
+          Everything built and shipped from this repo, live in your browser. Pick a
+          demo below — no install, no sign-up.
+        </p>
+      </header>
+
+      <div class="section-label">Featured</div>
+      <div class="grid">
+        <a class="card card--feature" href="./g-roller/">
+          <span class="card__badge">3D Browser Game</span>
+          <div class="card__title">G-Roller</div>
+          <p class="card__desc">
+            A Three.js endless runner — you're a ball auto-running across floating
+            platforms. Steer, jump, and roll as far as you can. Works on desktop and
+            mobile (touch to steer, tap to jump).
+          </p>
+        </a>
+      </div>
+
+      <div class="section-label">Quantum Physics · four iterations of the same idea</div>
+      <div class="grid">
+        <a class="card" href="./demos/quantum-physics/v1/">
+          <span class="card__badge">v1</span>
+          <div class="card__title">A Beginner's Guide</div>
+          <p class="card__desc">A clean, plain-language explainer for total beginners.</p>
+        </a>
+        <a class="card" href="./demos/quantum-physics/v2/">
+          <span class="card__badge">v2</span>
+          <div class="card__title">Quantum Quest</div>
+          <p class="card__desc">
+            Play with the universe's weirdest rules — an interactive, hands-on intro.
+          </p>
+        </a>
+        <a class="card" href="./demos/quantum-physics/v3/">
+          <span class="card__badge">v3</span>
+          <div class="card__title">QUANTUM//LAB</div>
+          <p class="card__desc">
+            An interactive field guide to the small, split across nine deep-dive pages.
+          </p>
+        </a>
+        <a class="card" href="./demos/quantum-physics/v4/">
+          <span class="card__badge">v4</span>
+          <div class="card__title">Eli the Electron</div>
+          <p class="card__desc">
+            A story-driven adventure through quantum weirdness, narrated start to finish.
+          </p>
+        </a>
+      </div>
+
+      <footer>
+        Built at the
+        <a href="https://github.com/grexican/bhs-hackathon">BHS AI Builder Hackathon</a>.
+        Each demo is its own folder in the repo — open one, read the code, keep building.
+      </footer>
+    </div>
+  </body>
+</html>

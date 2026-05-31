@@ -1,16 +1,24 @@
-# Builds the G-Roller web game and deploys it to GitHub Pages.
-# The build happens here in CI — NOTHING built is committed to the repo, so there
-# are no artifacts to merge and no git drama. Triggers only on the g-roller branch.
+# Builds the combined GitHub Pages site and deploys it.
+#
+# The published site is assembled in CI from three sources — NOTHING built is
+# committed back to the repo, so there are no artifacts to merge:
+#   /                      -> site/index.html       (the demo-gallery landing page)
+#   /g-roller/             -> g-roller/dist          (the Vite game, built here)
+#   /demos/quantum-physics -> demos/quantum-physics  (static demo folders, copied as-is)
+#
+# Triggers on the main branch (the release branch).
 #
 # One-time setup (repo owner): Settings -> Pages -> Build and deployment ->
-# Source: "GitHub Actions". After that, every push to g-roller redeploys.
-name: Deploy G-Roller to Pages
+# Source: "GitHub Actions". After that, every push to main redeploys.
+name: Deploy site to Pages
 
 on:
   push:
-    branches: [g-roller]
+    branches: [main]
     paths:
+      - "site/**"
       - "g-roller/**"
+      - "demos/**"
       - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
@@ -26,9 +34,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: g-roller
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,12 +41,26 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: g-roller/package-lock.json
+
+      # Build the G-Roller Vite game into g-roller/dist.
       - run: npm ci
+        working-directory: g-roller
       - run: npm run build
+        working-directory: g-roller
+
+      # Assemble the published site: landing page at the root, the built game
+      # under /g-roller/, and the static demos under /demos/.
+      - name: Assemble site
+        run: |
+          mkdir -p _site/g-roller _site/demos
+          cp site/index.html _site/index.html
+          cp -r g-roller/dist/* _site/g-roller/
+          cp -r demos/quantum-physics _site/demos/quantum-physics
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: g-roller/dist
+          path: _site
 
   deploy:
     needs: build
