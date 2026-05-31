@@ -519,7 +519,7 @@ export class Game {
       this.camera.position.y += (p.y + 9 - this.camera.position.y) * k;
       // Pull the camera back a touch when accelerating, in when braking — adds
       // a felt "g-force" to the Up/Down throttle.
-      this.camera.position.z = p.z - 16 - this._throttleSmooth * 3;
+      this.camera.position.z = p.z - 16 - this._throttleSmooth * 2;
       const shake = this._reducedMotion ? this._shake * 0.35 : this._shake;
       if (shake > 0) {
         this.camera.position.x += (Math.random() - 0.5) * shake;
@@ -542,7 +542,7 @@ export class Game {
     // accelerating widens the view, braking narrows it.
     this._throttleSmooth += (this.input.throttle - this._throttleSmooth) * 0.1;
     const speedFov = Math.min(14, Math.max(0, this._speed - CONFIG.forwardSpeed) * 0.4);
-    const targetFov = this._baseFov + speedFov + this._throttleSmooth * 9;
+    const targetFov = this._baseFov + speedFov + this._throttleSmooth * 6;
     if (Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.camera.fov += (targetFov - this.camera.fov) * 0.08;
       this.camera.updateProjectionMatrix();
