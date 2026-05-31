@@ -1,81 +1,97 @@
-// Tracks what the player is pressing. Works with keyboard and touch/mouse so
-// the game is playable on a laptop or a phone.
+// Tracks what the player is pressing. Works with keyboard (laptop) and an
+// on-screen thumbstick + jump button (touch devices).
+//
+//   Keyboard:  A/D or Left/Right = steer · W/Space = jump · Up/Down = speed
+//   Touch:     left thumbstick = steer (X) + speed (Y) · right button = jump
 
 export class Input {
   constructor(canvas) {
-    // steer: -1 = full left, +1 = full right, 0 = centered
-    this.steer = 0;
-    // jumpHeld: true while the jump key/touch is down (jump uses "hold for height")
+    this.steer = 0;     // -1 = full left, +1 = full right
+    this.throttle = 0;  // +1 = speed up, -1 = slow down
     this.jumpHeld = false;
-    // jumpPresses: increments on every fresh press. The player buffers off this
-    // so even a tap shorter than one frame can't be missed.
-    this.jumpPresses = 0;
-    // startPresses: only Space / W / tap (NOT ArrowUp), so the arrow keys are
-    // free to enter the cheat code on the start screen without starting the game.
-    this.startPresses = 0;
+    this.jumpPresses = 0; // increments on each fresh press (the player buffers off this)
+    this.startPresses = 0; // jump only (NOT arrows) so arrows are free for the cheat code
 
     this._left = false;
     this._right = false;
+    this._up = false;
+    this._down = false;
 
     window.addEventListener("keydown", (e) => this._onKey(e, true));
     window.addEventListener("keyup", (e) => this._onKey(e, false));
 
-    // Touch zones: LEFT third steers left, RIGHT third steers right, CENTER
-    // third jumps. Multi-touch (tracked per pointer id) so you can steer AND
-    // jump at the same time — and steering taps no longer trigger a jump.
-    this._touch = new Map(); // pointerId -> "left" | "right" | "jump"
-    const zoneOf = (x) => {
-      const w = window.innerWidth;
-      return x < w / 3 ? "left" : x > (2 * w) / 3 ? "right" : "jump";
-    };
-    const recomputeTouch = () => {
-      let l = false, r = false, j = false;
-      for (const z of this._touch.values()) {
-        if (z === "left") l = true; else if (z === "right") r = true; else j = true;
-      }
-      this._left = l; this._right = r; this.jumpHeld = j;
-      this._recompute();
-    };
-    canvas.addEventListener("pointerdown", (e) => {
-      const zone = zoneOf(e.clientX);
-      if (zone === "jump" && !this.jumpHeld) { this.jumpPresses++; this.startPresses++; }
-      this._touch.set(e.pointerId, zone);
-      recomputeTouch();
-    });
-    const lift = (e) => { this._touch.delete(e.pointerId); recomputeTouch(); };
-    window.addEventListener("pointerup", lift);
-    window.addEventListener("pointercancel", lift);
+    this._bindThumbstick();
+    this._bindJumpButton();
   }
 
   _onKey(e, down) {
     switch (e.code) {
       case "ArrowLeft":
-      case "KeyA":
-        this._left = down; break;
+      case "KeyA": this._left = down; break;
       case "ArrowRight":
-      case "KeyD":
-        this._right = down; break;
+      case "KeyD": this._right = down; break;
+      case "ArrowUp": this._up = down; e.preventDefault(); break;   // speed up
+      case "ArrowDown": this._down = down; e.preventDefault(); break; // slow down
       case "Space":
       case "KeyW":
-        // Space / W jump AND start the game.
         if (down && !this.jumpHeld) { this.jumpPresses++; this.startPresses++; }
         this.jumpHeld = down;
         e.preventDefault(); // stop Space from scrolling the page
         break;
-      case "ArrowUp":
-        // ArrowUp jumps in-game, but does NOT start the game — that frees it for
-        // the cheat code on the start screen.
-        if (down && !this.jumpHeld) this.jumpPresses++;
-        this.jumpHeld = down;
-        e.preventDefault();
-        break;
-      default:
-        return;
+      default: return;
     }
     this._recompute();
   }
 
   _recompute() {
     this.steer = (this._right ? 1 : 0) - (this._left ? 1 : 0);
+    this.throttle = (this._up ? 1 : 0) - (this._down ? 1 : 0);
+  }
+
+  // Left thumbstick: drag for analog steer (X) and speed (Y, up = faster).
+  _bindThumbstick() {
+    const stick = document.getElementById("stick");
+    const thumb = document.getElementById("stick-thumb");
+    if (!stick || !thumb) return;
+    let active = null;
+
+    const move = (e) => {
+      if (e.pointerId !== active) return;
+      const r = stick.getBoundingClientRect();
+      const max = r.width / 2;
+      let dx = e.clientX - (r.left + max);
+      let dy = e.clientY - (r.top + max);
+      const len = Math.hypot(dx, dy);
+      if (len > max) { dx = (dx / len) * max; dy = (dy / len) * max; }
+      thumb.style.transform = `translate(${dx}px, ${dy}px)`;
+      this.steer = Math.max(-1, Math.min(1, dx / max));
+      this.throttle = Math.max(-1, Math.min(1, -dy / max)); // up on screen = faster
+    };
+    const end = (e) => {
+      if (e.pointerId !== active) return;
+      active = null;
+      thumb.style.transform = "translate(0,0)";
+      this.steer = 0; this.throttle = 0;
+    };
+    stick.addEventListener("pointerdown", (e) => { active = e.pointerId; e.preventDefault(); move(e); });
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  }
+
+  // Right jump button: press and hold (hold for height), like Space.
+  _bindJumpButton() {
+    const btn = document.getElementById("jump-btn");
+    if (!btn) return;
+    const down = (e) => {
+      e.preventDefault();
+      if (!this.jumpHeld) { this.jumpPresses++; this.startPresses++; }
+      this.jumpHeld = true;
+    };
+    const up = () => { this.jumpHeld = false; };
+    btn.addEventListener("pointerdown", down);
+    btn.addEventListener("pointerup", up);
+    btn.addEventListener("pointercancel", up);
+    btn.addEventListener("pointerleave", up);
   }
 }

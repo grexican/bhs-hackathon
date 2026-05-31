@@ -188,8 +188,9 @@ export class Game {
     let s = this.baseSpeed;
     if (this._boostTimer > 0) s += CONFIG.boostAmount;
     if (this._effects.surge > 0) s += CONFIG.surgeAmount;
+    s += this.input.throttle * CONFIG.manualSpeed; // Up/Down arrows or thumbstick Y
     if (this._effects.slow > 0) s *= CONFIG.slowFactor;
-    return s;
+    return Math.max(CONFIG.minSpeed, Math.min(CONFIG.maxForwardSpeed + 10, s));
   }
 
   // Duration a timed effect lasts right now (cheat mode overrides everything).
@@ -510,9 +511,9 @@ export class Game {
       this.camera.lookAt(p.x, eyeY + 1, p.z + 16);
     } else {
       // Smooth the steer input so the lean eases gently in and out of turns
-      // instead of snapping to it.
+      // instead of snapping to it. (Kept subtle.)
       this._lean += (this.input.steer - this._lean) * (snap ? 1 : 0.05);
-      this.camera.position.x += (p.x - this._lean * 1.1 - this.camera.position.x) * k;
+      this.camera.position.x += (p.x - this._lean * 0.55 - this.camera.position.x) * k;
       this.camera.position.y += (p.y + 9 - this.camera.position.y) * k;
       this.camera.position.z = p.z - 16;
       const shake = this._reducedMotion ? this._shake * 0.35 : this._shake;
@@ -523,7 +524,7 @@ export class Game {
       this.camera.lookAt(p.x, p.y + 1.5, p.z + 12);
       // Roll RELATIVE to the look direction (rotateZ), not by setting rotation.z —
       // setting the absolute Euler z flips the backward-looking lookAt upside down.
-      this.camera.rotateZ(-this._lean * 0.016);
+      this.camera.rotateZ(-this._lean * 0.008);
     }
 
     this.sun.position.set(p.x - 30, p.y + 60, p.z - 20);

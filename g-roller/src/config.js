@@ -22,6 +22,11 @@ export const CONFIG = {
   boostAmount: 14,
   boostDuration: 1.6,
 
+  // Manual throttle (Up/Down arrows or the thumbstick Y axis): a slight, eased
+  // speed nudge. Kept small so the path stays reachable (gaps have 50% headroom).
+  manualSpeed: 6,
+  minSpeed: 15,    // speed never eases below this (so you can't stall)
+
   // Two eased ramps drive everything. SPREAD opens the field up FAST (degrees of
   // freedom — the path starts to wander wide, up and over, through a scattered
   // cloud of branch platforms). HAZARD ramps the danger in SLOWLY (obstacles,
