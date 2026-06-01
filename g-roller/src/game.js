@@ -15,7 +15,7 @@ const EFFECT_DURATIONS = {
   magnet: "magnetDuration", slow: "slowDuration", doublejump: "doubleJumpDuration",
   flight: "flightDuration", reverse: "reverseDuration", surge: "surgeDuration",
   morph: "morphDuration", trip: "tripDuration", lowgrav: "lowgravDuration",
-  flubber: "flubberDuration",
+  flubber: "flubberDuration", blackout: "blackoutDuration",
 };
 
 // The conductor. Builds the 3D world, runs the game loop, owns the Start ->
@@ -46,7 +46,7 @@ export class Game {
     this._lean = 0; // smoothed steer for a soft camera lean
     this._throttleSmooth = 0; // smoothed Up/Down throttle for the speed camera response
     this._shake = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0 };
     this._invuln = 0;
 
     this._buildRenderer();
@@ -167,8 +167,13 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 1200);
     this._updateBaseFov();
 
-    this.scene.add(new THREE.HemisphereLight(0xbcd0ff, 0x202840, 0.85));
+    this.hemi = new THREE.HemisphereLight(0xbcd0ff, 0x202840, 0.85);
+    this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xfff2d6, 1.15);
+    // Base intensities so the blackout powerdown can dim toward dark and ease back.
+    this._hemiBase = this.hemi.intensity;
+    this._sunBase = this.sun.intensity;
+    this._darkLevel = 0; // smoothed 0..1 blackout amount
     this.sun.position.set(-30, 60, -20);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(1024, 1024);
@@ -197,8 +202,12 @@ export class Game {
     this._biome = 0;
     this._throttleSmooth = 0;
     this._invuln = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0 };
     this._clearSplats();
+    this._darkLevel = 0; // lights back to full for a fresh run
+    this.hemi.intensity = this._hemiBase;
+    this.sun.intensity = this._sunBase;
+    this.field.blackout = false;
     this.canvas.classList.remove("is-tripping");
     this.scene.fog.color.setHex(BIOMES[0].fog);
     this.sun.color.setHex(BIOMES[0].sun);
@@ -253,6 +262,13 @@ export class Game {
     this._syncSettings();
   }
 
+  // Cheat-only: flip ALL pickup spawning off/on (handy for testing pure movement).
+  _togglePowerups() {
+    this.field.powerupsOn = !this.field.powerupsOn;
+    this._toast(this.field.powerupsOn ? "🎁 POWERUPS ON" : "🚫 POWERUPS OFF", "#ffd34e");
+    this._syncSettings();
+  }
+
   _cycleDifficulty() {
     this._diffLevel = (this._diffLevel + 1) % CONFIG.difficultyLevels.length;
     const lvl = CONFIG.difficultyLevels[this._diffLevel];
@@ -263,7 +279,7 @@ export class Game {
 
   _buildSettings() {
     const $ = (id) => document.getElementById(id);
-    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty") };
+    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty"), powerups: $("set-powerups") };
     const panel = $("settings-panel");
     const open = (v) => panel.classList.toggle("open", v);
     $("settings-btn").addEventListener("click", () => { this._syncSettings(); open(true); });
@@ -275,6 +291,7 @@ export class Game {
     this._settings.motion.addEventListener("click", () => this._toggleReduced());
     this._settings.view.addEventListener("click", () => this._toggleView());
     this._settings.difficulty.addEventListener("click", () => this._cycleDifficulty());
+    this._settings.powerups.addEventListener("click", () => this._togglePowerups());
     this._syncSettings();
   }
 
@@ -287,6 +304,11 @@ export class Game {
     s.motion.textContent = `🌿 Reduced Motion: ${this._reducedMotion ? "On" : "Off"}`;
     s.view.textContent = `👁 View: ${this._firstPerson ? "First-person" : "Third-person"}`;
     s.difficulty.textContent = `🎚️ Difficulty: ${CONFIG.difficultyLevels[this._diffLevel].name}`;
+    // Powerups switch is a cheat-only tool — only show the row when cheat is on.
+    if (s.powerups) {
+      s.powerups.style.display = this._cheat ? "" : "none";
+      s.powerups.textContent = `🎁 Powerups: ${this.field.powerupsOn ? "On" : "Off"}`;
+    }
     this._saveSettings(); // every toggle routes through here, so this captures all changes
   }
 
@@ -326,10 +348,12 @@ export class Game {
   _toggleCheat() {
     this._cheat = !this._cheat;
     this.field.itemMultiplier = this._cheat ? CONFIG.cheatItemMultiplier : 1;
+    if (!this._cheat) this.field.powerupsOn = true; // leaving cheat can't leave a normal run powerup-less
     this._toast(
       this._cheat ? `🎮 CHEAT ON · ${CONFIG.cheatItemMultiplier}× items` : "CHEAT OFF",
       "#ffd34e"
     );
+    this._syncSettings(); // show/hide the cheat-only Powerups row
   }
 
   _loop() {
@@ -374,7 +398,7 @@ export class Game {
       this.baseSpeed = Math.min(CONFIG.maxForwardSpeed, this.baseSpeed + CONFIG.speedRampAmount);
     }
     if (this._invuln > 0) this._invuln -= dt;
-    for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip", "lowgrav", "flubber"])
+    for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip", "lowgrav", "flubber", "blackout"])
       if (this._effects[k] > 0) this._effects[k] -= dt;
     // Psychedelic powerdown: recolor the view (gentle variant if reduced-motion).
     const tripping = this._effects.trip > 0;
@@ -382,6 +406,15 @@ export class Game {
     this.canvas.classList.toggle("is-tripping--gentle", tripping && this._reducedMotion);
     // Let the music react to whatever's active (trip warble, etc.).
     this.sound.setEffects(this._effects);
+
+    // Blackout powerdown: smoothly cut the lights toward near-dark and tell the field
+    // to light its platform edges (emergency-aisle glow). Eases in and back out.
+    const darkTarget = this._effects.blackout > 0 ? 1 : 0;
+    this._darkLevel += (darkTarget - this._darkLevel) * (1 - Math.exp(-dt / 0.45));
+    const m = 1 - this._darkLevel * (1 - CONFIG.blackoutDim);
+    this.hemi.intensity = this._hemiBase * m;
+    this.sun.intensity = this._sunBase * m;
+    this.field.blackout = this._effects.blackout > 0;
 
     // Ease the actual speed toward the target. Easing INTO a slow-mo is extra
     // gradual (slowEase) so it doesn't yank the speed out and drop you short.
@@ -524,6 +557,7 @@ export class Game {
       reverse: ["🔄 REVERSED!", "#ff9f1c"], surge: ["⚡ SURGE!", "#ff3b3b"],
       morph: ["🌀 MORPH!", "#ff4bd6"], splat: ["💦 SPLAT!", "#8a5a2b"], trip: ["🌈 TRIPPING!", "#a94bff"],
       flubber: ["🫧 FLUBBER! — steer in the air", "#6aff6a"],
+      blackout: ["🌑 BLACKOUT! — follow the edge lights", "#9fb3d0"],
     };
     // Different effects stack (run at once). Re-grabbing the same one tops its
     // timer back up without ever shortening it.
@@ -611,6 +645,7 @@ export class Game {
     add("surge", "⚡", "#ff3b3b");
     add("morph", "🌀", "#ff4bd6");
     add("flubber", "🫧", "#6aff6a");
+    add("blackout", "🌑", "#9fb3d0");
     add("trip", "🌈", "#a94bff");
     this._hud.effects.innerHTML = rows
       .map(([icon, label, color, frac]) => {

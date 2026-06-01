@@ -335,6 +335,13 @@ export class Player {
       this._board.material.opacity = 0.45 * blink(e.doublejump);
     }
 
+    // Blackout powerdown: the world goes dark, so give the ball a faint cool ember
+    // — *barely* visible, kept dim enough to stay under the bloom threshold.
+    const bm = this._ball.material;
+    const ballGlow = e.blackout > 0 ? 0.4 : 0;
+    bm.emissive.setHex(0x5a78a8);
+    bm.emissiveIntensity += (ballGlow - bm.emissiveIntensity) * Math.min(1, dt * 4);
+
     this._updateOrbit(e, t, blink);
   }
 

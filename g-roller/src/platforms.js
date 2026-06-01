@@ -24,6 +24,7 @@ const POWERUP_DEFS = {
   splat:      { color: 0x8a5a2b, shape: "box",   icon: "💦", good: false, weight: 3 },
   morph:      { color: 0xff4bd6, shape: "ico",   icon: "🌀", good: false, weight: 2.5 },
   flubber:    { color: 0x6aff6a, shape: "ico",   icon: "🫧", good: false, weight: 2.5 },
+  blackout:   { color: 0x44507a, shape: "octa",  icon: "🌑", good: false, weight: 2 },
   trip:       { color: 0xa94bff, shape: "tetra", icon: "🌈", good: false, weight: 1.3 },
 };
 const GOOD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => POWERUP_DEFS[k].good);
@@ -70,6 +71,17 @@ export class PlatformField {
     this._geoBox = new THREE.BoxGeometry(1, 1, 1);
     this._geoCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 28);
     this._geoHex = new THREE.CylinderGeometry(0.5, 0.5, 1, 6);
+
+    // Glowing edge outlines for the BLACKOUT powerdown: every board gets a wireframe
+    // child that lights up only when the lights cut out (emergency-aisle lighting).
+    // One shared bright material (blooms) + shared edge geometry for the cached shapes;
+    // curved boards get their own edge geometry. `blackout` toggles them all on/off.
+    this._edgeMat = new THREE.LineBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.95 });
+    this._edgeGeoBox = new THREE.EdgesGeometry(this._geoBox);
+    this._edgeGeoCyl = new THREE.EdgesGeometry(this._geoCyl);
+    this._edgeGeoHex = new THREE.EdgesGeometry(this._geoHex);
+    this.blackout = false;
+    this._edgeVis = false; // last applied blackout state (so we only re-toggle on change)
     this._gemGeo = new THREE.OctahedronGeometry(0.55);
 
     this._time = 0;
@@ -77,6 +89,7 @@ export class PlatformField {
     this._spreadD = 0;     // spread ramp (fast)
     this.itemMultiplier = 1; // cheat code bumps this to spawn extra gems/powerups
     this.difficultyMult = 1; // Easy/Medium/Hard scales the floor of the hazard ramps
+    this.powerupsOn = true;  // cheat-mode switch: turn pickup spawning fully off/on
     this._biomeTextures = BIOMES[0].textures;
     this._stepIndex = 0;
     this._stepsSinceTunnel = 0;
@@ -159,11 +172,25 @@ export class PlatformField {
     visual.castShadow = true;
     visual.receiveShadow = true;
     group.add(visual);
+
+    // Emergency edge lighting (lit only during blackout). Child of `visual` so it
+    // inherits the board's scale and slope automatically. Curved boards need their
+    // own edge geometry; flat/round boards share the cached unit-shape edges.
+    const edgeGeo = curve ? new THREE.EdgesGeometry(ownGeo)
+      : geoType === "cyl" ? this._edgeGeoCyl
+      : geoType === "hex" ? this._edgeGeoHex
+      : this._edgeGeoBox;
+    const edge = new THREE.LineSegments(edgeGeo, this._edgeMat);
+    edge.visible = this.blackout;
+    visual.add(edge);
+
     this.scene.add(group);
 
     const p = new Platform(group, w / 2, hy, len / 2, type);
     p._tex = tex;
     p._geo = ownGeo;
+    p._edge = edge;
+    p._edgeGeo = curve ? edgeGeo : null; // dispose curved edge geo with the board; shared ones stay
     p.slopeZ = slopeZ;
     p.curve = curve;
     visual.userData.platform = p; // raycast maps a hit back to its Platform
@@ -295,7 +322,7 @@ export class PlatformField {
     this._stepIndex++;
 
     // A line of gems down the middle as a reward for taking the tunnel.
-    for (let k = 0; k < 4; k++) this._addGem(x, y + 1.4, z - len / 2 + (k + 0.7) * (len / 5));
+    for (let k = 0; k < 4; k++) this._addGem(x, y + 0.6, z - len / 2 + (k + 0.7) * (len / 5)); // +0.8 in _addGem keeps these ~in the rings
   }
 
   // A full semi-transparent tube you roll through (kept short so the exit shows
@@ -315,10 +342,11 @@ export class PlatformField {
     p._geo = geo; // dispose this geometry when the platform is culled
   }
 
-  _addGem(x, y, z) {
+  _addGem(x, top, z) {
     const mesh = new THREE.Mesh(this._gemGeo, new THREE.MeshStandardMaterial({
       color: 0x66f0ff, emissive: 0x33d0ff, emissiveIntensity: 0.9, roughness: 0.2, metalness: 0.3,
     }));
+    const y = top + 0.8; // grounded on the platform — pickups don't float anymore
     mesh.position.set(x, y, z);
     this.scene.add(mesh);
     this.gems.push({ mesh, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
@@ -332,11 +360,11 @@ export class PlatformField {
     const type = weightedPick(good ? GOOD_POWERUPS : BAD_POWERUPS);
     const def = POWERUP_DEFS[type];
 
-    // Good pickups FLOAT (you choose to go grab them). PowerDOWNs sit GROUNDED right
-    // in the roll lane (ball-center height), so they're hard to dodge — you have to
-    // jump over or steer around one, you can't just decline it.
-    const grounded = !good;
-    const y = grounded ? top + 0.95 : this._floatY(top);
+    // Everything spawns GROUNDED on the platform now (no floating pickups) — right
+    // in the roll lane at ball-center height. You collect or dodge by where you
+    // steer/jump, not by reaching up for floaters.
+    const grounded = true;
+    const y = top + 0.95;
 
     const group = new THREE.Group();
     const mesh = new THREE.Mesh(this._powerGeo(def.shape), new THREE.MeshStandardMaterial({
@@ -553,8 +581,8 @@ export class PlatformField {
     const py = p.pos.y;
     for (let k = 0; k < this.itemMultiplier; k++) {
       const ox = (k - (this.itemMultiplier - 1) / 2) * 3;
-      if (chance(0.4)) this._addGem(x + ox, this._floatY(py + p.hy), z);
-      if (chance(CONFIG.powerupChance)) this._addPowerup(x + ox, py + p.hy, z + rand(-len * 0.3, len * 0.3), hd);
+      if (chance(0.4)) this._addGem(x + ox, py + p.hy, z);
+      if (this.powerupsOn && chance(CONFIG.powerupChance)) this._addPowerup(x + ox, py + p.hy, z + rand(-len * 0.3, len * 0.3), hd);
     }
 
     if (!safe) this._scatterCloud(x, exitY, z, sd, hd);
@@ -588,8 +616,8 @@ export class PlatformField {
       });
       for (let m = 0; m < this.itemMultiplier; m++) {
         const ox = (m - (this.itemMultiplier - 1) / 2) * 2.5;
-        if (chance(0.5)) this._addGem(x + ox, this._floatY(y + p.hy), z); // reward exploring off-path
-        if (chance(0.2)) this._addPowerup(x + ox, y + p.hy, z, hd);
+        if (chance(0.5)) this._addGem(x + ox, y + p.hy, z); // reward exploring off-path
+        if (this.powerupsOn && chance(0.2)) this._addPowerup(x + ox, y + p.hy, z, hd);
       }
     }
   }
@@ -599,6 +627,7 @@ export class PlatformField {
     p.mesh.traverse((o) => { if (o.isMesh) o.material.dispose(); });
     if (p._tex) p._tex.dispose();
     if (p._geo) p._geo.dispose();
+    if (p._edgeGeo) p._edgeGeo.dispose(); // curved boards own their edge geometry
   }
 
   // --- Per-frame ------------------------------------------------------------
@@ -608,6 +637,12 @@ export class PlatformField {
     this._difficulty = smoothstep(playerZ / CONFIG.difficultyDistance);
     this._spreadD = smoothstep(playerZ / CONFIG.spreadDistance);
     this._biomeTextures = BIOMES[biomeAt(playerZ)].textures; // platforms re-skin per biome
+
+    // Light/extinguish every board's edge outline when blackout flips on/off.
+    if (this.blackout !== this._edgeVis) {
+      this._edgeVis = this.blackout;
+      for (const pl of this.platforms) if (pl._edge) pl._edge.visible = this.blackout;
+    }
 
     while (this._cursor.z < playerZ + CONFIG.keepAheadDistance) this._extendPath(forwardSpeed);
 

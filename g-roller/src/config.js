@@ -142,6 +142,8 @@ export const CONFIG = {
   lowgravScale: 0.45,     // gravity multiplier while low-grav is active
   flubberDuration: 20,    // powerdown: every landing auto-bounces you (steer in the air!)
   flubberBounce: 1.3,     // bounce velocity = jumpSpeed * this (a bit higher than a jump)
+  blackoutDuration: 11,   // powerdown: the lights cut out — only glowing platform edges and a faint ball remain
+  blackoutDim: 0.06,      // scene light multiplier while blacked out (near-dark; edges + bloom carry the read)
 
   // Secret cheat code (half-Contra, no A/B) entered on the start/game-over
   // screen: floods the field with extra items so you can test powerups fast.
