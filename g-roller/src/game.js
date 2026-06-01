@@ -109,7 +109,7 @@ export class Game {
       if (e.code === "KeyG") this._toggleReduced();
       if (e.code === "KeyK") this._cycleSkin();
       if (e.code === "KeyL") this._cycleDifficulty();
-      if (e.code === "Escape") this._quitRun(); // end the run → title (the way out of zen)
+      if (e.code === "Escape") this._togglePause(); // pause / resume (NOT quit — quit is "End Run" in ⚙️)
       if (e.code === "KeyZ") this._toggleZen();
       // Cheat-only desktop testing: instantly fire a powerdown on yourself.
       // R rain · F fog · B blackout · T trip · O slow-mo.
@@ -347,6 +347,12 @@ export class Game {
   // Zen mode: a calm, no-pressure toggle. Flips no-death (power-bounce), scoring/gems
   // off, and zeroes the hazard mult so the field stops spawning anything dangerous.
   _toggleZen() {
+    // Zen changes the whole run (no-death, scoring off, fixed difficulty), so it can
+    // only be set on the title/game-over screen — not mid-run.
+    if (this.state === "playing" || this.state === "paused") {
+      this._toast("🧘 Set Zen on the title screen", "#9affd6");
+      return;
+    }
     this._zen = !this._zen;
     this._applyDifficultyMult();
     document.body.classList.toggle("is-zen", this._zen); // CSS hides the HUD counters — clean, just-zen'ing
@@ -483,6 +489,12 @@ export class Game {
 
     if (this.state === "playing") {
       this._tickPlaying(dt);
+    } else if (this.state === "paused") {
+      // Frozen. A jump press (or Esc, handled in keydown) resumes — NOT a restart.
+      if (this.input.startPresses !== this._seenStart) {
+        this._seenStart = this.input.startPresses;
+        this._resume();
+      }
     } else if (this._restartLock > 0) {
       this._restartLock -= dt;
       this._seenStart = this.input.startPresses; // swallow any presses during the grace
@@ -572,6 +584,24 @@ export class Game {
     if (!this._rainLensEl) this._rainLensEl = document.getElementById("rain-lens");
     this._rainLensEl.style.opacity = this._rainLevel;
     this._rainLensEl.style.backdropFilter = this._rainLensEl.style.webkitBackdropFilter = `blur(${(this._rainLevel * 2.6).toFixed(2)}px)`;
+    // Spawn fat drops at RANDOM positions/sizes/timing while it rains — each is a div
+    // that slides down + fades then self-removes (no synced loop = real randomness).
+    if (this._rainLevel > 0.25) {
+      this._rainDropT = (this._rainDropT || 0) + dt;
+      if (this._rainDropT >= (this._rainDropNext || 0)) {
+        this._rainDropT = 0;
+        this._rainDropNext = 0.05 + Math.random() * 0.16; // next drop 50–210ms out — irregular
+        const d = document.createElement("div");
+        d.className = "raindrop";
+        const w = 16 + Math.random() * 40;
+        d.style.width = `${w.toFixed(0)}px`;
+        d.style.height = `${(w * (1.3 + Math.random() * 0.7)).toFixed(0)}px`;
+        d.style.left = `${(Math.random() * 100).toFixed(1)}%`;
+        d.style.setProperty("--dur", `${(1.0 + Math.random() * 1.8).toFixed(2)}s`);
+        d.addEventListener("animationend", () => d.remove());
+        this._rainLensEl.appendChild(d);
+      }
+    }
 
     // Ease the actual speed toward the target. Easing INTO a slow-mo is extra
     // gradual (slowEase) so it doesn't yank the speed out and drop you short.
@@ -797,10 +827,30 @@ export class Game {
     if (layer) layer.innerHTML = "";
   }
 
-  // Voluntarily end the run (Esc) — the only way out of zen mode, where you can't
-  // die. Clean exit to the title overlay (no death FX/score-save); a jump restarts.
+  // Esc PAUSES (and resumes) — freezes the run with the option to keep going, rather
+  // than assuming you quit. The actual quit-to-title is the "End Run" button in ⚙️.
+  _togglePause() {
+    if (this.state === "playing") {
+      this.state = "paused"; // the loop stops ticking gameplay while paused
+      this._hud.subtitle.textContent = "⏸ Paused";
+      this._hud.hint.textContent = this._isTouch ? "Tap JUMP to resume" : "Esc or JUMP to resume · End Run in ⚙️ to quit";
+      this._hud.overlay.classList.remove("is-hidden");
+    } else if (this.state === "paused") {
+      this._resume();
+    }
+  }
+
+  _resume() {
+    this.state = "playing";
+    this._hud.overlay.classList.add("is-hidden");
+    this._seenStart = this.input.startPresses;       // don't treat the resume press as a restart
+    this.player._seenPresses = this.input.jumpPresses; // and don't auto-jump on resume
+  }
+
+  // Voluntarily end the run (the "End Run" button in ⚙️) — the way out of zen, where
+  // you can't die. Clean exit to the title overlay (no death FX/score-save); jump restarts.
   _quitRun() {
-    if (this.state !== "playing") return;
+    if (this.state !== "playing" && this.state !== "paused") return;
     this.state = "dead"; // reuses the "press jump to start again" gate
     this._restartLock = 0.3; // no accidental instant restart
     this.canvas.classList.remove("is-tripping", "is-tripping--gentle");

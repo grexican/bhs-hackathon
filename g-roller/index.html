@@ -107,20 +107,21 @@
           transparent 0 18px, rgba(205,220,235,0.045) 18px 19px, transparent 19px 38px);
         animation: rain-fall 0.7s linear infinite;
       }
-      #rain-lens::before { /* big fat droplets clinging to and sliding down the glass */
-        content: ""; position: absolute; inset: -18% 0;
-        background:
-          radial-gradient(24px 32px at 15% 16%, rgba(232,242,252,0.6), rgba(200,220,238,0.22) 58%, transparent 74%),
-          radial-gradient(17px 24px at 39% 2%,  rgba(232,242,252,0.5), transparent 72%),
-          radial-gradient(32px 42px at 69% 28%, rgba(232,242,252,0.62), rgba(200,220,238,0.2) 56%, transparent 74%),
-          radial-gradient(15px 21px at 88% 10%, rgba(232,242,252,0.46), transparent 72%),
-          radial-gradient(21px 29px at 29% 48%, rgba(232,242,252,0.56), transparent 74%),
-          radial-gradient(28px 37px at 56% 64%, rgba(232,242,252,0.58), rgba(200,220,238,0.2) 56%, transparent 74%),
-          radial-gradient(19px 26px at 81% 76%, rgba(232,242,252,0.5), transparent 74%);
-        animation: rain-drip 3.3s linear infinite;
+      /* Individual fat drops are spawned by JS (game.js) at RANDOM positions, sizes
+         and timing — real randomness, not one synced loop. Each slides down + fades,
+         then removes itself. They sit ON the lens (above its backdrop blur) = crisp. */
+      .raindrop {
+        position: absolute; top: -10%; pointer-events: none;
+        border-radius: 48% 48% 54% 54% / 58% 58% 46% 46%;
+        background: radial-gradient(ellipse at 40% 28%, rgba(236,245,253,0.8), rgba(198,220,240,0.3) 58%, transparent 76%);
+        animation: raindrop-fall var(--dur, 1.6s) linear forwards;
       }
       @keyframes rain-fall { to { transform: translateY(22%); } }
-      @keyframes rain-drip { from { transform: translateY(-12%); } to { transform: translateY(112%); } }
+      @keyframes raindrop-fall {
+        0%   { transform: translateY(0) scaleY(0.85); opacity: 0; }
+        12%  { opacity: 0.95; }
+        100% { transform: translateY(118vh) scaleY(1.35); opacity: 0; }
+      }
 
       /* Heads-up display layered on top of the 3D canvas */
       .hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; }

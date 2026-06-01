@@ -37,6 +37,8 @@ export class Input {
       // sit on a separate matrix, so they're the most reliable right-hand option.
       case "Space":
       case "KeyW":
+      case "ShiftLeft":  // left-hand jump (away from the arrow cluster — no ghosting)
+      case "ShiftRight":
       case "Enter":
       case "NumpadEnter":
       case "Numpad0":

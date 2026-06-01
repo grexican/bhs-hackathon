@@ -33,7 +33,7 @@ function skylineTexture(hue) {
   }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
-  tex.repeat.set(6, 1.1); // more repeats: the skyline planes are much longer now, this keeps buildings the same size (not stretched)
+  tex.repeat.set(8, 0.8); // more repeats: the skyline planes are much longer now, this keeps buildings the same size (not stretched)
   return tex;
 }
 
@@ -184,7 +184,7 @@ export class Background {
     // end sinks DOWN toward the floor in the distance while the behind end (off-camera)
     // rises — so the city descends to meet the ground far away instead of running flat.
     const WORLD_X = new THREE.Vector3(1, 0, 0);
-    const CITY_TILT = 0.17; // ~10° downward pitch of the far end
+    const CITY_TILT = 0.1; // ~10° downward pitch of the far end
     const make = (dist, height, hue, opacity, yaw) => {
       const tex = skylineTexture(hue);
       const mat = new THREE.MeshBasicMaterial({
@@ -207,9 +207,9 @@ export class Background {
     // Wider apart (more open / vast), and each side TOED IN toward +z (the distance)
     // so the walls converge into a vanishing-point funnel that "closes in" far away.
     const toe = 0.13; // ~7.5° inward lean of the far end
-    make(540, 355, 230, 0.5, Math.PI / 2 - toe);  // far, right
+    make(540, 355, 230, 0.5, Math.PI / 2 - toe); // far, right
     make(540, 355, 230, 0.5, -Math.PI / 2 + toe); // far, left
-    make(380, 295, 265, 0.7, Math.PI / 2 - toe);  // near, right
+    make(380, 295, 265, 0.7, Math.PI / 2 - toe); // near, right
     make(380, 295, 265, 0.7, -Math.PI / 2 + toe); // near, left
     this._sides = [1, -1, 1, -1];
 
