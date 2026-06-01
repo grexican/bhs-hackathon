@@ -9,36 +9,169 @@ const ONE = new THREE.Vector3(1, 1, 1);
 const ORBIT_KEYS = ["magnet", "slow", "reverse", "surge", "morph", "trip", "lowgrav", "flubber", "blackout", "fog"];
 const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡", morph: "🌀", trip: "🌈", lowgrav: "🌙", flubber: "🫧", blackout: "🌑", fog: "🌫️" };
 
-// Selectable ball skins (chosen in the ⚙️ panel). Each is just a two-tone checker
-// palette + grid-line colour — the texture is drawn procedurally below, so adding a
-// skin is one entry here. Index 0 is the default classic gold.
+// Selectable ball skins (chosen in the ⚙️ panel). Each entry names a procedural
+// `pattern` (drawn by ballTexture below) plus the colours that pattern needs.
+// Every entry MUST keep a `name` (the menu reads it). Index 0 stays classic gold.
 export const BALL_SKINS = [
-  { name: "Classic Gold", light: "#ffce3a", dark: "#ff9f1c", line: "rgba(40,28,8,0.55)" },
-  { name: "Cyber Cyan",   light: "#2bd6ff", dark: "#1b6fae", line: "rgba(6,26,38,0.55)" },
-  { name: "Magma",        light: "#ff7a3a", dark: "#c01e1e", line: "rgba(40,8,8,0.55)" },
-  { name: "Slime",        light: "#b6ff3a", dark: "#3a9f1c", line: "rgba(12,40,8,0.55)" },
-  { name: "Bubblegum",    light: "#ff8fd0", dark: "#d63a8f", line: "rgba(40,8,28,0.55)" },
-  { name: "Steel",        light: "#d0d6e0", dark: "#6a7280", line: "rgba(10,12,18,0.55)" },
-  { name: "Void",         light: "#b06bff", dark: "#5a2faf", line: "rgba(20,8,40,0.55)" },
+  { name: "Classic Gold", pattern: "checker", light: "#ffce3a", dark: "#ff9f1c", line: "rgba(40,28,8,0.55)" },
+  { name: "Racing Stripe", pattern: "stripes", light: "#f5f5f5", dark: "#e01e2c", accent: "#1a1a1a" },
+  { name: "Galaxy",       pattern: "galaxy",  light: "#7b4bff", dark: "#0a0820", accent: "#ffffff" },
+  { name: "Soccer",       pattern: "soccer",  light: "#fcfcfc", dark: "#141414", line: "rgba(0,0,0,0.85)" },
+  { name: "Carbon",       pattern: "carbon",  light: "#3a3f47", dark: "#15171b", accent: "#5a6270" },
+  { name: "Hazard",       pattern: "hazard",  light: "#ffd400", dark: "#141414" },
+  { name: "Magma",        pattern: "flames",  light: "#ffe66b", dark: "#7a0a0a", accent: "#ff7a1a" },
+  { name: "Bubblegum",    pattern: "dots",    light: "#ff8fd0", dark: "#ffd6ee", accent: "#d63a8f" },
 ];
 
-// A checker-grid skin for the ball so you can read its spin under the light.
+// Tiny deterministic PRNG so "random" speckles (stars, carbon flecks) look the
+// same every redraw and seam up nicely — seeded per skin pattern.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Draws a distinct 256x256 procedural pattern per skin and returns a sphere
+// texture. Patterns are built to tile across the 256-wide wrap so the vertical
+// seam isn't jarring (counts divide evenly; full-canvas fills hide it best).
 function ballTexture(skin = BALL_SKINS[0]) {
+  const S = 256;
   const c = document.createElement("canvas");
-  c.width = c.height = 256;
+  c.width = c.height = S;
   const ctx = c.getContext("2d");
-  ctx.fillStyle = skin.light;
-  ctx.fillRect(0, 0, 256, 256);
-  const n = 8, t = 256 / n;
-  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-    if ((x + y) % 2 === 0) { ctx.fillStyle = skin.dark; ctx.fillRect(x * t, y * t, t, t); }
+
+  switch (skin.pattern) {
+    case "stripes": {
+      // Diagonal racing stripes: a few bold bands plus thin pinstripes between.
+      ctx.fillStyle = skin.light; ctx.fillRect(0, 0, S, S);
+      ctx.save();
+      ctx.translate(S / 2, S / 2); ctx.rotate(Math.PI / 4); ctx.translate(-S, -S);
+      const w = S * 2, bands = 8, bw = w / bands;
+      for (let i = 0; i < bands; i++) {
+        ctx.fillStyle = i % 2 === 0 ? skin.dark : skin.light;
+        ctx.fillRect(i * bw, 0, bw, w);
+        ctx.fillStyle = skin.accent; // pinstripe edge
+        ctx.fillRect(i * bw, 0, bw * 0.12, w);
+      }
+      ctx.restore();
+      break;
+    }
+    case "galaxy": {
+      // Deep-space gradient with a sweep of speckled stars and a faint nebula band.
+      const g = ctx.createLinearGradient(0, 0, S, S);
+      g.addColorStop(0, skin.dark); g.addColorStop(0.5, skin.light); g.addColorStop(1, skin.dark);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      ctx.fillStyle = "rgba(255,120,200,0.18)"; // nebula wash
+      ctx.beginPath(); ctx.ellipse(S * 0.6, S * 0.4, S * 0.55, S * 0.22, 0.6, 0, Math.PI * 2); ctx.fill();
+      const rnd = mulberry32(7);
+      for (let i = 0; i < 220; i++) {
+        const x = rnd() * S, y = rnd() * S, r = rnd() * 1.6 + 0.3;
+        ctx.globalAlpha = 0.4 + rnd() * 0.6;
+        ctx.fillStyle = skin.accent;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case "soccer": {
+      // Classic soccer ball: white field with black pentagons on a hex-ish grid.
+      ctx.fillStyle = skin.light; ctx.fillRect(0, 0, S, S);
+      const drawPenta = (cx, cy, rad) => {
+        ctx.fillStyle = skin.dark;
+        ctx.beginPath();
+        for (let k = 0; k < 5; k++) {
+          const a = -Math.PI / 2 + (k / 5) * Math.PI * 2;
+          const px = cx + Math.cos(a) * rad, py = cy + Math.sin(a) * rad;
+          k === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.closePath(); ctx.fill();
+      };
+      const rad = 26, step = S / 4;
+      for (let gy = 0; gy <= 4; gy++) for (let gx = 0; gx <= 4; gx++) {
+        const ox = (gy % 2) * step / 2; // stagger rows for a woven look
+        drawPenta(gx * step + ox, gy * step, rad);
+      }
+      ctx.strokeStyle = skin.line; ctx.lineWidth = 3; // seam stitching
+      for (let i = 0; i <= 4; i++) {
+        ctx.beginPath(); ctx.moveTo(0, i * step); ctx.lineTo(S, i * step + step / 2); ctx.stroke();
+      }
+      break;
+    }
+    case "carbon": {
+      // Carbon-fibre weave: a tight 2x2 twill of beveled tiles with a sheen.
+      ctx.fillStyle = skin.dark; ctx.fillRect(0, 0, S, S);
+      const cell = 16;
+      for (let y = 0; y < S; y += cell) for (let x = 0; x < S; x += cell) {
+        const woven = ((x / cell) + (y / cell)) % 2 === 0;
+        const grad = ctx.createLinearGradient(x, y, x + cell, y + cell);
+        if (woven) { grad.addColorStop(0, skin.light); grad.addColorStop(1, skin.dark); }
+        else { grad.addColorStop(0, skin.dark); grad.addColorStop(1, skin.light); }
+        ctx.fillStyle = grad; ctx.fillRect(x, y, cell - 1, cell - 1);
+      }
+      ctx.fillStyle = skin.accent; ctx.globalAlpha = 0.25; // faint highlight sweep
+      ctx.fillRect(0, 0, S, S * 0.18);
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case "hazard": {
+      // Diagonal hazard chevrons — bold caution stripes, divides evenly to tile.
+      ctx.fillStyle = skin.light; ctx.fillRect(0, 0, S, S);
+      ctx.save();
+      ctx.translate(S / 2, S / 2); ctx.rotate(-Math.PI / 4); ctx.translate(-S, -S);
+      const w = S * 2, bands = 12, bw = w / bands;
+      ctx.fillStyle = skin.dark;
+      for (let i = 0; i < bands; i += 2) ctx.fillRect(i * bw, 0, bw, w);
+      ctx.restore();
+      break;
+    }
+    case "flames": {
+      // Magma: hot vertical gradient with licking flame tongues rising up.
+      const g = ctx.createLinearGradient(0, S, 0, 0);
+      g.addColorStop(0, skin.dark); g.addColorStop(0.55, skin.accent); g.addColorStop(1, skin.light);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      const rnd = mulberry32(13);
+      ctx.fillStyle = skin.accent;
+      for (let i = 0; i < 9; i++) {
+        const bx = (i / 9) * S + rnd() * 12; // evenly spaced base => tiles across seam
+        const h = S * (0.4 + rnd() * 0.45), bw = 26 + rnd() * 18;
+        ctx.beginPath();
+        ctx.moveTo(bx - bw / 2, S);
+        ctx.quadraticCurveTo(bx - bw * 0.2, S - h * 0.6, bx, S - h);
+        ctx.quadraticCurveTo(bx + bw * 0.2, S - h * 0.6, bx + bw / 2, S);
+        ctx.closePath(); ctx.fill();
+      }
+      break;
+    }
+    case "dots": {
+      // Polka dots on a soft field — staggered rows so it reads while spinning.
+      ctx.fillStyle = skin.dark; ctx.fillRect(0, 0, S, S);
+      const step = 32, r = 9;
+      for (let gy = 0; gy * step <= S; gy++) for (let gx = 0; gx * step <= S; gx++) {
+        const ox = (gy % 2) * step / 2;
+        ctx.fillStyle = (gx + gy) % 2 === 0 ? skin.accent : skin.light;
+        ctx.beginPath(); ctx.arc(gx * step + ox, gy * step, r, 0, Math.PI * 2); ctx.fill();
+      }
+      break;
+    }
+    default: {
+      // Classic checker grid so you can read the ball's spin under the light.
+      ctx.fillStyle = skin.light; ctx.fillRect(0, 0, S, S);
+      const n = 8, t = S / n;
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+        if ((x + y) % 2 === 0) { ctx.fillStyle = skin.dark; ctx.fillRect(x * t, y * t, t, t); }
+      }
+      ctx.strokeStyle = skin.line; ctx.lineWidth = 3;
+      for (let i = 0; i <= n; i++) {
+        ctx.beginPath(); ctx.moveTo(i * t, 0); ctx.lineTo(i * t, S); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i * t); ctx.lineTo(S, i * t); ctx.stroke();
+      }
+    }
   }
-  ctx.strokeStyle = skin.line;
-  ctx.lineWidth = 3;
-  for (let i = 0; i <= n; i++) {
-    ctx.beginPath(); ctx.moveTo(i * t, 0); ctx.lineTo(i * t, 256); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, i * t); ctx.lineTo(256, i * t); ctx.stroke();
-  }
+
   return new THREE.CanvasTexture(c);
 }
 
@@ -215,6 +348,11 @@ export class Player {
         if (best.type === "bouncy") {
           // Trampoline: a MASSIVE auto-launch (not chopped — see _controlledJump).
           v.y = CONFIG.jumpSpeed * CONFIG.bounceBoost; this.airJumps = 0; this._controlledJump = false;
+        } else if (best.type === "flipper") {
+          // Flipper: hinged springboard. Big vertical AND a forward blast (added in
+          // game._onLanded). Kicks the plate's flip animation. SENDS you — survive the landing.
+          v.y = CONFIG.jumpSpeed * CONFIG.flipperVertical; this.airJumps = 0; this._controlledJump = false;
+          best._flipT = CONFIG.flipperFlipTime; fresh = true; landed = "flipper";
         } else if (ctx.flubber) {
           // Flubber powerdown: auto-bounce off ANY surface, a bit higher than a
           // jump — you have to steer in the air to stay on course.
@@ -234,7 +372,7 @@ export class Player {
         // Only report a fresh landing (not every grounded frame) so landing
         // sounds don't fire continuously while you ride a board.
         if (fresh && landed === null) { this.jumpCount += 1; landed = best.type; }
-        else if (landed === "flubber") this.jumpCount += 1;
+        else if (landed === "flubber" || landed === "flipper") this.jumpCount += 1;
       }
     }
     // Launch off the top of an up-ramp: keep some of the climb as a hop (clamped

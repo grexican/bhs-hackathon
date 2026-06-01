@@ -34,6 +34,14 @@ export const CONFIG = {
   // Trampoline boards (the pink ones): launch you up like a boosted jump.
   bounceBoost: 1.7,   // launch velocity = jumpSpeed * this (trimmed — jumpSpeed 50 made 2.05 absurd)
 
+  // Flipper plate (orange): a hinged springboard that pivots forward and SENDS you
+  // up AND forward — a directed launch. Survive the landing. Reuses the box plate;
+  // the "flip" is just an animated hinge kick (no new geometry).
+  flipperVertical: 1.75,  // launch v.y = jumpSpeed * this — dramatic (above the trampoline; energy also goes forward)
+  flipperForward: 42,     // forward speed BLAST on launch (added to the accel bonus, then decays off)
+  flipperFlipTime: 0.4,   // seconds the hinge-kick animation lasts
+  flipperChance: 0.05,    // chance a non-safe main-path board is a flipper (rare — it's a big event)
+
   // Manual throttle (Up/Down arrows or the thumbstick Y axis): a slight, eased
   // speed nudge. Kept small so the path stays reachable (gaps have 50% headroom).
   manualSpeed: 8,
@@ -151,6 +159,7 @@ export const CONFIG = {
   flubberBounce: 1.3,     // bounce velocity = jumpSpeed * this (a bit higher than a jump)
   blackoutDuration: 18,   // powerdown: the lights cut out — only glowing platform edges and a faint ball remain
   blackoutDim: 0.3,
+  rainDuration: 16,       // powerdown: heavy rain on the windshield — streaks, sliding drops, blurred vision (cousin of fog)
   fogDuration: 25,        // powerdown: a wall of grey smoke rolls in so you can't read distant platforms (distinct from blackout)
   fogNear: 80, fogFar: 230,        // normal fog distances (clear & far-seeing)
   fogBlindNear: 42, fogBlindFar: 95, // "fogged" distances — clear close (obstacles still readable ~2s out), grey wall beyond

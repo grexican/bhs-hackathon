@@ -15,12 +15,12 @@ const EFFECT_DURATIONS = {
   magnet: "magnetDuration", slow: "slowDuration", doublejump: "doubleJumpDuration",
   flight: "flightDuration", reverse: "reverseDuration", surge: "surgeDuration",
   morph: "morphDuration", trip: "tripDuration", lowgrav: "lowgravDuration",
-  flubber: "flubberDuration", blackout: "blackoutDuration", fog: "fogDuration",
+  flubber: "flubberDuration", blackout: "blackoutDuration", fog: "fogDuration", rain: "rainDuration",
 };
 
 // The timed POWERDOWNS (bad effects). Having these active cranks the scoring
 // multiplier — risk/reward for riding them out instead of avoiding them.
-const BAD_EFFECTS = ["reverse", "surge", "morph", "trip", "flubber", "blackout", "fog"];
+const BAD_EFFECTS = ["reverse", "surge", "morph", "trip", "flubber", "blackout", "fog", "rain"];
 
 // The conductor. Builds the 3D world, runs the game loop, owns the Start ->
 // Playing -> Dead state machine, scoring, powerups, the chase camera, and the
@@ -51,7 +51,7 @@ export class Game {
     this._lean = 0; // smoothed steer for a soft camera lean
     this._throttleSmooth = 0; // smoothed Up/Down throttle for the speed camera response
     this._shake = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0, rain: 0 };
     this._invuln = 0;
 
     this._buildRenderer();
@@ -98,11 +98,25 @@ export class Game {
     this._isTouch = document.body.classList.contains("is-touch");
     if (this._isTouch) this._hud.hint.textContent = "Tap JUMP to roll";
     window.addEventListener("keydown", (e) => {
+      if (e.repeat) return;
+      // Settings shortcuts (desktop): M sound · V view · N track · X music-fx ·
+      // G reduced-motion · K ball skin · L difficulty.
       if (e.code === "KeyM") this._toggleSound();
       if (e.code === "KeyV") this._toggleView();
       if (e.code === "KeyN") this._cycleTrack();
       if (e.code === "KeyX") this._toggleMusicFx();
       if (e.code === "KeyG") this._toggleReduced();
+      if (e.code === "KeyK") this._cycleSkin();
+      if (e.code === "KeyL") this._cycleDifficulty();
+      // Cheat-only desktop testing: instantly fire a powerdown on yourself.
+      // R rain · F fog · B blackout · T trip · O slow-mo.
+      if (this._cheat && this.state === "playing") {
+        if (e.code === "KeyR") this._triggerEffect("rain");
+        if (e.code === "KeyF") this._triggerEffect("fog");
+        if (e.code === "KeyB") this._triggerEffect("blackout");
+        if (e.code === "KeyT") this._triggerEffect("trip");
+        if (e.code === "KeyO") this._triggerEffect("slow");
+      }
     });
     this._buildSettings();
 
@@ -171,6 +185,7 @@ export class Game {
     this.scene.fog = new THREE.Fog(0x141a33, CONFIG.fogNear, CONFIG.fogFar);
     this._fogLevel = 0; // smoothed 0..1 fog-powerdown amount (pulls the horizon in)
     this._fogSmoke = new THREE.Color(CONFIG.fogSmokeColor); // grey the fog tints toward while fogged — reads as smoke, not shadow
+    this._rainLevel = 0; // smoothed 0..1 rain-powerdown amount (drives the windshield overlay)
 
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 1200);
     this._updateBaseFov();
@@ -210,7 +225,7 @@ export class Game {
     this._biome = 0;
     this._throttleSmooth = 0;
     this._invuln = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0, rain: 0 };
     this._clearSplats();
     this._darkLevel = 0; // lights back to full for a fresh run
     this.hemi.intensity = this._hemiBase;
@@ -313,6 +328,12 @@ export class Game {
     this._skinIndex = this.player.setSkin((this._skinIndex ?? 0) + 1); // applies + wraps + returns the new index
     this._toast(`🎨 ${BALL_SKINS[this._skinIndex].name}`, "#ffd34e");
     this._syncSettings();
+  }
+
+  // Desktop testing (cheat hotkeys): apply a powerup/powerdown to yourself by type.
+  // Reuses the normal pickup path so it behaves exactly like rolling over it.
+  _triggerEffect(type) {
+    this._applyPowerup({ type, good: POWERUP_DEFS[type].good, pos: this.player.position.clone() });
   }
 
   _buildSettings() {
@@ -459,7 +480,7 @@ export class Game {
       this.baseSpeed = Math.min(CONFIG.maxForwardSpeed, this.baseSpeed + CONFIG.speedRampAmount);
     }
     if (this._invuln > 0) this._invuln -= dt;
-    for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip", "lowgrav", "flubber", "blackout", "fog"])
+    for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip", "lowgrav", "flubber", "blackout", "fog", "rain"])
       if (this._effects[k] > 0) this._effects[k] -= dt;
     // Psychedelic powerdown: recolor the view (gentle variant if reduced-motion).
     const tripping = this._effects.trip > 0;
@@ -502,6 +523,15 @@ export class Game {
     const blur = (this._fogLevel * 3.5).toFixed(2);
     this._fogLensEl.style.backdropFilter = this._fogLensEl.style.webkitBackdropFilter = `blur(${blur}px)`;
     this.bloom.strength = this._bloomBase + this._fogLevel * 0.7;
+
+    // Rain powerdown: heavy windshield rain. Fade the lens overlay in/out with the
+    // effect + ramp a blur (wet, blurred vision — cousin of fog). The streaks and
+    // sliding drops are pure CSS on #rain-lens; here we just drive opacity + blur.
+    const rainTarget = this._effects.rain > 0 ? 1 : 0;
+    this._rainLevel += (rainTarget - this._rainLevel) * (1 - Math.exp(-dt / 0.5));
+    if (!this._rainLensEl) this._rainLensEl = document.getElementById("rain-lens");
+    this._rainLensEl.style.opacity = this._rainLevel;
+    this._rainLensEl.style.backdropFilter = this._rainLensEl.style.webkitBackdropFilter = `blur(${(this._rainLevel * 2.6).toFixed(2)}px)`;
 
     // Ease the actual speed toward the target. Easing INTO a slow-mo is extra
     // gradual (slowEase) so it doesn't yank the speed out and drop you short.
@@ -593,6 +623,12 @@ export class Game {
     const p = ev.pos.clone(); p.y -= this.player.radius;
     if (ev.landed === "bouncy") {
       this.particles.burst(p, 0xff3f7a, 22); this._shake = 0.35; this._toast("BOING!", "#ff3f7a"); this.sound.bounce();
+    } else if (ev.landed === "flipper") {
+      // Forward BLAST on top of the big vertical the player already got — rides off
+      // as an accel bonus, held then decaying. SENDS you forward + up.
+      this._accelBonus = Math.min(CONFIG.accelMax, this._accelBonus + CONFIG.flipperForward);
+      this._accelHold = CONFIG.accelHold;
+      this.particles.burst(p, 0xff7a1c, 28); this._shake = 0.5; this._toast("LAUNCH!", "#ff7a1c"); this.sound.bounce();
     } else if (ev.landed === "boost") {
       this.particles.burst(p, 0x2bff6a, 16); this.sound.boost(); // acceleration plate — speed builds while you ride it
     } else if (ev.landed === "flubber") {
@@ -654,6 +690,7 @@ export class Game {
       flubber: ["🫧 FLUBBER! — steer in the air", "#6aff6a"],
       blackout: ["🌑 BLACKOUT! — follow the edge lights", "#9fb3d0"],
       fog: ["🌫️ FOGGED! — distance is gone", "#9aa6b5"],
+      rain: ["🌧️ DOWNPOUR! — wipers can't keep up", "#9fb8d0"],
     };
     // Different effects stack (run at once). Re-grabbing the SAME timed one ADDS its
     // full duration onto whatever's left, so a second blackout extends the blackout

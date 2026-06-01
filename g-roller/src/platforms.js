@@ -26,6 +26,7 @@ export const POWERUP_DEFS = {
   flubber:    { color: 0x6aff6a, shape: "ico",   icon: "🫧", good: false, weight: 2.5 },
   blackout:   { color: 0x44507a, shape: "octa",  icon: "🌑", good: false, weight: 2 },
   fog:        { color: 0x9aa6b5, shape: "box",   icon: "🌫️", good: false, weight: 2 },
+  rain:       { color: 0x6f9fd0, shape: "ico",   icon: "🌧️", good: false, weight: 2 },
   trip:       { color: 0xa94bff, shape: "tetra", icon: "🌈", good: false, weight: 1.3 },
 };
 const GOOD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => POWERUP_DEFS[k].good);
@@ -53,6 +54,7 @@ class Platform {
     this.slopeZ = 0;             // ramp: top rises this much per unit of z
     this.curve = 0;              // curved board: + concave (funnels in), - convex (rolls off)
     this.leanX = 0;              // sideways bank: top rises this much per unit of x (+ raises the +x edge); drags you to the low side
+    this._flipT = 0;             // flipper plate: seconds left on the hinge-kick animation (0 = at rest)
     this._tex = null;
     this._geo = null;            // own geometry to dispose (curved boards only)
   }
@@ -153,8 +155,8 @@ export class PlatformField {
       map: tex,
       roughness: type === "bouncy" ? 0.4 : 0.85,
       metalness: 0.05,
-      emissive: type === "bouncy" ? 0xff1f5a : type === "boost" ? 0x1fbf4c : 0x000000,
-      emissiveIntensity: type === "bouncy" ? 0.5 : type === "boost" ? 0.32 : 0,
+      emissive: type === "bouncy" ? 0xff1f5a : type === "boost" ? 0x1fbf4c : type === "flipper" ? 0xff7a1c : 0x000000,
+      emissiveIntensity: type === "bouncy" ? 0.5 : type === "boost" ? 0.32 : type === "flipper" ? 0.55 : 0,
     });
 
     let visual, ownGeo = null;
@@ -570,8 +572,13 @@ export class PlatformField {
       dy = toY * 0.6 + rand(dyDown, dyUp) * 0.4;
     }
 
-    const type = !safe && chance(0.1) ? "boost" : "normal";
-    const texName = type === "boost" ? "boost" : this._groundTex();
+    let type = "normal";
+    if (!safe) {
+      if (chance(CONFIG.flipperChance)) type = "flipper"; // rare hinged launch pad
+      else if (chance(0.1)) type = "boost";
+    }
+    const texName = type === "boost" ? "boost" : type === "flipper" ? "rubber" : this._groundTex();
+    if (type === "flipper") len = rand(9, 14); // small launch panels — a full-length flipper looks wrong
 
     // Angle (slope) and curve (bow) are independent display PROPERTIES, not their
     // own plate types: any board — flat, boost, round, and a mover below — can tilt
@@ -579,7 +586,7 @@ export class PlatformField {
     // (before placement) so a longer ramp doesn't throw off the gap that follows it.
     // (Tunnels are a separate structure and stay flat for now.)
     let slopeZ = 0, curve = 0, leanX = 0;
-    if (!safe) {
+    if (!safe && type !== "flipper") { // flippers stay flat — the hinge animation owns rotation.x
       if (chance(ramp(CONFIG.rampChance, sd))) {
         slopeZ = (chance(0.5) ? 1 : -1) * rand(CONFIG.rampSlope[0], CONFIG.rampSlope[1]);
         if (!round) len *= ramp(CONFIG.rampLenBoost, sd); // box ramps run longer; keep round tiles small
@@ -608,8 +615,8 @@ export class PlatformField {
 
     // Acceleration plates are always flat boxes (forward arrows); ramps use a
     // thin box too so their near edge meets the incoming height cleanly.
-    const geoType = type === "boost" ? "box" : g.geoType;
-    const hy = type === "boost" || slopeZ ? 0.5 : g.hy;
+    const geoType = type === "boost" || type === "flipper" ? "box" : g.geoType;
+    const hy = type === "boost" || type === "flipper" || slopeZ ? 0.5 : g.hy;
     const p = this._addBoard({ x, y: yCenter, z, w, len, hy, geoType, type, texName, slopeZ, curve, leanX });
     const exitY = slopeZ ? yCenter + slopeZ * (len / 2) : yCenter;
     this._cursor = { x, y: exitY, z: z + len / 2 };
@@ -709,6 +716,25 @@ export class PlatformField {
       const ny = m.baseY + o * m.dirY;
       p.dx = nx - p.pos.x; p.dy = ny - p.pos.y;
       p.pos.x = nx; p.pos.y = ny;
+    }
+
+    // Flipper plates: animate the hinge kick (pivot the surface forward about its
+    // BACK edge) while _flipT counts down. Pure visual juice — the launch already
+    // fired the instant you touched it. position offsets pin the back edge so it
+    // reads as a trap-door/catapult swinging up rather than spinning in place.
+    for (const p of this.platforms) {
+      if (p._flipT <= 0) continue;
+      p._flipT = Math.max(0, p._flipT - dt);
+      const m = p.surfaceMesh;
+      if (!m) continue;
+      const phase = 1 - p._flipT / CONFIG.flipperFlipTime; // 0 -> 1 across the kick
+      const a = Math.sin(phase * Math.PI) * 1.2;            // lift to ~69°, then back to flat
+      // Hinge at the FAR (+z) edge; the NEAR (camera-side, -z) edge swings UP so the
+      // surface deflects you FORWARD (matches the actual launch) — like a diving board.
+      m.rotation.x = a;
+      m.position.y = p.hz * Math.sin(a);                    // pin the far edge as the hinge
+      m.position.z = p.hz * (1 - Math.cos(a));
+      if (p._flipT === 0) { m.rotation.x = 0; m.position.set(0, 0, 0); } // settle flat
     }
 
     for (const g of this.gems) {
