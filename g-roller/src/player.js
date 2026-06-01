@@ -200,6 +200,9 @@ export class Player {
           if (best.type === "boost") this.onBoost = true; // game ramps speed while you ride it
           // Curved board: drift toward the middle (concave) or off the sides (convex).
           if (best.curve) p.x += -CONFIG.curveForce * best.curve * (p.x - best.pos.x) * dt;
+          // Banked board: a constant downhill drag toward the low edge (leanX>0 lifts
+          // the +x side, so you slide toward -x). Steer against it or roll off the side.
+          if (best.leanX) p.x += -CONFIG.leanForce * best.leanX * dt;
         }
         this.lastGroundedY = bestTop;
         // Only report a fresh landing (not every grounded frame) so landing

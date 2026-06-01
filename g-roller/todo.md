@@ -38,7 +38,52 @@ comparable; store best-of-day in localStorage.
   for endless). Generator structure doesn't change.
 - This same seedable-RNG refactor is the prerequisite for the Audiosurf swing idea.
 
+## Greenlit — build next (specced this session)
+
+### Difficulty differentiation (Hard ≈ Medium today — root cause found)
+`difficultyMult` (Easy 0.55 / Med 1.0 / Hard 1.7) flows ONLY through `_hazRamp`,
+which scales the ramp FLOOR and caps at `pair[1]`. So mult only changes how fast
+hazards rise early — deep in a run every difficulty converges to the same ceiling,
+making Hard and Medium identical on the plateau. Two-part fix:
+1. Scale the whole ramp (floor AND ceiling) with a global safety cap:
+   `_hazRamp(pair,d){ const lo=pair[0]*mult, hi=pair[1]*mult; return Math.min(ramp([lo,hi],d), CONFIG.hazardCeil); }`
+2. Add real per-level levers beyond the single mult: `speedMult` (~0.92/1.0/1.12 —
+   speed is THE runner difficulty knob and is currently untouched), maybe `gapMult`
+   / narrower pads on Hard.
+
+### Risk/reward multiplier under powerdowns ("multiplier during difficult times")
+While powerdowns are active, crank the SCORE multiplier: each active powerdown adds
+one, and every powerdown beyond the first adds an extra "stack" bonus on top — so
+riding out three at once scores far more than three separately. Plan: a module-level
+`BAD_EFFECTS` list + a `_dangerBonus()` in game.js folded into the score-mult used at
+`this.score += speed*dt*scorePerMeter*mult` (line ~475), shown in the HUD. New config:
+`powerdownMult`, `powerdownStackBonus`. NOT yet implemented.
+
+### Cannon / launcher piece (slingshot/catapult)
+A piece you roll INTO that funnels you to a centre, aims upward, and BLASTS you
+forward + HIGH (significant air, like the red bouncy squares but a directed launch).
+Goal: survive the landing. Likely a new board `type` ("cannon") with a capture +
+auto-launch in player.js (reuse the trampoline/`bounceBoost` launch path, add a
+forward component + bigger vertical). UX/aesthetic for the funnel still TBD. Spawn
+rare, scale presence with difficulty. NOT yet implemented.
+
+### Spline / wave ground (GREENLIT — feasibility study done, LOW–MED)
+Undulating terrain is single-height-per-(x,z), which the down-raycast collision
+already handles (same as ramps/curves) — ZERO physics/collision changes. Add a
+`_makeWaveGeo` builder (displaced PlaneGeometry, `computeVertexNormals`) wired as a
+new orthogonal board property next to slope/curve/lean, plus a `waveChance`.
+Constraints: start/end flush at local y=0 so exit-height bookkeeping stays valid;
+keep amplitude gentle so no face crosses the engine's near-vertical cutoff (else you
+fall through). Full report: `tmp/marble-madness-feasibility.md`. NOT yet implemented.
+
 ## Backlog (from the design review — considered, not scheduled)
+
+- **Snaking tubes / Marble-Madness ride (DEFERRED — revisit later)** — a tube that
+  banks/rises/inverts breaks the engine's "always +z, collide downward" core; needs a
+  separate parametric on-rails mode (CatmullRomCurve3, physics suspended, re-seed on
+  exit) + a bespoke ride camera. HIGH effort, set-piece only. Note: the current "tube
+  tunnel" is purely cosmetic (flat floor + decorative pipe you never touch). Full
+  analysis in `tmp/marble-madness-feasibility.md`.
 
 - **Missions / challenge cards** — 3 rotating objectives on the start screen
   ("roll 800 m", "40 gems in a run", "5 near-misses, no death"). Feeds off events

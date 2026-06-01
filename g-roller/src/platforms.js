@@ -52,6 +52,7 @@ class Platform {
     this.dx = 0; this.dy = 0;    // movement applied this frame (so riders move too)
     this.slopeZ = 0;             // ramp: top rises this much per unit of z
     this.curve = 0;              // curved board: + concave (funnels in), - convex (rolls off)
+    this.leanX = 0;              // sideways bank: top rises this much per unit of x (+ raises the +x edge); drags you to the low side
     this._tex = null;
     this._geo = null;            // own geometry to dispose (curved boards only)
   }
@@ -77,12 +78,13 @@ export class PlatformField {
     // child that lights up only when the lights cut out (emergency-aisle lighting).
     // One shared bright material (blooms) + shared edge geometry for the cached shapes;
     // curved boards get their own edge geometry. `blackout` toggles them all on/off.
-    this._edgeMat = new THREE.LineBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.95 });
+    this._edgeMat = new THREE.LineBasicMaterial({ color: 0xffc24a, transparent: true, opacity: 0.2 });
     this._edgeGeoBox = new THREE.EdgesGeometry(this._geoBox);
     this._edgeGeoCyl = new THREE.EdgesGeometry(this._geoCyl);
     this._edgeGeoHex = new THREE.EdgesGeometry(this._geoHex);
     this.blackout = false;
     this._edgeVis = false; // last applied blackout state (so we only re-toggle on change)
+    this._emissiveScale = 1; // blackout dims the pieces' OWN glow (emissive) down to ~0; 1 = normal
     this._gemGeo = new THREE.OctahedronGeometry(0.55);
 
     this._time = 0;
@@ -142,7 +144,7 @@ export class PlatformField {
     return t;
   }
 
-  _addBoard({ x, y, z, w, len, hy, geoType, type, texName, slopeZ = 0, curve = 0 }) {
+  _addBoard({ x, y, z, w, len, hy, geoType, type, texName, slopeZ = 0, curve = 0, leanX = 0 }) {
     const group = new THREE.Group();
     group.position.set(x, y, z);
 
@@ -151,8 +153,8 @@ export class PlatformField {
       map: tex,
       roughness: type === "bouncy" ? 0.4 : 0.85,
       metalness: 0.05,
-      emissive: type === "bouncy" ? 0xff1f5a : type === "boost" ? 0x1fdd5a : 0x000000,
-      emissiveIntensity: type === "bouncy" ? 0.5 : type === "boost" ? 0.6 : 0,
+      emissive: type === "bouncy" ? 0xff1f5a : type === "boost" ? 0x1fbf4c : 0x000000,
+      emissiveIntensity: type === "bouncy" ? 0.5 : type === "boost" ? 0.32 : 0,
     });
 
     let visual, ownGeo = null;
@@ -172,6 +174,10 @@ export class PlatformField {
     // convention). Collision raycasts the real mesh, so the surface is always what
     // you see — a tilted curved/round/boost board all just work.
     if (slopeZ) visual.rotation.x = -Math.atan(slopeZ);
+    // Sideways bank, independent of the ramp pitch above. A +z roll lifts the +x
+    // edge and drops the -x edge; collision raycasts the real tilted mesh, so the
+    // ball sits on the bank and player.js drags it toward the low (-x) side.
+    if (leanX) visual.rotation.z = Math.atan(leanX);
     visual.castShadow = true;
     visual.receiveShadow = true;
     group.add(visual);
@@ -196,6 +202,7 @@ export class PlatformField {
     p._edgeGeo = curve ? edgeGeo : null; // dispose curved edge geo with the board; shared ones stay
     p.slopeZ = slopeZ;
     p.curve = curve;
+    p.leanX = leanX;
     visual.userData.platform = p; // raycast maps a hit back to its Platform
     p.surfaceMesh = visual;       // the one landable mesh (obstacles/tube added later aren't this)
     this.platforms.push(p);
@@ -221,6 +228,24 @@ export class PlatformField {
   // opens calmer, Hard busier. Clamped so a high multiplier can't push past the peak.
   _hazRamp(pair, d) {
     return ramp([Math.min(pair[0] * this.difficultyMult, pair[1]), pair[1]], d);
+  }
+
+  // Blackout can't dim pieces that light THEMSELVES — boost (green) and bouncy (red)
+  // plates use emissive, which ignores scene lights, so they stay vivid. Scale ONLY
+  // the plate-SURFACE glow in step with the blackout so those plates go indistinct
+  // like the dark ones. Obstacles (spikes/barriers — separate child meshes) keep
+  // their glow so hazards stay readable in the dark, and gems/powerups (not children
+  // of a platform) keep glowing as beacons. Lazily records each base; scale=1 restores.
+  // Runs every frame while dimmed so boards spawned mid-blackout are caught too.
+  setEmissiveScale(scale) {
+    if (scale >= 0.999 && this._emissiveScale >= 0.999) return; // nothing to do in normal light
+    this._emissiveScale = scale;
+    for (const p of this.platforms) {
+      const m = p.surfaceMesh && p.surfaceMesh.material;
+      if (!m || !m.isMeshStandardMaterial) continue;
+      if (m.userData.baseEmissive === undefined) m.userData.baseEmissive = m.emissiveIntensity;
+      if (m.userData.baseEmissive > 0) m.emissiveIntensity = m.userData.baseEmissive * scale;
+    }
   }
 
   // Hang an obstacle off a platform. Four kinds, each needing a different move:
@@ -335,7 +360,7 @@ export class PlatformField {
     const geo = new THREE.CylinderGeometry(r, r, len, 30, 1, true); // open-ended cylinder
     const mat = new THREE.MeshStandardMaterial({
       color: 0x8a5bff, emissive: 0x6a3bff, emissiveIntensity: 0.55,
-      metalness: 0.3, roughness: 0.35, transparent: true, opacity: 0.32,
+      metalness: 0.3, roughness: 0.35, transparent: true, opacity: 0.6,
       side: THREE.DoubleSide, depthWrite: false,
     });
     const tube = new THREE.Mesh(geo, mat);
@@ -547,7 +572,7 @@ export class PlatformField {
     // and/or bow, in any combination, on top of its shape/size/texture. Rolled here
     // (before placement) so a longer ramp doesn't throw off the gap that follows it.
     // (Tunnels are a separate structure and stay flat for now.)
-    let slopeZ = 0, curve = 0;
+    let slopeZ = 0, curve = 0, leanX = 0;
     if (!safe) {
       if (chance(ramp(CONFIG.rampChance, sd))) {
         slopeZ = (chance(0.5) ? 1 : -1) * rand(CONFIG.rampSlope[0], CONFIG.rampSlope[1]);
@@ -560,6 +585,14 @@ export class PlatformField {
         const mag = rand(CONFIG.curveAmount[0], CONFIG.curveAmount[1]);
         curve = (chance(0.7) ? 1 : -1) * mag;
       }
+      // Sideways bank — independent of ramp/curve, so a board can climb AND lean.
+      // Chance ramps with difficulty (_hazRamp); the magnitude's upper bound grows
+      // with spread (ramp(.., sd)), so early boards are barely tilted and later ones
+      // bank for real. Side is random. player.js drags you toward the low edge.
+      if (chance(this._hazRamp(CONFIG.leanChance, hd))) {
+        const mag = rand(CONFIG.leanAmount[0], ramp(CONFIG.leanAmount, sd));
+        leanX = (chance(0.5) ? 1 : -1) * mag;
+      }
     }
 
     const x = clamp(this._cursor.x + dx, -band - 4, band + 4);
@@ -571,7 +604,7 @@ export class PlatformField {
     // thin box too so their near edge meets the incoming height cleanly.
     const geoType = type === "boost" ? "box" : g.geoType;
     const hy = type === "boost" || slopeZ ? 0.5 : g.hy;
-    const p = this._addBoard({ x, y: yCenter, z, w, len, hy, geoType, type, texName, slopeZ, curve });
+    const p = this._addBoard({ x, y: yCenter, z, w, len, hy, geoType, type, texName, slopeZ, curve, leanX });
     const exitY = slopeZ ? yCenter + slopeZ * (len / 2) : yCenter;
     this._cursor = { x, y: exitY, z: z + len / 2 };
     this._clearOverlapping(p); // static pieces never sit inside each other

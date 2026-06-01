@@ -29,6 +29,7 @@ export const CONFIG = {
   accelMax: 42,       // cap on the accumulated bonus — a big top-end on a full ride
   accelHold: 1.4,     // seconds you stay launched at top speed before the decel kicks in
   accelDecay: 9,      // speed lost per second after the hold — a steady, linear glide back
+  accelEase: 0.09,    // while ON a boost plate, speed chases its target THIS fast (small = snappy) so all the gain happens before you lift off — no accelerating in mid-air
 
   // Trampoline boards (the pink ones): launch you up like a boosted jump.
   bounceBoost: 1.7,   // launch velocity = jumpSpeed * this (trimmed — jumpSpeed 50 made 2.05 absurd)
@@ -119,6 +120,9 @@ export const CONFIG = {
   curveChance: [0.05, 0.25],  // boards curved across their width
   curveAmount: [0.04, 0.14], // parabola steepness, RANDOM per board: gentle slopes up to dramatic half-pipes
   curveForce: 16,            // sideways "gravity" — multiplied by the (random) curve, so a deep bowl pulls hard, a soft one barely
+  leanChance: [0.05, 0.4],   // boards banked left/right (independent of ramp/curve); chance ramps with difficulty — near-zero early, common at peak
+  leanAmount: [0.03, 0.22],  // sideways tilt (rise/run across the width), RANDOM per board; the upper bound grows with difficulty so it starts barely-there
+  leanForce: 14,             // downhill "gravity" while riding a banked board — multiplied by the (random) lean, so a steep bank drags hard
 
   // Powerups / powerdowns
   powerupChance: 0.3,     // chance a path platform spawns a pickup (bumped — the wide sprawl has room for more)
@@ -142,11 +146,12 @@ export const CONFIG = {
   lowgravScale: 0.45,     // gravity multiplier while low-grav is active
   flubberDuration: 20,    // powerdown: every landing auto-bounces you (steer in the air!)
   flubberBounce: 1.3,     // bounce velocity = jumpSpeed * this (a bit higher than a jump)
-  blackoutDuration: 11,   // powerdown: the lights cut out — only glowing platform edges and a faint ball remain
-  blackoutDim: 0.06,      // scene light multiplier while blacked out (near-dark; edges + bloom carry the read)
-  fogDuration: 9,         // powerdown: the horizon rolls in so you can't read distant platforms (distinct from blackout)
+  blackoutDuration: 18,   // powerdown: the lights cut out — only glowing platform edges and a faint ball remain
+  blackoutDim: 0.3,
+  fogDuration: 25,        // powerdown: a wall of grey smoke rolls in so you can't read distant platforms (distinct from blackout)
   fogNear: 80, fogFar: 230,        // normal fog distances (clear & far-seeing)
-  fogBlindNear: 45, fogBlindFar: 110, // "fogged" distances — only your next jump or two stays legible
+  fogBlindNear: 42, fogBlindFar: 95, // "fogged" distances — clear close (obstacles still readable ~2s out), grey wall beyond
+  fogSmokeColor: 0x494d55, // dark mid-grey the fog tints toward while fogged — under the bloom threshold (no glow), dims the deep field into murk, neutral enough to read as smoke not blue shadow
 
   // Secret cheat code (half-Contra, no A/B) entered on the start/game-over
   // screen: floods the field with extra items so you can test powerups fast.

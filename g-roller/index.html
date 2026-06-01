@@ -63,6 +63,36 @@
         100% { opacity: 0; transform: translate(-50%, 18px) rotate(var(--rot)) scale(1.08); }
       }
 
+      /* A faint grey haze on the "lens" while the fog powerdown is active — sits
+         right on the camera so the fog feels like it's pressing on YOU, not just
+         softening the distance. Denser at the screen edges, clear-ish in the
+         middle so you can still read what's just ahead. Opacity is driven from JS
+         by the fog level; kept deliberately subtle. */
+      #fog-lens {
+        position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0;
+        /* Near-uniform grey wash (only a touch denser at the edges) so the WHOLE
+           windshield fogs over, not just a ring. The blur is set from JS so it
+           ramps with the fog level — that's the "everything goes soft" part. */
+        background: radial-gradient(ellipse at center,
+          rgba(176,180,188,0.40) 0%,
+          rgba(174,178,186,0.50) 55%,
+          rgba(178,182,190,0.66) 100%);
+        backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px);
+      }
+
+      /* A dark film right on the lens while BLACKOUT is active. This — not dimming
+         the 3D lights/emissive — is what carries the darkness now. Fairly uniform
+         so the WHOLE view goes murky (not just the edges), a touch darker in the
+         corners. Bright things (pickups, obstacles, boost/bouncy) punch through
+         faintly; dark plates vanish. Opacity driven from JS by the blackout level. */
+      #dark-lens {
+        position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0;
+        background: radial-gradient(ellipse at center,
+          rgba(2,3,7,0.60) 0%,
+          rgba(1,2,5,0.68) 60%,
+          rgba(0,0,2,0.82) 100%);
+      }
+
       /* Heads-up display layered on top of the 3D canvas */
       .hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
 
@@ -238,6 +268,8 @@
     <canvas id="game-canvas"></canvas>
 
     <div id="splats"></div>
+    <div id="fog-lens"></div>
+    <div id="dark-lens"></div>
 
     <div class="hud">
       <div class="hud__panel">

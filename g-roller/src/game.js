@@ -158,12 +158,14 @@ export class Game {
       0.72   // threshold — only the brightest pixels bloom
     );
     this.composer.addPass(this.bloom);
+    this._bloomBase = this.bloom.strength; // fog cranks this up so lights flare/halo
   }
 
   _buildScene() {
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.Fog(0x141a33, CONFIG.fogNear, CONFIG.fogFar);
     this._fogLevel = 0; // smoothed 0..1 fog-powerdown amount (pulls the horizon in)
+    this._fogSmoke = new THREE.Color(CONFIG.fogSmokeColor); // grey the fog tints toward while fogged — reads as smoke, not shadow
 
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 1200);
     this._updateBaseFov();
@@ -448,6 +450,12 @@ export class Game {
     this.sun.intensity = this._sunBase * m;
     this.background.dim = this._darkLevel; // fade the skyline/moon down too
     this.field.blackout = this._effects.blackout > 0;
+    this.field.setEmissiveScale(m); // dim the self-lit plates (boost green / bouncy red) in step with the lights — otherwise they ignore the blackout
+    // Night-driving darkness: a dark film right on the lens. The scene stays faintly
+    // lit underneath (dimmed plates + edge outlines + glowing pickups), so you get
+    // "faint outlines you have to focus on" rather than a flat black screen.
+    if (!this._darkLensEl) this._darkLensEl = document.getElementById("dark-lens");
+    this._darkLensEl.style.opacity = this._darkLevel;
 
     // Fog powerdown: ease the horizon in (distinct from blackout — this hides
     // DISTANCE while the lights stay on, so you can't read far-off platforms).
@@ -455,11 +463,28 @@ export class Game {
     this._fogLevel += (fogTarget - this._fogLevel) * (1 - Math.exp(-dt / 0.5));
     this.scene.fog.near = CONFIG.fogNear + (CONFIG.fogBlindNear - CONFIG.fogNear) * this._fogLevel;
     this.scene.fog.far = CONFIG.fogFar + (CONFIG.fogBlindFar - CONFIG.fogFar) * this._fogLevel;
+    // Tint the fog toward grey smoke as it rolls in — otherwise distance just fades
+    // to the dark biome colour (reads as shadow, not smoke). Strong lerp so it wins
+    // against the biome colour crossfade; when fog lifts, _fogLevel→0 hands the
+    // colour back to the biome tint. (The wall of grey is what makes it impenetrable.)
+    if (this._fogLevel > 0.01) this.scene.fog.color.lerp(this._fogSmoke, 0.15 * this._fogLevel);
+    // Haze on the lens, right on the camera — grey wash + a blur that ramps with the
+    // fog (everything goes soft), plus extra bloom so lights flare/halo like real fog.
+    if (!this._fogLensEl) this._fogLensEl = document.getElementById("fog-lens");
+    this._fogLensEl.style.opacity = this._fogLevel;
+    const blur = (this._fogLevel * 3.5).toFixed(2);
+    this._fogLensEl.style.backdropFilter = this._fogLensEl.style.webkitBackdropFilter = `blur(${blur}px)`;
+    this.bloom.strength = this._bloomBase + this._fogLevel * 0.7;
 
     // Ease the actual speed toward the target. Easing INTO a slow-mo is extra
     // gradual (slowEase) so it doesn't yank the speed out and drop you short.
     const target = this._effectiveSpeed();
-    const tau = this._effects.slow > 0 && target < this._speed ? CONFIG.slowEase : 0.33;
+    // While riding a boost plate, chase the target FAST so the whole speed gain
+    // lands before you lift off — otherwise the eased catch-up keeps climbing in the
+    // air (felt like "accelerating mid-jump"). Slow-mo easing still wins when active.
+    const tau = this._effects.slow > 0 && target < this._speed ? CONFIG.slowEase
+      : this.player.onBoost ? CONFIG.accelEase
+      : 0.33;
     this._speed += (target - this._speed) * (1 - Math.exp(-dt / tau));
     const speed = this._speed;
     const magnetPos = this._effects.magnet > 0 ? this.player.position : null;
@@ -600,11 +625,12 @@ export class Game {
       blackout: ["🌑 BLACKOUT! — follow the edge lights", "#9fb3d0"],
       fog: ["🌫️ FOGGED! — distance is gone", "#9aa6b5"],
     };
-    // Different effects stack (run at once). Re-grabbing the same one tops its
-    // timer back up without ever shortening it.
+    // Different effects stack (run at once). Re-grabbing the SAME timed one ADDS its
+    // full duration onto whatever's left, so a second blackout extends the blackout
+    // rather than resetting it to the max. (Shield is a boolean; splat is instant.)
     if (u.type === "shield") this._effects.shield = true;
     else if (u.type === "splat") this._splat();
-    else this._effects[u.type] = Math.max(this._effects[u.type] || 0, this._dur(u.type));
+    else this._effects[u.type] = (this._effects[u.type] || 0) + this._dur(u.type);
 
     this.particles.burst(u.pos, u.good ? 0x66f0ff : 0xff7a1c, 20);
     this._toast(map[u.type][0], map[u.type][1]);
