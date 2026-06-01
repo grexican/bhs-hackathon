@@ -14,7 +14,8 @@ import { Sound } from "./sound.js";
 const EFFECT_DURATIONS = {
   magnet: "magnetDuration", slow: "slowDuration", doublejump: "doubleJumpDuration",
   flight: "flightDuration", reverse: "reverseDuration", surge: "surgeDuration",
-  morph: "morphDuration", trip: "tripDuration",
+  morph: "morphDuration", trip: "tripDuration", lowgrav: "lowgravDuration",
+  flubber: "flubberDuration",
 };
 
 // The conductor. Builds the 3D world, runs the game loop, owns the Start ->
@@ -27,7 +28,7 @@ export class Game {
     this.baseSpeed = CONFIG.forwardSpeed;
     this._speed = CONFIG.forwardSpeed; // smoothed actual speed (eases toward the target)
     this._speedTimer = 0;
-    this._boostTimer = 0;
+    this._accelBonus = 0;  // speed bonus accumulated while riding acceleration plates
     this._seenStart = 0;   // tracks Input.startPresses for the start gate
     this._cheat = false;
     this._konami = [];
@@ -43,7 +44,7 @@ export class Game {
     this._lean = 0; // smoothed steer for a soft camera lean
     this._throttleSmooth = 0; // smoothed Up/Down throttle for the speed camera response
     this._shake = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0 };
     this._invuln = 0;
 
     this._buildRenderer();
@@ -168,7 +169,7 @@ export class Game {
     this.baseSpeed = CONFIG.forwardSpeed;
     this._speed = CONFIG.forwardSpeed;
     this._speedTimer = 0;
-    this._boostTimer = 0;
+    this._accelBonus = 0;
     this.gems = 0;
     this.score = 0;
     this.multiplier = 1;
@@ -176,7 +177,7 @@ export class Game {
     this._biome = 0;
     this._throttleSmooth = 0;
     this._invuln = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0 };
     this._clearSplats();
     this.canvas.classList.remove("is-tripping");
     this.scene.fog.color.setHex(BIOMES[0].fog);
@@ -188,11 +189,11 @@ export class Game {
 
   _effectiveSpeed() {
     let s = this.baseSpeed;
-    if (this._boostTimer > 0) s += CONFIG.boostAmount;
+    s += this._accelBonus; // built up by riding acceleration plates
     if (this._effects.surge > 0) s += CONFIG.surgeAmount;
     s += this.input.throttle * CONFIG.manualSpeed; // Up/Down arrows or thumbstick Y
     if (this._effects.slow > 0) s *= CONFIG.slowFactor;
-    return Math.max(CONFIG.minSpeed, Math.min(CONFIG.maxForwardSpeed + 10, s));
+    return Math.max(CONFIG.minSpeed, Math.min(CONFIG.maxForwardSpeed + CONFIG.accelMax + 6, s));
   }
 
   // Duration a timed effect lasts right now (cheat mode overrides everything).
@@ -256,9 +257,8 @@ export class Game {
       this._speedTimer = 0;
       this.baseSpeed = Math.min(CONFIG.maxForwardSpeed, this.baseSpeed + CONFIG.speedRampAmount);
     }
-    if (this._boostTimer > 0) this._boostTimer -= dt;
     if (this._invuln > 0) this._invuln -= dt;
-    for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip"])
+    for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip", "lowgrav", "flubber"])
       if (this._effects[k] > 0) this._effects[k] -= dt;
     // Psychedelic powerdown: recolor the view (gentle variant if reduced-motion).
     const tripping = this._effects.trip > 0;
@@ -267,10 +267,11 @@ export class Game {
     // Let the music react to whatever's active (trip warble, etc.).
     this.sound.setEffects(this._effects);
 
-    // Ease the actual speed toward the target so boost/slow ramp in and out over
-    // ~1s instead of snapping.
+    // Ease the actual speed toward the target. Easing INTO a slow-mo is extra
+    // gradual (slowEase) so it doesn't yank the speed out and drop you short.
     const target = this._effectiveSpeed();
-    this._speed += (target - this._speed) * (1 - Math.exp(-dt / 0.33));
+    const tau = this._effects.slow > 0 && target < this._speed ? CONFIG.slowEase : 0.33;
+    this._speed += (target - this._speed) * (1 - Math.exp(-dt / tau));
     const speed = this._speed;
     this.field.update(dt, this.player.position.z, speed);
 
@@ -290,8 +291,14 @@ export class Game {
       maxAirJumps: this._effects.doublejump > 0 ? 1 : 0,
       flight: this._effects.flight > 0,
       morph: this._effects.morph > 0,
+      gravityScale: this._effects.lowgrav > 0 ? CONFIG.lowgravScale : 1,
+      flubber: this._effects.flubber > 0,
     };
     const ev = this.player.update(dt, this.input, ctx, this.field);
+
+    // Acceleration plates: build speed while you ride one, ease it back off after.
+    if (this.player.onBoost) this._accelBonus = Math.min(CONFIG.accelMax, this._accelBonus + CONFIG.accelRate * dt);
+    else this._accelBonus = Math.max(0, this._accelBonus - CONFIG.accelDecay * dt);
 
     if (ev.jumped) this.sound.jump();
     this._onLanded(ev);
@@ -303,7 +310,7 @@ export class Game {
 
     // Ball speed-trail.
     const tp = this.player.position.clone(); tp.y -= this.player.radius * 0.6;
-    this.particles.trail(tp, this._boostTimer > 0 || this._effects.surge > 0 ? 0x2bff6a : 0xffc24e);
+    this.particles.trail(tp, this._accelBonus > 1 || this._effects.surge > 0 ? 0x2bff6a : 0xffc24e);
 
     // Depth grid follows underneath.
     this.grid.position.z = Math.round(this.player.position.z / 5) * 5;
@@ -334,7 +341,9 @@ export class Game {
     if (ev.landed === "bouncy") {
       this.particles.burst(p, 0xff3f7a, 22); this._shake = 0.35; this._toast("BOING!", "#ff3f7a"); this.sound.bounce();
     } else if (ev.landed === "boost") {
-      this._boostTimer = CONFIG.boostDuration; this.particles.burst(p, 0x2bff6a, 20); this._shake = 0.25; this._toast("BOOST!", "#2bff6a"); this.sound.boost();
+      this.particles.burst(p, 0x2bff6a, 16); this.sound.boost(); // acceleration plate — speed builds while you ride it
+    } else if (ev.landed === "flubber") {
+      this.particles.burst(p, 0x6aff6a, 8); this.sound.bounce(); // auto-bounce, every landing
     } else {
       this.particles.burst(p, 0xbfc6d8, 7); this.sound.land();
     }
@@ -386,8 +395,10 @@ export class Game {
     const map = {
       shield: ["🛡️ SHIELD", "#35e0ff"], magnet: ["🧲 MAGNET", "#b06bff"], slow: ["🐢 SLOW-MO", "#4dff8a"],
       doublejump: ["⏫ DOUBLE JUMP", "#7cff5a"], flight: ["🕊️ FLIGHT — hold jump!", "#ffe14d"],
+      lowgrav: ["🌙 LOW GRAVITY", "#9affd6"],
       reverse: ["🔄 REVERSED!", "#ff9f1c"], surge: ["⚡ SURGE!", "#ff3b3b"],
       morph: ["🌀 MORPH!", "#ff4bd6"], splat: ["💦 SPLAT!", "#8a5a2b"], trip: ["🌈 TRIPPING!", "#a94bff"],
+      flubber: ["🫧 FLUBBER! — steer in the air", "#6aff6a"],
     };
     // Different effects stack (run at once). Re-grabbing the same one tops its
     // timer back up without ever shortening it.
@@ -469,10 +480,12 @@ export class Game {
     add("magnet", "🧲", "#4a78ff");
     add("slow", "🐢", "#2fd9c0");
     add("doublejump", "⏫", "#c6ff3a");
+    add("lowgrav", "🌙", "#9affd6");
     add("flight", "🕊️", "#ffd24a");
     add("reverse", "🔄", "#ff9f1c");
     add("surge", "⚡", "#ff3b3b");
     add("morph", "🌀", "#ff4bd6");
+    add("flubber", "🫧", "#6aff6a");
     add("trip", "🌈", "#a94bff");
     this._hud.effects.innerHTML = rows
       .map(([icon, label, color, frac]) => {

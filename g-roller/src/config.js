@@ -7,7 +7,7 @@ export const CONFIG = {
   sideSpeed: 20,
   forwardSpeed: 24,         // starting auto-run speed (eases up from here) — 5% slower
   maxForwardSpeed: 63,
-  jumpSpeed: 31.5,          // another ~10% jump height
+  jumpSpeed: 33,            // another ~10% jump height
   gravity: 39,
   playerRadius: 0.9,
 
@@ -18,9 +18,15 @@ export const CONFIG = {
   coyoteTime: 0.1,       // still jump for this long after rolling off a ledge
   jumpBufferTime: 0.13,  // a jump pressed this soon before landing still fires
 
-  // Speed boost pads
-  boostAmount: 14,
-  boostDuration: 1.6,
+  // Acceleration plates (the green-arrow boards): the longer you ride one, the
+  // faster you go — speed builds up smoothly while on it and eases back off when
+  // you leave it.
+  accelRate: 10,      // speed gained per second while standing on a plate
+  accelMax: 22,       // cap on the accumulated acceleration bonus
+  accelDecay: 8,      // speed lost per second once you leave the plate
+
+  // Trampoline boards (the pink ones): launch you up like a boosted jump.
+  bounceBoost: 2.05,  // launch velocity = jumpSpeed * this
 
   // Manual throttle (Up/Down arrows or the thumbstick Y axis): a slight, eased
   // speed nudge. Kept small so the path stays reachable (gaps have 50% headroom).
@@ -38,42 +44,46 @@ export const CONFIG = {
   spreadDistance: 650,      // metres before the field is fully "spread out"
   difficultyDistance: 1500, // metres before hazards hit their peak (ramps in sooner)
 
-  keepAheadDistance: 175,
-  cullBehindDistance: 65,
-  pathRiseSafety: 0.6,      // fraction of max jump height a step may rise
+  keepAheadDistance: 185,
+  cullBehindDistance: 70,
+  pathRiseSafety: 0.62,     // fraction of max jump height a step may rise
   pathGapSafety: 0.5,       // fraction of jump distance a forward gap may span
-  pathLateralSafety: 0.42,  // fraction of strafe reach a sideways step may take
-  safeStraight: 4,          // first few pads run straight ahead, no spread
+  pathLateralSafety: 0.44,  // fraction of strafe reach a sideways step may take
+  safeStraight: 6,          // first few pads run straight ahead, big and easy
 
-  // --- Critical path (the guaranteed-reachable chain). Opens up with SPREAD. ---
-  gapFracLo: [0.18, 0.5],
-  gapFracHi: [0.4, 1.0],
-  lateralFrac: [0.3, 1.0],  // how much of the reachable strafe a step may use
-  riseFrac: [0.35, 1.0],    // how much of the reachable rise a step may use
-  dropDepth: [-3, -9],      // how far a step may drop
-  bandX: [18, 64],          // how far the path may wander left/right (grows wide)
-  driftEvery: [4, 8],       // steps between picking a new wander target
-  driftY: [16, 46],         // vertical reach of wander targets (the up-and-over)
+  // --- Critical path (the guaranteed-reachable chain). Opens up with SPREAD.
+  // Like a spline drawn through the city: it winds up, over, down and across in
+  // big sweeps, but every step stays within a jump's reach. ---
+  gapFracLo: [0.2, 0.52],
+  gapFracHi: [0.42, 1.0],
+  lateralFrac: [0.4, 1.0],  // how much of the reachable strafe a step may use
+  riseFrac: [0.4, 1.0],     // how much of the reachable rise a step may use
+  dropDepth: [-4, -10],     // how far a step may drop
+  bandX: [26, 108],         // how far the path may wander left/right (sprawls WIDE)
+  driftEvery: [4, 9],       // steps between picking a new wander target
+  driftY: [24, 70],         // vertical reach of wander targets (big up-and-over)
 
   // --- Scatter cloud: branch platforms strewn around the path for the sprawl. ---
-  cloudCount: [1, 4],       // extra platforms per step (grows with spread)
-  cloudRadiusX: [12, 50],   // how wide the cloud scatters
-  cloudRadiusY: [7, 26],    // how tall the cloud scatters (parallax layers)
-  cloudZSpread: 28,         // depth jitter of cloud platforms around the front
+  cloudCount: [1, 5],       // extra platforms per step (grows with spread)
+  cloudRadiusX: [18, 84],   // how wide the cloud scatters
+  cloudRadiusY: [12, 40],   // how tall the cloud scatters (parallax layers)
+  cloudZSpread: 34,         // depth jitter of cloud platforms around the front
 
-  // --- Pad size: starts long & wide, gets shorter & narrower with HAZARD. ---
-  padLenLo: [24, 8],
-  padLenHi: [34, 13],
-  padWidthLo: [13, 6],
-  padWidthHi: [16, 8.5],
+  // --- Pad size: BIG early (long winding jumps, generous landings) and only
+  // shrinking modestly with HAZARD difficulty. ---
+  padLenLo: [36, 12],
+  padLenHi: [54, 18],
+  padWidthLo: [16, 7],
+  padWidthHi: [23, 10],
 
   // --- Hazards: a small floor right after the safe intro (so spikes, obstacles
   // and moving platforms show up early), ramping to their peak. ---
   obstacleChance: [0.14, 0.6],
-  movingChance: [0.22, 0.62],     // moving boards are a big part of the mix now
-  moveAmp: [4, 11],
+  movingChance: [0.28, 0.7],      // moving boards are a big part of the mix (slightly more)
+  moveAmp: [4, 12],
   sharpTurnChance: [0.08, 0.38],
   goodPowerupChance: [0.9, 0.5],
+  roundGeoChance: [0.04, 0.4],    // hex/round pads: rare & small early, common later
 
   // --- Tunnels: a short run of glowing rings you roll through. Kept short so
   // the exit is always visible past it in the third-person camera. ---
@@ -99,17 +109,22 @@ export const CONFIG = {
   magnetRadius: 32,       // gems within this distance get sucked in
   magnetPull: 22,         // how hard the magnet yanks gems (higher = they catch up)
   slowDuration: 9,
-  slowFactor: 0.6,        // forward speed multiplier while slowed
+  slowFactor: 0.72,       // forward speed multiplier while slowed (gentler than before)
+  slowEase: 2.4,          // seconds to ease INTO the slow (so it's not sudden)
   reverseDuration: 8,
   surgeDuration: 7,
   surgeAmount: 16,        // extra forward speed while surged (a powerdown)
   invulnTime: 1.2,        // brief mercy window after a shielded hit
   doubleJumpDuration: 16, // grants one mid-air jump
-  flightDuration: 6,      // hold jump to soar (shortened — it was the strongest effect)
-  flightLift: 17,         // upward speed while flying
+  flightDuration: 25,     // hold jump to soar
+  flightLift: 18,         // upward speed while flying
   morphDuration: 11,      // ball deforms and steering goes wobbly
   morphWobble: 7,         // strength of the steering wobble while morphed
   tripDuration: 13,       // psychedelic powerdown: colors go wild, hard to see
+  lowgravDuration: 18,    // floaty moon-gravity — jumps and bounces go huge
+  lowgravScale: 0.45,     // gravity multiplier while low-grav is active
+  flubberDuration: 20,    // powerdown: every landing auto-bounces you (steer in the air!)
+  flubberBounce: 1.3,     // bounce velocity = jumpSpeed * this (a bit higher than a jump)
 
   // Secret cheat code (half-Contra, no A/B) entered on the start/game-over
   // screen: spawns extra items and makes every timed power last cheatDuration.
@@ -132,8 +147,8 @@ export const CONFIG = {
   fallMargin: 16,
 
   // Starter platform
-  starterLength: 56,
-  starterWidth: 16,
+  starterLength: 92,
+  starterWidth: 18,
 };
 
 // Themed zones the run passes through. Each retints the fog + sun and restricts

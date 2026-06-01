@@ -17,11 +17,13 @@ const POWERUP_DEFS = {
   slow:       { color: 0x2fd9c0, shape: "ico",   icon: "🐢", good: true,  weight: 5 },
   magnet:     { color: 0x4a78ff, shape: "ring",  icon: "🧲", good: true,  weight: 4 },
   doublejump: { color: 0xc6ff3a, shape: "knot",  icon: "⏫", good: true,  weight: 3 },
+  lowgrav:    { color: 0x9affd6, shape: "octa",  icon: "🌙", good: true,  weight: 2.5 },
   flight:     { color: 0xffd24a, shape: "octa",  icon: "🕊️", good: true,  weight: 1.3 },
   reverse:    { color: 0xff9f1c, shape: "box",   icon: "🔄", good: false, weight: 5 },
   surge:      { color: 0xff3b3b, shape: "cone",  icon: "⚡", good: false, weight: 3 },
   splat:      { color: 0x8a5a2b, shape: "box",   icon: "💦", good: false, weight: 3 },
   morph:      { color: 0xff4bd6, shape: "ico",   icon: "🌀", good: false, weight: 2.5 },
+  flubber:    { color: 0x6aff6a, shape: "ico",   icon: "🫧", good: false, weight: 2.5 },
   trip:       { color: 0xa94bff, shape: "tetra", icon: "🌈", good: false, weight: 1.3 },
 };
 const GOOD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => POWERUP_DEFS[k].good);
@@ -69,7 +71,6 @@ export class PlatformField {
     this._geoCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 28);
     this._geoHex = new THREE.CylinderGeometry(0.5, 0.5, 1, 6);
     this._gemGeo = new THREE.OctahedronGeometry(0.55);
-    this._ringGeo = new THREE.TorusGeometry(CONFIG.tunnelRadius, 0.35, 12, 32);
 
     this._time = 0;
     this._difficulty = 0;  // hazard ramp (slow)
@@ -114,7 +115,13 @@ export class PlatformField {
   _texFor(name, w, len) {
     const t = this.tex[name].clone();
     t.needsUpdate = true;
-    t.repeat.set(Math.max(1, w / 4), Math.max(1, len / 4));
+    if (name === "boost") {
+      // Boost arrows: one column, tiled along the length so they always run
+      // straight down the board (forward), never sideways.
+      t.repeat.set(1, Math.max(1, Math.round(len / 7)));
+    } else {
+      t.repeat.set(Math.max(1, w / 4), Math.max(1, len / 4));
+    }
     return t;
   }
 
@@ -235,7 +242,7 @@ export class PlatformField {
     const z = this._cursor.z + gap + len / 2;
 
     const p = this._addBoard({ x, y, z, w, len, hy: 0.5, geoType: "box", type: "normal", texName: "concrete" });
-    this._addTunnelRings(p, len);
+    this._addTunnelTube(p, len);
     this._cursor = { x, y, z: z + len / 2 };
     this._stepsSinceTunnel = 0;
     this._stepIndex++;
@@ -244,20 +251,21 @@ export class PlatformField {
     for (let k = 0; k < 4; k++) this._addGem(x, y + 1.4, z - len / 2 + (k + 0.7) * (len / 5));
   }
 
-  _addTunnelRings(p, len) {
-    const count = CONFIG.tunnelRings;
-    const spacing = len / count;
+  // A full semi-transparent tube you roll through (kept short so the exit shows
+  // through it in the third-person view).
+  _addTunnelTube(p, len) {
     const r = CONFIG.tunnelRadius;
-    for (let k = 0; k < count; k++) {
-      const hue = ((k / count) * 0.55 + 0.55) % 1; // gradient purple -> cyan down the tube
-      const col = new THREE.Color().setHSL(hue, 0.8, 0.6);
-      const ring = new THREE.Mesh(this._ringGeo, new THREE.MeshStandardMaterial({
-        color: col, emissive: col, emissiveIntensity: 0.9, metalness: 0.4, roughness: 0.3,
-        transparent: true, opacity: 0.7,
-      }));
-      ring.position.set(0, r - 1.4, -p.hz + (k + 0.5) * spacing);
-      p.mesh.add(ring);
-    }
+    const geo = new THREE.CylinderGeometry(r, r, len, 30, 1, true); // open-ended cylinder
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x8a5bff, emissive: 0x6a3bff, emissiveIntensity: 0.55,
+      metalness: 0.3, roughness: 0.35, transparent: true, opacity: 0.32,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    const tube = new THREE.Mesh(geo, mat);
+    tube.rotation.x = Math.PI / 2;   // align the tube axis with z (the travel direction)
+    tube.position.set(0, r - 1.4, 0);
+    p.mesh.add(tube);
+    p._geo = geo; // dispose this geometry when the platform is culled
   }
 
   _addGem(x, y, z) {
@@ -328,9 +336,12 @@ export class PlatformField {
     return top + (chance(0.5) ? rand(0.9, 1.3) : rand(4.3, 5.6));
   }
 
-  // Does a candidate box overlap any nearby existing platform?
+  // Does a candidate box overlap any nearby STATIC platform? Moving boards are
+  // ignored — they're allowed to slide over things (that's the only case where
+  // overlap is OK).
   _overlaps(x, y, z, hx, hy, hz) {
     for (const p of this.platforms) {
+      if (p.mover) continue;
       if (Math.abs(p.pos.z - z) > p.hz + hz + 40) continue;
       if (Math.abs(p.pos.x - x) <= p.hx + hx + 1 &&
           Math.abs(p.pos.y - y) <= p.hy + hy + 1.5 &&
@@ -339,16 +350,36 @@ export class PlatformField {
     return false;
   }
 
+  // Remove any static decor platforms that overlap the just-placed critical
+  // platform (the path takes priority), so static pieces never sit inside each
+  // other. Movers are left alone.
+  _clearOverlapping(keep) {
+    for (let i = this.platforms.length - 1; i >= 0; i--) {
+      const p = this.platforms[i];
+      if (p === keep || p.mover) continue;
+      if (Math.abs(p.pos.z - keep.pos.z) <= p.hz + keep.hz &&
+          Math.abs(p.pos.x - keep.pos.x) <= p.hx + keep.hx &&
+          Math.abs(p.pos.y - keep.pos.y) <= p.hy + keep.hy + 1) {
+        this._disposePlatform(p);
+        this.platforms.splice(i, 1);
+      }
+    }
+  }
+
   // --- Path generation ------------------------------------------------------
 
-  _randGeo() {
-    // Mix up the shape AND thickness so boards aren't all identical slabs.
+  _randGeo(roundChance) {
+    // Hex/round pads are rare early (small accents) and become common later;
+    // everything else is a box with varied thickness.
+    if (Math.random() < roundChance) {
+      return chance(0.5)
+        ? { geoType: "cyl", hy: rand(0.5, 1.0) }
+        : { geoType: "hex", hy: rand(0.5, 1.0) };
+    }
     const roll = Math.random();
-    if (roll < 0.45) return { geoType: "box", hy: 0.6 };
-    if (roll < 0.62) return { geoType: "box", hy: rand(1.3, 2.4) }; // thick block
-    if (roll < 0.74) return { geoType: "box", hy: 0.28 };           // thin slab
-    if (roll < 0.88) return { geoType: "cyl", hy: rand(0.5, 1.0) }; // round pad
-    return { geoType: "hex", hy: rand(0.5, 1.0) };                  // hex pad
+    if (roll < 0.6) return { geoType: "box", hy: 0.6 };
+    if (roll < 0.82) return { geoType: "box", hy: rand(1.3, 2.4) }; // thick block
+    return { geoType: "box", hy: 0.28 };                            // thin slab
   }
 
   // Extend the world by one step: lay the next GUARANTEED-REACHABLE critical
@@ -386,11 +417,11 @@ export class PlatformField {
       this._drift.y = clamp(this._cursor.y + rand(-vy * 0.7, vy), -30, 55);
     }
 
-    const g = this._randGeo();
+    const g = this._randGeo(ramp(CONFIG.roundGeoChance, sd));
     const round = g.geoType !== "box";
     const w = rand(ramp(CONFIG.padWidthLo, dd), ramp(CONFIG.padWidthHi, dd));
     let len = rand(ramp(CONFIG.padLenLo, dd), ramp(CONFIG.padLenHi, dd));
-    if (round) len = Math.min(len, rand(8, 14));
+    if (round) len = Math.min(len, rand(10, 18));
 
     // Reachable step budgets (open up with SPREAD).
     const gap = clamp(rand(maxGap * ramp(CONFIG.gapFracLo, sd), maxGap * ramp(CONFIG.gapFracHi, sd)), 3, maxGap);
@@ -431,9 +462,13 @@ export class PlatformField {
       }
     }
 
-    const p = this._addBoard({ x, y: yCenter, z, w, len, hy: g.hy, geoType: g.geoType, type, texName, slopeZ, curve });
+    // Acceleration plates are always flat boxes so the forward arrows read right.
+    const geoType = type === "boost" ? "box" : g.geoType;
+    const hy = type === "boost" ? 0.5 : g.hy;
+    const p = this._addBoard({ x, y: yCenter, z, w, len, hy, geoType, type, texName, slopeZ, curve });
     const exitY = slopeZ ? yCenter + slopeZ * (len / 2) : yCenter;
     this._cursor = { x, y: exitY, z: z + len / 2 };
+    this._clearOverlapping(p); // static pieces never sit inside each other
 
     if (!safe) {
       // Keep movers and obstacles on plain flat boards (no ramps/curves).

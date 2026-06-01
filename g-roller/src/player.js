@@ -6,8 +6,8 @@ const ONE = new THREE.Vector3(1, 1, 1);
 // Effects without a dedicated mesh get an orbiting glyph around the ball so you
 // can always see what you've got running. (flight=wings, doublejump=board,
 // shield=bubble are shown separately.)
-const ORBIT_KEYS = ["magnet", "slow", "reverse", "surge", "morph", "trip"];
-const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡", morph: "🌀", trip: "🌈" };
+const ORBIT_KEYS = ["magnet", "slow", "reverse", "surge", "morph", "trip", "lowgrav", "flubber"];
+const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡", morph: "🌀", trip: "🌈", lowgrav: "🌙", flubber: "🫧" };
 
 // A gold checker-grid skin for the ball so you can read its spin under the light.
 function ballTexture() {
@@ -146,7 +146,7 @@ export class Player {
     if (ctx.morph) steer = steer * 0.65 + Math.sin(this._t * 9) * (CONFIG.morphWobble / CONFIG.sideSpeed);
     v.x = steer * CONFIG.sideSpeed;
     v.z = ctx.forwardSpeed;
-    v.y -= CONFIG.gravity * dt;
+    v.y -= CONFIG.gravity * (ctx.gravityScale || 1) * dt; // low-grav powerup floats you
 
     const prevBottom = p.y - this.radius;
     p.x += v.x * dt;
@@ -158,6 +158,7 @@ export class Player {
     const prevRide = this._ridePlat;
     this.grounded = false;
     this._ridePlat = null;
+    this.onBoost = false; // true while standing on an acceleration plate (read by game)
     if (v.y <= 0) {
       const newBottom = p.y - this.radius;
       let bestTop = -Infinity, best = null;
@@ -172,16 +173,26 @@ export class Player {
         if (newBottom <= top + 0.05 && top > bestTop) { bestTop = top; best = plat; }
       }
       if (best) {
+        let fresh = !prevRide;
         if (best.type === "bouncy") {
-          v.y = CONFIG.jumpSpeed * 1.55; this.airJumps = 0; // bouncy launch re-arms double jump
+          // Trampoline: a big boosted launch (goes huge under low gravity).
+          v.y = CONFIG.jumpSpeed * CONFIG.bounceBoost; this.airJumps = 0;
+        } else if (ctx.flubber) {
+          // Flubber powerdown: auto-bounce off ANY surface, a bit higher than a
+          // jump — you have to steer in the air to stay on course.
+          p.y = bestTop + this.radius; v.y = CONFIG.jumpSpeed * CONFIG.flubberBounce; this.airJumps = 0;
+          fresh = true; landed = "flubber";
         } else {
           p.y = bestTop + this.radius; v.y = 0; this.grounded = true; this._ridePlat = best; this.airJumps = 0;
+          if (best.type === "boost") this.onBoost = true; // game ramps speed while you ride it
           // Curved board: drift toward the middle (concave) or off the sides (convex).
           if (best.curve) p.x += -CONFIG.curveForce * best.curve * (p.x - best.pos.x) * dt;
         }
         this.lastGroundedY = bestTop;
-        if (!prevRide) this.jumpCount += 1; // count fresh landings only, not every grounded frame
-        landed = best.type;
+        // Only report a fresh landing (not every grounded frame) so landing
+        // sounds don't fire continuously while you ride a board.
+        if (fresh && landed === null) { this.jumpCount += 1; landed = best.type; }
+        else if (landed === "flubber") this.jumpCount += 1;
       }
     }
     // Launch off the top of an up-ramp: keep some of the climb as a hop.

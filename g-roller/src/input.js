@@ -48,8 +48,9 @@ export class Input {
     this.throttle = (this._up ? 1 : 0) - (this._down ? 1 : 0);
   }
 
-  // Left thumbstick: drag left/right for analog steering. Horizontal only — the
-  // vertical axis is intentionally ignored so steering never affects speed/zoom.
+  // Left thumbstick: drag left/right to steer; push clearly UP/DOWN to change
+  // speed. Throttle only engages on a vertical-dominant push, so ordinary
+  // steering never nudges the speed/zoom.
   _bindThumbstick() {
     const stick = document.getElementById("stick");
     const thumb = document.getElementById("stick-thumb");
@@ -64,14 +65,16 @@ export class Input {
       let dy = e.clientY - (r.top + max);
       const len = Math.hypot(dx, dy);
       if (len > max) { dx = (dx / len) * max; dy = (dy / len) * max; }
-      thumb.style.transform = `translate(${dx}px, ${dy}px)`; // thumb still slides visually
+      thumb.style.transform = `translate(${dx}px, ${dy}px)`;
       this.steer = Math.max(-1, Math.min(1, dx / max));
+      // Only count vertical pushes as throttle (|dy| clearly > |dx|).
+      this.throttle = Math.abs(dy) > Math.abs(dx) * 1.3 ? Math.max(-1, Math.min(1, -dy / max)) : 0;
     };
     const end = (e) => {
       if (e.pointerId !== active) return;
       active = null;
       thumb.style.transform = "translate(0,0)";
-      this.steer = 0;
+      this.steer = 0; this.throttle = 0;
     };
     stick.addEventListener("pointerdown", (e) => { active = e.pointerId; e.preventDefault(); move(e); });
     window.addEventListener("pointermove", move);
