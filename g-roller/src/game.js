@@ -9,6 +9,7 @@ import { PlatformField, POWERUP_DEFS } from "./platforms.js";
 import { Particles } from "./effects.js";
 import { Background } from "./background.js";
 import { Sound } from "./sound.js";
+import { iconImg } from "./icons.js";
 
 // Maps a timed effect's state key to its CONFIG duration key.
 const EFFECT_DURATIONS = {
@@ -492,7 +493,7 @@ export class Game {
       for (const key in this._puButtons) {
         const on = this.field.enabledPowerups.has(key);
         const b = this._puButtons[key];
-        b.textContent = `${POWERUP_DEFS[key].icon} ${key}`;
+        b.innerHTML = `${iconImg(key, POWERUP_DEFS[key].color, 16)} ${key}`;
         b.classList.toggle("off", !on);
       }
     }
@@ -917,15 +918,15 @@ export class Game {
 
   _applyPowerup(u) {
     const map = {
-      shield: ["🛡️ SHIELD", "#35e0ff"], magnet: ["🧲 MAGNET", "#b06bff"], slow: ["🐢 SLOW-MO", "#4dff8a"],
-      doublejump: ["⏫ DOUBLE JUMP", "#7cff5a"], flight: ["🕊️ FLIGHT — hold jump!", "#ffe14d"],
-      lowgrav: ["🌕 LOW GRAVITY", "#9affd6"],
-      reverse: ["🔄 REVERSED!", "#ff9f1c"], surge: ["⚡ SURGE!", "#ff3b3b"],
-      morph: ["🌀 MORPH!", "#ff4bd6"], splat: ["💦 SPLAT!", "#8a5a2b"], trip: ["🌈 TRIPPING!", "#a94bff"],
-      flubber: ["🫧 FLUBBER! — steer in the air", "#6aff6a"],
-      blackout: ["🌑 BLACKOUT! — follow the edge lights", "#9fb3d0"],
-      fog: ["🌫️ FOGGED! — distance is gone", "#9aa6b5"],
-      rain: ["🌧️ DOWNPOUR! — wipers can't keep up", "#9fb8d0"],
+      shield: ["SHIELD", "#35e0ff"], magnet: ["MAGNET", "#b06bff"], slow: ["SLOW-MO", "#4dff8a"],
+      doublejump: ["DOUBLE JUMP", "#7cff5a"], flight: ["FLIGHT — hold jump!", "#ffe14d"],
+      lowgrav: ["LOW GRAVITY", "#9affd6"],
+      reverse: ["REVERSED!", "#ff9f1c"], surge: ["SURGE!", "#ff3b3b"],
+      morph: ["MORPH!", "#ff4bd6"], splat: ["SPLAT!", "#8a5a2b"], trip: ["TRIPPING!", "#a94bff"],
+      flubber: ["FLUBBER! — steer in the air", "#6aff6a"],
+      blackout: ["BLACKOUT! — follow the edge lights", "#9fb3d0"],
+      fog: ["FOGGED! — distance is gone", "#9aa6b5"],
+      rain: ["DOWNPOUR! — wipers can't keep up", "#9fb8d0"],
     };
     // Different effects stack (run at once). Re-grabbing the SAME timed one ADDS its
     // full duration onto whatever's left, so a second blackout extends the blackout
@@ -935,7 +936,7 @@ export class Game {
     else this._effects[u.type] = (this._effects[u.type] || 0) + this._dur(u.type);
 
     this.particles.burst(u.pos, u.good ? 0x66f0ff : 0xff7a1c, 20);
-    this._toast(map[u.type][0], map[u.type][1]);
+    this._toast(map[u.type][0], map[u.type][1], u.type);
     this.sound.power(u.good);
     if (!u.good) this._shake = 0.3;
   }
@@ -1020,9 +1021,11 @@ export class Game {
     this._refreshHud();
   }
 
-  _toast(text, color = "#2bd6ff") {
+  _toast(text, color = "#2bd6ff", iconKey = null) {
     const t = this._hud.toast;
-    t.textContent = text;
+    // Powerup toasts lead with their vector icon; plain toasts (BOING/BOOST) stay text.
+    if (iconKey) t.innerHTML = `${iconImg(iconKey, color, 30)} ${text}`;
+    else t.textContent = text;
     t.style.color = color;
     t.style.textShadow = `0 0 24px ${color}aa`;
     t.classList.remove("toast--show");
@@ -1033,26 +1036,26 @@ export class Game {
   _renderEffects() {
     const e = this._effects;
     const rows = [];
-    if (e.shield) rows.push(["🛡️", "Shield", "#9fe0ff", 1]); // no timer — lasts till hit
-    const add = (key, icon, color) => {
-      if (e[key] > 0) rows.push([icon, `${Math.ceil(e[key])}s`, color, e[key] / this._dur(key)]);
+    if (e.shield) rows.push(["shield", "Shield", "#9fe0ff", 1]); // no timer — lasts till hit
+    const add = (key, color) => {
+      if (e[key] > 0) rows.push([key, `${Math.ceil(e[key])}s`, color, e[key] / this._dur(key)]);
     };
-    add("magnet", "🧲", "#4a78ff");
-    add("slow", "🐢", "#2fd9c0");
-    add("doublejump", "⏫", "#c6ff3a");
-    add("lowgrav", "🌙", "#9affd6");
-    add("flight", "🕊️", "#ffd24a");
-    add("reverse", "🔄", "#ff9f1c");
-    add("surge", "⚡", "#ff3b3b");
-    add("morph", "🌀", "#ff4bd6");
-    add("flubber", "🫧", "#6aff6a");
-    add("blackout", "🌑", "#9fb3d0");
-    add("fog", "🌫️", "#9aa6b5");
-    add("trip", "🌈", "#a94bff");
+    add("magnet", "#4a78ff");
+    add("slow", "#2fd9c0");
+    add("doublejump", "#c6ff3a");
+    add("lowgrav", "#9affd6");
+    add("flight", "#ffd24a");
+    add("reverse", "#ff9f1c");
+    add("surge", "#ff3b3b");
+    add("morph", "#ff4bd6");
+    add("flubber", "#6aff6a");
+    add("blackout", "#9fb3d0");
+    add("fog", "#9aa6b5");
+    add("trip", "#a94bff");
     this._hud.effects.innerHTML = rows
-      .map(([icon, label, color, frac]) => {
+      .map(([key, label, color, frac]) => {
         const w = Math.max(0, Math.min(1, frac)) * 100;
-        return `<span class="chip" style="--c:${color}"><span class="chip__top">${icon} <b>${label}</b></span><span class="chip__bar"><span class="chip__fill" style="width:${w}%"></span></span></span>`;
+        return `<span class="chip" style="--c:${color}"><span class="chip__top">${iconImg(key, color, 18)} <b>${label}</b></span><span class="chip__bar"><span class="chip__fill" style="width:${w}%"></span></span></span>`;
       })
       .join("");
   }

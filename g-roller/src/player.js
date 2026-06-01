@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { CONFIG } from "./config.js";
+import { iconCanvas } from "./icons.js";
+import { POWERUP_DEFS } from "./platforms.js";
 
 const ONE = new THREE.Vector3(1, 1, 1);
 
@@ -10,7 +12,6 @@ const ONE = new THREE.Vector3(1, 1, 1);
 // ones (morph wobble, trip rainbow, lowgrav float, flubber bounce, blackout dark,
 // fog) are dropped here — they still show as countdown chips in the HUD.
 const ORBIT_KEYS = ["magnet", "slow", "reverse", "surge"];
-const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡", morph: "🌀", trip: "🌈", lowgrav: "🌕", flubber: "🫧", blackout: "🌑", fog: "🌫️" };
 const ORBIT_RING_SEG = 48; // segments in a glyph's depletion ring
 
 // Selectable ball skins (chosen in the ⚙️ panel). Each entry names a procedural
@@ -883,7 +884,7 @@ export class Player {
     }
     active.forEach((k, i) => {
       let s = this._orbitSprites[k];
-      if (!s) { s = this._emojiSprite(ORBIT_EMOJI[k]); this._orbit.add(s); this._orbitSprites[k] = s; }
+      if (!s) { s = this._emojiSprite(k); this._orbit.add(s); this._orbitSprites[k] = s; }
       let ring = this._orbitRings[k];
       if (!ring) { ring = this._makeOrbitRing(); this._orbit.add(ring); this._orbitRings[k] = ring; }
       const ang = t * 1.3 + (i / active.length) * Math.PI * 2;
@@ -1009,15 +1010,14 @@ export class Player {
     return m;
   }
 
-  _emojiSprite(emoji) {
-    let tex = this._emojiTex[emoji];
+  // A camera-facing vector glyph for an active effect orbiting the ball. Drawn
+  // (not emoji) and tinted by the effect's own color, cached per key.
+  _emojiSprite(key) {
+    let tex = this._emojiTex[key];
     if (!tex) {
-      const c = document.createElement("canvas"); c.width = c.height = 48;
-      const ctx = c.getContext("2d");
-      ctx.font = "34px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(emoji, 24, 27);
-      tex = new THREE.CanvasTexture(c);
-      this._emojiTex[emoji] = tex;
+      const def = POWERUP_DEFS[key];
+      tex = new THREE.CanvasTexture(iconCanvas(key, def ? def.color : 0xffffff));
+      this._emojiTex[key] = tex;
     }
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
     s.scale.set(1.1, 1.1, 1);

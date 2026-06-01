@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { CONFIG, jumpReach, ramp, smoothstep, BIOMES, biomeAt } from "./config.js";
 import { makeTextureLibrary, GROUND_TEXTURES } from "./textures.js";
+import { iconCanvas } from "./icons.js";
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
@@ -262,7 +263,7 @@ export class PlatformField {
     if (runePayload) {
       p.runePayload = runePayload;
       p._runeSpent = false;
-      const glyph = this._iconSprite(POWERUP_DEFS[runePayload.type].icon);
+      const glyph = this._iconSprite(runePayload.type);
       glyph.position.set(0, hy + 1.4, 0); // sit just above the (short) plate
       group.add(glyph);
     }
@@ -661,7 +662,7 @@ export class PlatformField {
       color: def.color, emissive: def.color, emissiveIntensity: 0.85, roughness: 0.25, metalness: 0.3,
     }));
     group.add(mesh);
-    group.add(this._iconSprite(def.icon)); // floating glyph above the shape
+    group.add(this._iconSprite(type)); // floating glyph above the shape
     group.position.set(x, y, z);
     this.scene.add(group);
     this.powerups.push({ mesh: group, type, good, grounded, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
@@ -683,17 +684,17 @@ export class PlatformField {
     return g;
   }
 
-  // A camera-facing emoji glyph that hovers above a pickup. Material is cached.
-  _iconSprite(emoji) {
+  // A camera-facing vector glyph that hovers above a pickup or rune plate.
+  // Drawn (not emoji) so every effect is instantly recognizable. Material cached
+  // per effect key, tinted by that effect's own color.
+  _iconSprite(key) {
     if (!this._iconCache) this._iconCache = {};
-    let mat = this._iconCache[emoji];
+    let mat = this._iconCache[key];
     if (!mat) {
-      const c = document.createElement("canvas"); c.width = c.height = 64;
-      const ctx = c.getContext("2d");
-      ctx.font = "46px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(emoji, 32, 36);
+      const def = POWERUP_DEFS[key];
+      const c = iconCanvas(key, def ? def.color : 0xffffff);
       mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false });
-      this._iconCache[emoji] = mat;
+      this._iconCache[key] = mat;
     }
     const s = new THREE.Sprite(mat);
     s.scale.set(1.5, 1.5, 1);
