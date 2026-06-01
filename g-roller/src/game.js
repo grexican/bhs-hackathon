@@ -5,7 +5,7 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { CONFIG, BIOMES, biomeAt } from "./config.js";
 import { Input } from "./input.js";
 import { Player } from "./player.js";
-import { PlatformField } from "./platforms.js";
+import { PlatformField, POWERUP_DEFS } from "./platforms.js";
 import { Particles } from "./effects.js";
 import { Background } from "./background.js";
 import { Sound } from "./sound.js";
@@ -263,10 +263,18 @@ export class Game {
     this._syncSettings();
   }
 
-  // Cheat-only: flip ALL pickup spawning off/on (handy for testing pure movement).
-  _togglePowerups() {
-    this.field.powerupsOn = !this.field.powerupsOn;
-    this._toast(this.field.powerupsOn ? "🎁 POWERUPS ON" : "🚫 POWERUPS OFF", "#ffd34e");
+  // Cheat-only: allow/block a single powerup type from spawning. Disable everything
+  // but the one you want and (with cheat's 5x items) it shows up constantly to test.
+  _togglePowerupType(key) {
+    const s = this.field.enabledPowerups;
+    if (s.has(key)) s.delete(key); else s.add(key);
+    this._syncSettings();
+  }
+
+  _setAllPowerups(on) {
+    const s = this.field.enabledPowerups;
+    s.clear();
+    if (on) for (const k of Object.keys(POWERUP_DEFS)) s.add(k);
     this._syncSettings();
   }
 
@@ -281,6 +289,19 @@ export class Game {
   _buildSettings() {
     const $ = (id) => document.getElementById(id);
     this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty"), powerups: $("set-powerups") };
+
+    // Build the cheat-only per-powerup spawn-pool chips (one toggle per type).
+    const grid = $("set-powerups-grid");
+    this._puButtons = {};
+    for (const key of Object.keys(POWERUP_DEFS)) {
+      const b = document.createElement("button");
+      b.className = "settings__pu";
+      b.addEventListener("click", () => this._togglePowerupType(key));
+      grid.appendChild(b);
+      this._puButtons[key] = b;
+    }
+    $("set-pu-all").addEventListener("click", () => this._setAllPowerups(true));
+    $("set-pu-none").addEventListener("click", () => this._setAllPowerups(false));
     const panel = $("settings-panel");
     const open = (v) => panel.classList.toggle("open", v);
     $("settings-btn").addEventListener("click", () => { this._syncSettings(); open(true); });
@@ -292,7 +313,6 @@ export class Game {
     this._settings.motion.addEventListener("click", () => this._toggleReduced());
     this._settings.view.addEventListener("click", () => this._toggleView());
     this._settings.difficulty.addEventListener("click", () => this._cycleDifficulty());
-    this._settings.powerups.addEventListener("click", () => this._togglePowerups());
     this._syncSettings();
   }
 
@@ -305,10 +325,15 @@ export class Game {
     s.motion.textContent = `🌿 Reduced Motion: ${this._reducedMotion ? "On" : "Off"}`;
     s.view.textContent = `👁 View: ${this._firstPerson ? "First-person" : "Third-person"}`;
     s.difficulty.textContent = `🎚️ Difficulty: ${CONFIG.difficultyLevels[this._diffLevel].name}`;
-    // Powerups switch is a cheat-only tool — only show the row when cheat is on.
-    if (s.powerups) {
-      s.powerups.style.display = this._cheat ? "" : "none";
-      s.powerups.textContent = `🎁 Powerups: ${this.field.powerupsOn ? "On" : "Off"}`;
+    // Per-powerup spawn pool is a cheat-only tool — only show it when cheat is on.
+    if (s.powerups) s.powerups.style.display = this._cheat ? "" : "none";
+    if (this._puButtons) {
+      for (const key in this._puButtons) {
+        const on = this.field.enabledPowerups.has(key);
+        const b = this._puButtons[key];
+        b.textContent = `${POWERUP_DEFS[key].icon} ${key}`;
+        b.classList.toggle("off", !on);
+      }
     }
     this._saveSettings(); // every toggle routes through here, so this captures all changes
   }
@@ -349,7 +374,7 @@ export class Game {
   _toggleCheat() {
     this._cheat = !this._cheat;
     this.field.itemMultiplier = this._cheat ? CONFIG.cheatItemMultiplier : 1;
-    if (!this._cheat) this.field.powerupsOn = true; // leaving cheat can't leave a normal run powerup-less
+    if (!this._cheat) this._setAllPowerups(true); // leaving cheat restores the full spawn pool
     this._toast(
       this._cheat ? `🎮 CHEAT ON · ${CONFIG.cheatItemMultiplier}× items` : "CHEAT OFF",
       "#ffd34e"

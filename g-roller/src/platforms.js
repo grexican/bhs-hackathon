@@ -12,7 +12,7 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // know what you're about to touch. GOOD = cool colors, BAD (powerdowns) = warm.
 // weight = spawn frequency: simpler / milder effects are common, powerful or
 // harsh ones (flight, trip) are rare.
-const POWERUP_DEFS = {
+export const POWERUP_DEFS = {
   shield:     { color: 0x9fe0ff, shape: "ring",  icon: "🛡️", good: true,  weight: 5 },
   slow:       { color: 0x2fd9c0, shape: "ico",   icon: "🐢", good: true,  weight: 5 },
   magnet:     { color: 0x4a78ff, shape: "ring",  icon: "🧲", good: true,  weight: 4 },
@@ -89,7 +89,9 @@ export class PlatformField {
     this._spreadD = 0;     // spread ramp (fast)
     this.itemMultiplier = 1; // cheat code bumps this to spawn extra gems/powerups
     this.difficultyMult = 1; // Easy/Medium/Hard scales the floor of the hazard ramps
-    this.powerupsOn = true;  // cheat-mode switch: turn pickup spawning fully off/on
+    // Cheat-mode test tool: which powerup types are allowed to spawn. Default = all.
+    // Disable all but one and (with cheat's 5x items) it spawns constantly to test.
+    this.enabledPowerups = new Set(Object.keys(POWERUP_DEFS));
     this._biomeTextures = BIOMES[0].textures;
     this._stepIndex = 0;
     this._stepsSinceTunnel = 0;
@@ -355,9 +357,19 @@ export class PlatformField {
   // Power pickup, telegraphed by color + shape + a glyph sprite so you can read it
   // from a distance. Powerdowns are the majority (they act like dodgeable obstacles)
   // and skew further that way with difficulty.
-  _addPowerup(x, top, z, d = 0) {
+  // Pick a powerup type honoring the good/bad ratio, but only from types enabled in
+  // the cheat test menu. Falls back to the other pool's enabled types; null if none.
+  _pickPowerupType(d) {
     const good = chance(ramp(CONFIG.goodPowerupChance, d));
-    const type = weightedPick(good ? GOOD_POWERUPS : BAD_POWERUPS);
+    const inPool = (list) => list.filter((k) => this.enabledPowerups.has(k));
+    const first = inPool(good ? GOOD_POWERUPS : BAD_POWERUPS);
+    const pool = first.length ? first : inPool(good ? BAD_POWERUPS : GOOD_POWERUPS);
+    return pool.length ? weightedPick(pool) : null;
+  }
+
+  _addPowerup(x, top, z, d = 0) {
+    const type = this._pickPowerupType(d);
+    if (!type) return; // every type disabled in the cheat test menu → nothing spawns
     const def = POWERUP_DEFS[type];
 
     // Everything spawns GROUNDED on the platform now (no floating pickups) — right
@@ -582,7 +594,7 @@ export class PlatformField {
     for (let k = 0; k < this.itemMultiplier; k++) {
       const ox = (k - (this.itemMultiplier - 1) / 2) * 3;
       if (chance(0.4)) this._addGem(x + ox, py + p.hy, z);
-      if (this.powerupsOn && chance(CONFIG.powerupChance)) this._addPowerup(x + ox, py + p.hy, z + rand(-len * 0.3, len * 0.3), hd);
+      if (chance(CONFIG.powerupChance)) this._addPowerup(x + ox, py + p.hy, z + rand(-len * 0.3, len * 0.3), hd);
     }
 
     if (!safe) this._scatterCloud(x, exitY, z, sd, hd);
@@ -617,7 +629,7 @@ export class PlatformField {
       for (let m = 0; m < this.itemMultiplier; m++) {
         const ox = (m - (this.itemMultiplier - 1) / 2) * 2.5;
         if (chance(0.5)) this._addGem(x + ox, y + p.hy, z); // reward exploring off-path
-        if (this.powerupsOn && chance(0.2)) this._addPowerup(x + ox, y + p.hy, z, hd);
+        if (chance(0.2)) this._addPowerup(x + ox, y + p.hy, z, hd);
       }
     }
   }
