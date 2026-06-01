@@ -162,7 +162,7 @@ export class PlatformField {
     return t;
   }
 
-  _addBoard({ x, y, z, w, len, hy, geoType, type, texName, slopeZ = 0, curve = 0, leanX = 0, runePayload = null, spline = null }) {
+  _addBoard({ x, y, z, w, len, hy, geoType, type, texName, slopeZ = 0, curve = 0, leanX = 0, yaw = 0, runePayload = null, spline = null }) {
     const group = new THREE.Group();
     group.position.set(x, y, z);
 
@@ -222,6 +222,10 @@ export class PlatformField {
     // edge and drops the -x edge; collision raycasts the real tilted mesh, so the
     // ball sits on the bank and player.js drags it toward the low (-x) side.
     if (leanX) visual.rotation.z = Math.atan(leanX);
+    // Yaw: rotate the board's HEADING about the vertical axis so it points off
+    // diagonally. The surface stays horizontal (normal still +Y), so the down-ray
+    // collision is unaffected — it's just a turned runway you strafe along.
+    if (yaw) visual.rotation.y = yaw;
     visual.castShadow = true;
     visual.receiveShadow = true;
     group.add(visual);
@@ -248,6 +252,7 @@ export class PlatformField {
     p.slopeZ = slopeZ;
     p.curve = curve;
     p.leanX = leanX;
+    p.yaw = yaw;
     visual.userData.platform = p; // raycast maps a hit back to its Platform
     p.surfaceMesh = visual;       // the one landable mesh (obstacles/tube added later aren't this)
 
@@ -843,48 +848,72 @@ export class PlatformField {
     // and/or bow, in any combination, on top of its shape/size/texture. Rolled here
     // (before placement) so a longer ramp doesn't throw off the gap that follows it.
     // (Tunnels are a separate structure and stay flat for now.)
-    let slopeZ = 0, curve = 0, leanX = 0;
-    if (!safe && type !== "flipper" && type !== "rune") { // flippers + runes stay flat (no slope/curve/lean) so the rune reads clearly and a jump can clear a bad one
-      if (chance(ramp(CONFIG.rampChance, sd))) {
-        slopeZ = (chance(0.5) ? 1 : -1) * rand(CONFIG.rampSlope[0], CONFIG.rampSlope[1]);
-        if (!round) len *= ramp(CONFIG.rampLenBoost, sd); // box ramps run longer; keep round tiles small
-      }
-      if (!round && chance(ramp(CONFIG.curveChance, sd))) {
-        // Random magnitude: most are gentle, some are dramatic half-pipes. Concave
-        // (+, funnels in) favored over convex (-, rolls off). curveForce reads this
-        // magnitude, so a deep bowl also pulls you sideways hard ("gravity").
-        const mag = rand(CONFIG.curveAmount[0], CONFIG.curveAmount[1]);
-        curve = (chance(0.7) ? 1 : -1) * mag;
-      }
-      // Sideways bank — independent of ramp/curve, so a board can climb AND lean.
-      // Chance ramps with difficulty (_hazRamp); the magnitude's upper bound grows
-      // with spread (ramp(.., sd)), so early boards are barely tilted and later ones
-      // bank for real. Side is random. player.js drags you toward the low edge.
-      if (chance(this._hazRamp(CONFIG.leanChance, hd))) {
-        const mag = rand(CONFIG.leanAmount[0], ramp(CONFIG.leanAmount, sd));
-        leanX = (chance(0.5) ? 1 : -1) * mag;
+    let slopeZ = 0, curve = 0, leanX = 0, yaw = 0;
+    if (!safe && type !== "flipper" && type !== "rune") { // flippers + runes stay flat (no slope/curve/lean/yaw) so the rune reads clearly and a jump can clear a bad one
+      // Yaw (a diagonal runway) is rolled FIRST and is EXCLUSIVE: a yawed board stays
+      // flat — no slope/curve/lean — so it reads as one clean turned plank you strafe
+      // along. Heading sign is random; magnitude grows with SPREAD (subtle early).
+      if (!round && chance(ramp(CONFIG.yawChance, sd))) {
+        yaw = (chance(0.5) ? 1 : -1) * rand(CONFIG.yawAmount[0], ramp(CONFIG.yawAmount, sd));
+        len *= CONFIG.yawLenBoost; // a real diagonal runway to track along
+      } else {
+        if (chance(ramp(CONFIG.rampChance, sd))) {
+          slopeZ = (chance(0.5) ? 1 : -1) * rand(CONFIG.rampSlope[0], CONFIG.rampSlope[1]);
+          if (!round) len *= ramp(CONFIG.rampLenBoost, sd); // box ramps run longer; keep round tiles small
+        }
+        if (!round && chance(ramp(CONFIG.curveChance, sd))) {
+          // Random magnitude: most are gentle, some are dramatic half-pipes. Concave
+          // (+, funnels in) favored over convex (-, rolls off). curveForce reads this
+          // magnitude, so a deep bowl also pulls you sideways hard ("gravity").
+          const mag = rand(CONFIG.curveAmount[0], CONFIG.curveAmount[1]);
+          curve = (chance(0.7) ? 1 : -1) * mag;
+        }
+        // Sideways bank — independent of ramp/curve, so a board can climb AND lean.
+        // Chance ramps with difficulty (_hazRamp); the magnitude's upper bound grows
+        // with spread (ramp(.., sd)), so early boards are barely tilted and later ones
+        // bank for real. Side is random. player.js drags you toward the low edge.
+        if (chance(this._hazRamp(CONFIG.leanChance, hd))) {
+          const mag = rand(CONFIG.leanAmount[0], ramp(CONFIG.leanAmount, sd));
+          leanX = (chance(0.5) ? 1 : -1) * mag;
+        }
       }
     }
 
-    const x = clamp(this._cursor.x + dx, -band - 4, band + 4);
-    const y = this._cursor.y + dy;
-    const z = this._cursor.z + gap + len / 2;
-    const yCenter = slopeZ ? this._cursor.y + slopeZ * (len / 2) : y; // ramp near edge meets the incoming height
+    // Lay the board's NEAR end at the reachable jump target, then run it along its
+    // heading (rotated by yaw). For a normal board (yaw 0) this is the old behaviour:
+    // near end at cursor.z+gap, board running straight ahead. For a yawed board the
+    // far end (and the next gap) veers off diagonally — the path "shoots off to the side".
+    const nearX = clamp(this._cursor.x + dx, -band - 4, band + 4);
+    const nearY = this._cursor.y + dy;
+    const nearZ = this._cursor.z + gap;
+    const fdx = Math.sin(yaw), fdz = Math.cos(yaw); // board's forward (heading) unit dir
+    const x = nearX + fdx * (len / 2);             // board CENTER
+    const z = nearZ + fdz * (len / 2);
+    const yCenter = slopeZ ? nearY + slopeZ * (len / 2) : nearY; // ramp near edge meets the incoming height
 
     // Acceleration plates are always flat boxes (forward arrows); ramps use a
     // thin box too so their near edge meets the incoming height cleanly.
     const geoType = type === "boost" || type === "flipper" || type === "rune" ? "box" : g.geoType;
     const hy = type === "boost" || type === "flipper" || type === "rune" || slopeZ ? 0.5 : g.hy;
-    const p = this._addBoard({ x, y: yCenter, z, w, len, hy, geoType, type, texName, slopeZ, curve, leanX, runePayload });
+    const p = this._addBoard({ x, y: yCenter, z, w, len, hy, geoType, type, texName, slopeZ, curve, leanX, yaw, runePayload });
+    if (yaw) {
+      // Widen the collision prefilter box to the diagonal footprint. The down-ray
+      // still hits the real turned mesh; this just keeps the ball in the candidate
+      // set across the board's full rotated X/Z extent (mirrors the spline's p.hx).
+      p.hx = (w / 2) * Math.abs(Math.cos(yaw)) + (len / 2) * Math.abs(Math.sin(yaw));
+      p.hz = (len / 2) * Math.abs(Math.cos(yaw)) + (w / 2) * Math.abs(Math.sin(yaw));
+    }
     const exitY = slopeZ ? yCenter + slopeZ * (len / 2) : yCenter;
-    this._cursor = { x, y: exitY, z: z + len / 2 };
+    this._cursor = { x: clamp(nearX + fdx * len, -band - 4, band + 4), y: exitY, z: nearZ + fdz * len };
     this._clearOverlapping(p); // static pieces never sit inside each other
 
     if (!safe && type !== "rune") { // runes stay a clean, still, readable plate — no movers/obstacles on them
       // Movement is a property too — a board can slide/lift while tilted or bowed.
-      if (chance(this._hazRamp(CONFIG.movingChance, hd))) this._makeMover(p, false);
-      // Obstacles stay off ramps/curves: a spike mid-climb you can't avoid is unfair.
-      if (type === "normal" && !slopeZ && !curve && len > 12 && chance(this._hazRamp(CONFIG.obstacleChance, hd))) {
+      // (Not on yawed boards: a sliding diagonal runway is too chaotic to track.)
+      if (!yaw && chance(this._hazRamp(CONFIG.movingChance, hd))) this._makeMover(p, false);
+      // Obstacles stay off ramps/curves/yaw: a spike you can't dodge mid-climb or
+      // mid-strafe is unfair.
+      if (type === "normal" && !slopeZ && !curve && !yaw && len > 12 && chance(this._hazRamp(CONFIG.obstacleChance, hd))) {
         const r = Math.random();
         let kind;
         if (r < 0.34) kind = "spikes";

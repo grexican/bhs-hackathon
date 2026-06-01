@@ -678,7 +678,11 @@ export class Player {
     }
     v.x = steer * CONFIG.sideSpeed;
     v.z = ctx.forwardSpeed;
-    v.y -= CONFIG.gravity * (ctx.gravityScale || 1) * dt; // low-grav powerup floats you
+    // Asymmetric gravity: float UP gently (riseGravity), fall DOWN fast (full gravity).
+    // That's the "swinging from the rooftops" feel — long, floaty hang on the way up,
+    // a satisfying drop on the way down. gravityScale (low-grav powerup) still applies.
+    const g = v.y > 0 ? CONFIG.riseGravity : CONFIG.gravity;
+    v.y -= g * (ctx.gravityScale || 1) * dt;
 
     const prevBottom = p.y - this.radius;
     p.x += v.x * dt;

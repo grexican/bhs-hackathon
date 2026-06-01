@@ -7,8 +7,9 @@ export const CONFIG = {
   sideSpeed: 20,
   forwardSpeed: 24,         // starting auto-run speed (eases up from here) — 5% slower
   maxForwardSpeed: 63,
-  jumpSpeed: 50,            // experimenting with a big, floaty jump
-  gravity: 39,
+  jumpSpeed: 42,            // launch velocity — trimmed from 50 so the take-off is less "springy"/explosive
+  gravity: 39,              // FALL gravity (the drop the player likes — kept full-strength)
+  riseGravity: 23,          // ASCENT gravity — much weaker than fall, so the jump floats UP slowly (Spider-Man swing feel) but still drops fast. Asymmetric on purpose.
   playerRadius: 0.9,
 
   // Variable jump: releasing jump while rising chops upward speed for a fast drop
@@ -72,8 +73,8 @@ export const CONFIG = {
   // --- Critical path (the guaranteed-reachable chain). Opens up with SPREAD.
   // Like a spline drawn through the city: it winds up, over, down and across in
   // big sweeps, but every step stays within a jump's reach. ---
-  gapFracLo: [0.2, 0.52],
-  gapFracHi: [0.42, 1.0],
+  gapFracLo: [0.28, 0.52],  // longer early hops (less frantic) — the floaty jump gives the reach for it
+  gapFracHi: [0.5, 1.0],
   lateralFrac: [0.4, 1.0],  // how much of the reachable strafe a step may use
   riseFrac: [0.4, 1.0],     // how much of the reachable rise a step may use
   dropDepth: [-4, -10],     // how far a step may drop
@@ -82,15 +83,15 @@ export const CONFIG = {
   driftY: [24, 70],         // vertical reach of wander targets (big up-and-over)
 
   // --- Scatter cloud: branch platforms strewn around the path for the sprawl. ---
-  cloudCount: [1, 5],       // extra platforms per step (grows with spread)
+  cloudCount: [0, 2],       // extra platforms per step (grows with spread) — kept LOW: a few alternate routes, not a forest of paths
   cloudRadiusX: [18, 94],   // how wide the cloud scatters (a touch wider — reinforces the open feel)
   cloudRadiusY: [12, 40],   // how tall the cloud scatters (parallax layers)
   cloudZSpread: 34,         // depth jitter of cloud platforms around the front
 
   // --- Pad size: BIG early (long winding jumps, generous landings) and only
   // shrinking modestly with HAZARD difficulty. ---
-  padLenLo: [36, 12],
-  padLenHi: [54, 18],
+  padLenLo: [48, 14],   // boards run LONGER early (more landing room, less rushed), shrinking with hazard
+  padLenHi: [70, 20],
   padWidthLo: [16, 7],
   padWidthHi: [23, 10],
 
@@ -160,6 +161,15 @@ export const CONFIG = {
   leanChance: [0.05, 0.4],   // boards banked left/right (independent of ramp/curve); chance ramps with difficulty — near-zero early, common at peak
   leanAmount: [0.03, 0.22],  // sideways tilt (rise/run across the width), RANDOM per board; the upper bound grows with difficulty so it starts barely-there
   leanForce: 14,             // downhill "gravity" while riding a banked board — multiplied by the (random) lean, so a steep bank drags hard
+
+  // --- Yaw boards: a board whose HEADING is rotated, so the safe ground veers off
+  // diagonally in a straight line. You roll forward (+z always) but must STRAFE to
+  // track the diagonal runway to its far end, where the next gap waits. Not a spline
+  // (no hills) — just a turned plank. Subtle early, sharper deep in, but always
+  // capped so forwardSpeed*tan(yaw) stays under sideSpeed (you can always keep up). ---
+  yawChance: [0.04, 0.32],   // chance a normal board veers off diagonally — rare early, common deep in
+  yawAmount: [0.06, 0.28],   // tan of the heading angle (sideways veer); upper bound grows with SPREAD — barely-there early, ~15° at peak (still strafe-able)
+  yawLenBoost: 1.4,          // yawed boards run longer than a normal pad — a real diagonal runway to track along
 
   // Powerups / powerdowns
   powerupChance: 0.3,     // chance a path platform spawns a pickup (bumped — the wide sprawl has room for more)
@@ -279,8 +289,12 @@ export function biomeAt(z) {
 // Peak height of a full jump and the air time it grants — used by the platform
 // generator to guarantee the next stepping stone is always reachable.
 export function jumpReach() {
-  const h = (CONFIG.jumpSpeed * CONFIG.jumpSpeed) / (2 * CONFIG.gravity);
-  const airTime = (2 * CONFIG.jumpSpeed) / CONFIG.gravity;
+  // Asymmetric gravity: float UP on riseGravity, fall DOWN on the full gravity.
+  // Peak height and total air time must reflect BOTH so the path generator keeps
+  // sizing gaps/rises to what the ball can actually clear.
+  const v = CONFIG.jumpSpeed, gUp = CONFIG.riseGravity, gDown = CONFIG.gravity;
+  const h = (v * v) / (2 * gUp);              // peak rise (taller than a symmetric jump)
+  const airTime = v / gUp + Math.sqrt(2 * h / gDown); // slow rise + faster fall back to launch height
   return { height: h, airTime };
 }
 

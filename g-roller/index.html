@@ -268,6 +268,30 @@
       body.is-touch .hud__controls--keys { display: none; }
       body:not(.is-touch) .hud__controls--touch { display: none; }
 
+      /* Landscape phones (short viewport): the score panel was sprawling DOWN into
+         the bottom-left joystick. Shrink it hard, drop the lowest-value line, and
+         pull the touch controls in so the HUD and the stick never overlap. */
+      @media (orientation: landscape) and (max-height: 540px) {
+        .hud__panel { top: 10px; left: 10px; padding: 7px 10px; border-radius: 10px; }
+        .hud__score { font-size: 22px; }
+        .hud__mult { font-size: 13px; }
+        .hud__dist { font-size: 14px; margin-top: 3px; }
+        .hud__dist span:last-child { font-size: 10px; }
+        .hud__stats { font-size: 11px; gap: 9px; margin-top: 4px; }
+        .hud__best { display: none; } /* reclaim vertical space on a tiny screen */
+        .hud__effects { top: 10px; right: 10px; gap: 5px; max-height: calc(100dvh - 130px); }
+        .chip { min-width: 78px; padding: 5px 9px; }
+        .chip__top { font-size: 13px; }
+        /* Smaller, tucked-in touch controls so they clear the shrunken HUD. */
+        #stick { width: 100px; height: 100px; bottom: 14px; left: 14px; }
+        #stick-thumb { width: 44px; height: 44px; margin: -22px 0 0 -22px; }
+        #jump-btn { width: 80px; height: 80px; bottom: 16px; right: 18px; font-size: 14px; }
+        body.is-touch #view-btn { top: 50px; padding: 6px 10px; }
+        /* Keep the start / game-over overlay from overflowing a short screen. */
+        .hud__title { font-size: clamp(36px, 9vw, 64px); letter-spacing: 3px; }
+        .hud__center { gap: 9px; }
+      }
+
       /* Settings: a gear button that opens a panel of toggles (so touch players,
          who have no keyboard shortcuts, can change sound/track/motion/view). */
       #settings-btn {
