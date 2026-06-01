@@ -138,7 +138,10 @@ export class Player {
     let jumped = false;
     if (ctx.flight && input.jumpHeld) {
       v.y = CONFIG.flightLift; this.grounded = false; // hold jump to soar
-    } else if (this._jumpBuffer > 0 && canGroundJump) {
+    } else if ((this._jumpBuffer > 0 || input.jumpHeld) && canGroundJump) {
+      // Fire on a buffered press OR simply because the button is HELD — so holding
+      // jump auto-hops the instant you touch down (or within coyote time as you roll
+      // off an edge). This is the grace for "I was a few frames late to the button."
       v.y = CONFIG.jumpSpeed; this.grounded = false; this.airJumps = 0;
       this._coyote = 0; this._jumpBuffer = 0; jumped = true; this._controlledJump = true;
     } else if (this._jumpBuffer > 0 && this.airJumps < ctx.maxAirJumps) {
@@ -152,13 +155,21 @@ export class Player {
     // Steering (steerMult flips for the "reverse" powerdown). When morphed, the
     // ball rolls weird — loosen control and add a wobble that fights your line.
     let steer = -input.steer * ctx.steerMult;
-    if (ctx.morph) steer = steer * 0.65 + Math.sin(this._t * 9) * (CONFIG.morphWobble / CONFIG.sideSpeed);
+    if (ctx.morph) {
+      // Haphazard wobble: three non-harmonic sines plus a smoothed random walk, so
+      // it never settles into a predictable rhythm — it genuinely fights your line.
+      this._morphDrift = ((this._morphDrift || 0) + (Math.random() - 0.5) * dt * 9) * 0.99;
+      const wob = 0.45 * Math.sin(this._t * 9.0)
+                + 0.30 * Math.sin(this._t * 5.3 + 2.1)
+                + 0.25 * Math.sin(this._t * 14.7 + 0.7)
+                + this._morphDrift;
+      steer = steer * 0.55 + wob * (CONFIG.morphWobble / CONFIG.sideSpeed); // less of your own control, too
+    }
     v.x = steer * CONFIG.sideSpeed;
     v.z = ctx.forwardSpeed;
     v.y -= CONFIG.gravity * (ctx.gravityScale || 1) * dt; // low-grav powerup floats you
 
     const prevBottom = p.y - this.radius;
-    const wasGrounded = this.grounded;  // were we on a surface last frame?
     p.x += v.x * dt;
     p.y += v.y * dt;
     p.z += v.z * dt;
@@ -171,7 +182,7 @@ export class Player {
     this.onBoost = false; // true while standing on an acceleration plate (read by game)
     if (v.y <= 0) {
       const newBottom = p.y - this.radius;
-      const floor = this._floorBelow(field, p.x, p.z, prevBottom, newBottom, prevRide, wasGrounded);
+      const floor = this._floorBelow(field, p.x, p.z, prevBottom, newBottom, prevRide);
       if (floor) {
         const best = floor.plat, bestTop = floor.y;
         let fresh = !prevRide;
@@ -247,7 +258,7 @@ export class Player {
   // meshes and return the highest one the player's feet have reached. Works for
   // flat, ramp and curved boards with no analytic model (the previous analytic
   // version mis-tilted ramps). Preserves pass-through-from-below via prevBottom.
-  _floorBelow(field, x, z, prevBottom, newBottom, prevRide, wasGrounded) {
+  _floorBelow(field, x, z, prevBottom, newBottom, prevRide) {
     const meshes = this._candMeshes;
     meshes.length = 0;
     const Z = this.radius + 4;
@@ -271,11 +282,18 @@ export class Player {
         if (ny <= 0.1) continue;
       }
       const top = h.point.y;
-      if (newBottom > top + 0.05) continue; // feet haven't reached this surface yet
-      // Pass-through from below: skip a surface that was above our previous feet,
-      // unless we were riding it or were already grounded (lets ramps hug up).
-      if (prevBottom < top - 0.6 && h.object.userData.platform !== prevRide && !wasGrounded) continue;
-      return { plat: h.object.userData.platform, y: top };
+      const plat = h.object.userData.platform;
+      if (plat === prevRide) {
+        // The board we're already riding: stick to it, with slack so we hug a
+        // rising ramp instead of clipping through its near edge.
+        if (newBottom <= top + 0.7) return { plat, y: top };
+        continue;
+      }
+      // Any other board: land ONLY if we crossed down onto it this frame — i.e.
+      // our feet were at/above its surface last frame. This stops the warp
+      // (snapping UP onto a higher pad that merely shares our x/z) and still
+      // lets us pass through a board from below.
+      if (prevBottom >= top - 0.6 && newBottom <= top + 0.05) return { plat, y: top };
     }
     return null;
   }

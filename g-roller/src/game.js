@@ -29,6 +29,7 @@ export class Game {
     this._speed = CONFIG.forwardSpeed; // smoothed actual speed (eases toward the target)
     this._speedTimer = 0;
     this._accelBonus = 0;  // speed bonus accumulated while riding acceleration plates
+    this._accelHold = 0;   // seconds left coasting at top speed after leaving a plate
     this._seenStart = 0;   // tracks Input.startPresses for the start gate
     this._cheat = false;
     this._konami = [];
@@ -62,6 +63,7 @@ export class Game {
       score: document.getElementById("score"),
       mult: document.getElementById("mult"),
       distance: document.getElementById("distance"),
+      speed: document.getElementById("speed"),
       jumps: document.getElementById("jumps"),
       gems: document.getElementById("gems"),
       bestScore: document.getElementById("best-score"),
@@ -77,6 +79,10 @@ export class Game {
     this.bestScore = Number(localStorage.getItem("gr_bestScore") || 0);
     this.bestDistance = Number(localStorage.getItem("gr_bestDistance") || 0);
     this.bestJumps = Number(localStorage.getItem("gr_bestJumps") || 0);
+
+    // Restore the player's saved preferences before anything reads them (camera
+    // view, audio mute/track/fx, reduced motion). Must run after this.sound exists.
+    this._loadSettings();
 
     this._resetWorld();
     this._refreshHud();
@@ -162,6 +168,7 @@ export class Game {
     this._speed = CONFIG.forwardSpeed;
     this._speedTimer = 0;
     this._accelBonus = 0;
+    this._accelHold = 0;
     this.gems = 0;
     this.score = 0;
     this.multiplier = 1;
@@ -188,9 +195,10 @@ export class Game {
     return Math.max(CONFIG.minSpeed, Math.min(CONFIG.maxForwardSpeed + CONFIG.accelMax + 6, s));
   }
 
-  // Duration a timed effect lasts right now (cheat mode overrides everything).
+  // How long a timed effect lasts. Cheat mode keeps these TRUE to each powerup
+  // (it only spawns more of them) so you can test the real durations.
   _dur(key) {
-    return this._cheat ? CONFIG.cheatDuration : CONFIG[EFFECT_DURATIONS[key]];
+    return CONFIG[EFFECT_DURATIONS[key]];
   }
 
   _toggleView() {
@@ -248,13 +256,40 @@ export class Game {
     s.fx.textContent = `🎚️ Music FX: ${this.sound.reactive ? "On" : "Off"}`;
     s.motion.textContent = `🌿 Reduced Motion: ${this._reducedMotion ? "On" : "Off"}`;
     s.view.textContent = `👁 View: ${this._firstPerson ? "First-person" : "Third-person"}`;
+    this._saveSettings(); // every toggle routes through here, so this captures all changes
+  }
+
+  // --- Persisted preferences (survive a reload) ----------------------------
+  // Stored as individual gr_* keys next to the best-score keys. Booleans are
+  // "1"/"0"; track is its index. Anything missing keeps the constructor default,
+  // so first-time players (and reduced-motion-by-OS users) are unaffected.
+  _loadSettings() {
+    const get = (k) => localStorage.getItem(k);
+    const view = get("gr_view");
+    if (view !== null) this._firstPerson = view === "1";
+    const motion = get("gr_motion");
+    if (motion !== null) this._reducedMotion = motion === "1";
+    const muted = get("gr_muted");
+    if (muted !== null) this.sound.muted = muted === "1";
+    const fx = get("gr_fx");
+    if (fx !== null) this.sound.reactive = fx === "1";
+    const track = get("gr_track");
+    if (track !== null) this.sound.setTrack(Number(track));
+  }
+
+  _saveSettings() {
+    localStorage.setItem("gr_view", this._firstPerson ? "1" : "0");
+    localStorage.setItem("gr_motion", this._reducedMotion ? "1" : "0");
+    localStorage.setItem("gr_muted", this.sound.muted ? "1" : "0");
+    localStorage.setItem("gr_fx", this.sound.reactive ? "1" : "0");
+    localStorage.setItem("gr_track", String(this.sound.trackIndex()));
   }
 
   _toggleCheat() {
     this._cheat = !this._cheat;
     this.field.itemMultiplier = this._cheat ? CONFIG.cheatItemMultiplier : 1;
     this._toast(
-      this._cheat ? `🎮 CHEAT ON · ${CONFIG.cheatItemMultiplier}× items · ${CONFIG.cheatDuration}s power` : "CHEAT OFF",
+      this._cheat ? `🎮 CHEAT ON · ${CONFIG.cheatItemMultiplier}× items` : "CHEAT OFF",
       "#ffd34e"
     );
   }
@@ -340,9 +375,18 @@ export class Game {
     };
     const ev = this.player.update(dt, this.input, ctx, this.field);
 
-    // Acceleration plates: build speed while you ride one, ease it back off after.
-    if (this.player.onBoost) this._accelBonus = Math.min(CONFIG.accelMax, this._accelBonus + CONFIG.accelRate * dt);
-    else this._accelBonus = Math.max(0, this._accelBonus - CONFIG.accelDecay * dt);
+    // Acceleration plates feel like a launch: while you ride, the build COMPOUNDS
+    // (rate grows with the bonus already gathered) so it curves upward the longer
+    // you stay. After you leave you coast at top speed for a beat (accelHold), then
+    // bleed off in a steady LINEAR decel — momentum draining, not a hard cutoff.
+    if (this.player.onBoost) {
+      this._accelBonus = Math.min(CONFIG.accelMax, this._accelBonus + (CONFIG.accelRate + this._accelBonus * CONFIG.accelGrowth) * dt);
+      this._accelHold = CONFIG.accelHold;
+    } else if (this._accelHold > 0) {
+      this._accelHold -= dt; // still launched — hold the top speed before decel starts
+    } else {
+      this._accelBonus = Math.max(0, this._accelBonus - CONFIG.accelDecay * dt);
+    }
 
     if (ev.jumped) this.sound.jump();
     this._onLanded(ev);
@@ -542,6 +586,7 @@ export class Game {
     this._hud.score.textContent = Math.floor(this.score).toLocaleString();
     this._hud.mult.textContent = `×${this.multiplier}`;
     this._hud.distance.textContent = Math.max(0, Math.floor(this.player.position.z));
+    this._hud.speed.textContent = Math.round(this._speed); // smoothed actual speed — spikes when you ride an accel plate
     this._hud.jumps.textContent = Math.max(0, this.player.jumpCount);
     this._hud.gems.textContent = this.gems;
     this._hud.bestScore.textContent = this.bestScore.toLocaleString();
@@ -571,17 +616,30 @@ export class Game {
       // Smooth the steer input so the lean eases gently in and out of turns
       // instead of snapping to it. (Kept subtle.)
       this._lean += (this.input.steer - this._lean) * (snap ? 1 : 0.05);
+
+      // Big-air framing: the higher you climb above the surface you launched from,
+      // the more the camera rises, pulls back, and pitches its gaze DOWN and ahead
+      // — so the platforms below come back into the frame instead of dropping out
+      // of it. Ramps in past ~12 units up, full by ~47, so normal hops are untouched.
+      const groundY = this.player.lastGroundedY;
+      const airAbove = Math.max(0, p.y - groundY);
+      const air = Math.min(1, Math.max(0, (airAbove - 12) / 35));
+
       this.camera.position.x += (p.x - this._lean * 0.55 - this.camera.position.x) * k;
-      this.camera.position.y += (p.y + 9 - this.camera.position.y) * k;
-      // Pull the camera back a touch when accelerating, in when braking — adds
-      // a felt "g-force" to the Up/Down throttle.
-      this.camera.position.z = p.z - 16 - this._throttleSmooth * 2;
+      this.camera.position.y += (p.y + 9 + airAbove * 0.35 - this.camera.position.y) * k;
+      // Pull the camera back a touch when accelerating, in when braking — adds a
+      // felt "g-force" to the Up/Down throttle; pull back further when way up high.
+      this.camera.position.z = p.z - 16 - this._throttleSmooth * 2 - air * 10;
       const shake = this._reducedMotion ? this._shake * 0.35 : this._shake;
       if (shake > 0) {
         this.camera.position.x += (Math.random() - 0.5) * shake;
         this.camera.position.y += (Math.random() - 0.5) * shake;
       }
-      this.camera.lookAt(p.x, p.y + 1.5, p.z + 12);
+      // Drop the gaze toward the launch height and push it further ahead as we
+      // climb — this is what tilts the camera down onto the path during big air.
+      const lookY = (p.y + 1.5) + (groundY - p.y) * 0.55 * air;
+      const lookZ = p.z + 12 + air * 18;
+      this.camera.lookAt(p.x, lookY, lookZ);
       // Roll RELATIVE to the look direction (rotateZ), not by setting rotation.z —
       // setting the absolute Euler z flips the backward-looking lookAt upside down.
       this.camera.rotateZ(-this._lean * 0.008);

@@ -124,7 +124,7 @@ export class Sound {
       this.comp.connect(this.ctx.destination);
 
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.8; // trimmed down — the old 0.9 was hot
+      this.master.gain.value = this.muted ? 0 : 0.8; // honor a muted pref restored before audio started (0.9 was hot)
       this.master.connect(this.comp);
 
       this.musicGain = this.ctx.createGain();
@@ -211,6 +211,18 @@ export class Sound {
 
   trackName() {
     return TRACKS[this._trackIndex].name;
+  }
+
+  // Jump straight to a track by index (used to restore a saved choice). Wraps so
+  // an out-of-range saved value can never crash. Swaps live if music is playing.
+  setTrack(i) {
+    this._trackIndex = ((Math.trunc(i) % TRACKS.length) + TRACKS.length) % TRACKS.length;
+    if (this.ctx && this._musicOn) this._startMusic();
+    return TRACKS[this._trackIndex].name;
+  }
+
+  trackIndex() {
+    return this._trackIndex;
   }
 
   toggleMute() {

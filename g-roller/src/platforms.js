@@ -148,12 +148,13 @@ export class PlatformField {
       const geo = geoType === "cyl" ? this._geoCyl : geoType === "hex" ? this._geoHex : this._geoBox;
       visual = new THREE.Mesh(geo, mat);
       visual.scale.set(w, hy * 2, len);
-      // NEGATIVE atan: a +X rotation tilts the +z (forward) end DOWN, so we
-      // negate it to make slopeZ>0 = uphill in the travel direction (matches the
-      // generator's exit-height convention). Collision uses a raycast against the
-      // real mesh, so the surface is always exactly what you see.
-      if (slopeZ) visual.rotation.x = -Math.atan(slopeZ);
     }
+    // Angle is independent of shape and curve — any board can tilt. NEGATIVE atan:
+    // a +X rotation tilts the +z (forward) end DOWN, so we negate it to make
+    // slopeZ>0 = uphill in the travel direction (matches the generator's exit-height
+    // convention). Collision raycasts the real mesh, so the surface is always what
+    // you see — a tilted curved/round/boost board all just work.
+    if (slopeZ) visual.rotation.x = -Math.atan(slopeZ);
     visual.castShadow = true;
     visual.receiveShadow = true;
     group.add(visual);
@@ -450,23 +451,29 @@ export class PlatformField {
       dy = toY * 0.6 + rand(dyDown, dyUp) * 0.4;
     }
 
-    const x = clamp(this._cursor.x + dx, -band - 4, band + 4);
-    const y = this._cursor.y + dy;
-    const z = this._cursor.z + gap + len / 2;
-
     const type = !safe && chance(0.1) ? "boost" : "normal";
     const texName = type === "boost" ? "boost" : this._groundTex();
 
-    // Maybe make this a ramp (roll up/down + launch off the top) or a curved board.
-    let slopeZ = 0, curve = 0, yCenter = y;
-    if (!safe && type === "normal" && !round) {
+    // Angle (slope) and curve (bow) are independent display PROPERTIES, not their
+    // own plate types: any board — flat, boost, round, and a mover below — can tilt
+    // and/or bow, in any combination, on top of its shape/size/texture. Rolled here
+    // (before placement) so a longer ramp doesn't throw off the gap that follows it.
+    // (Tunnels are a separate structure and stay flat for now.)
+    let slopeZ = 0, curve = 0;
+    if (!safe) {
       if (chance(ramp(CONFIG.rampChance, sd))) {
         slopeZ = (chance(0.5) ? 1 : -1) * rand(CONFIG.rampSlope[0], CONFIG.rampSlope[1]);
-        yCenter = this._cursor.y + slopeZ * (len / 2); // near edge meets the incoming height
-      } else if (chance(ramp(CONFIG.curveChance, sd))) {
+        if (!round) len *= ramp(CONFIG.rampLenBoost, sd); // box ramps run longer; keep round tiles small
+      }
+      if (!round && chance(ramp(CONFIG.curveChance, sd))) {
         curve = (chance(0.6) ? 1 : -1) * CONFIG.curveAmount; // + concave (in), - convex (out)
       }
     }
+
+    const x = clamp(this._cursor.x + dx, -band - 4, band + 4);
+    const y = this._cursor.y + dy;
+    const z = this._cursor.z + gap + len / 2;
+    const yCenter = slopeZ ? this._cursor.y + slopeZ * (len / 2) : y; // ramp near edge meets the incoming height
 
     // Acceleration plates are always flat boxes (forward arrows); ramps use a
     // thin box too so their near edge meets the incoming height cleanly.
@@ -478,8 +485,9 @@ export class PlatformField {
     this._clearOverlapping(p); // static pieces never sit inside each other
 
     if (!safe) {
-      // Keep movers and obstacles on plain flat boards (no ramps/curves).
-      if (!slopeZ && !curve && chance(ramp(CONFIG.movingChance, hd))) this._makeMover(p, false);
+      // Movement is a property too — a board can slide/lift while tilted or bowed.
+      if (chance(ramp(CONFIG.movingChance, hd))) this._makeMover(p, false);
+      // Obstacles stay off ramps/curves: a spike mid-climb you can't avoid is unfair.
       if (type === "normal" && !slopeZ && !curve && len > 12 && chance(ramp(CONFIG.obstacleChance, hd))) {
         this._addObstacle(p, chance(0.55) ? "barrier" : "spikes");
       }
