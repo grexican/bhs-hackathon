@@ -134,17 +134,17 @@ export const CONFIG = {
   // here is tuned GENTLE-and-WIDE early, narrower + more dramatic with distance,
   // but always clamped so the ball can roll the whole length without being flung
   // off or falling through. ---
-  splineChance: [0.08, 0.34],  // chance a non-safe step becomes a spline ribbon (ramps with HAZARD) — present from early on
-  splineCooldown: 4,           // min normal steps between spline boards (so they don't cluster)
-  splineLength: [70, 110],     // ribbon length grows with SPREAD — a real long traverse
+  splineChance: [0.14, 0.4],   // chance a non-safe step becomes a spline ribbon (ramps with HAZARD)
+  splineCooldown: 7,           // min normal steps between spline boards — a real cool-off after one so they don't chain back-to-back
+  splineLength: [70, 320],     // ribbon length grows with SPREAD — short-but-interesting early, epic deep in
   splineWidth: [22, 12],       // WIDE early (easy to stay on), NARROWER with SPREAD
-  splineSegZ: 56,              // tessellation along the length (smooth hills)
+  splineSegZ: 120,             // tessellation along the length (smooth hills even on the long ribbons)
   splineSegX: 8,               // tessellation across the width
-  splineAmpY: [3.0, 7.0],      // hill/valley height (peak rise), grows with SPREAD — capped below so the surface never goes near-vertical
-  splineWavesY: [1.5, 2.5],    // how many hill+valley cycles fit along the ribbon (more = busier terrain deeper in)
-  splineMeanderX: [3.0, 9.0],  // sideways drift of the centerline (peak), grows with SPREAD
-  splineWavesX: [0.5, 1.0],    // how many left/right swings along the ribbon
-  splineMaxSlope: 0.6,         // HARD CAP on |dy/dz| anywhere on the surface (~31°). Keeps every face well above the normal.y>0.1 collision cutoff so the ball never falls through a crest.
+  splineAmpY: [7.0, 20.0],     // hill/valley height (peak rise), grows with SPREAD — big rolling terrain, capped below so the surface never goes near-vertical
+  splineWavesY: [1.5, 3.0],    // how many hill+valley cycles fit along the ribbon — modest so the long length reads as long-wavelength sweeps, not chop
+  splineMeanderX: [8.0, 22.0], // sideways drift of the centerline (peak), grows with SPREAD — winding but keyboard-manageable side-speed
+  splineWavesX: [0.5, 1.2],    // how many left/right swings along the ribbon
+  splineMaxSlope: 0.9,         // HARD CAP on |dy/dz| anywhere on the surface (~42°). Steep, dramatic hills but still above the normal.y>0.1 collision cutoff so the ball never falls through a crest.
 
   // --- Ramps & curved boards ---
   // Ramps RE-ENABLED with the proper fix: collision now raycasts straight down

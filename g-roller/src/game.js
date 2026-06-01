@@ -683,23 +683,24 @@ export class Game {
     this._rainLevel += (rainTarget - this._rainLevel) * (1 - Math.exp(-dt / 0.5));
     if (!this._rainLensEl) this._rainLensEl = document.getElementById("rain-lens");
     this._rainLensEl.style.opacity = this._rainLevel;
-    // Keep the OVERALL veil blur light — the distortion should come from the DROPS
-    // themselves (per-drop lens on .raindrop), not a heavy whole-screen smear.
+    // Keep the OVERALL veil blur very light — the distortion should come almost
+    // entirely from the DROPS themselves (per-drop lens on .raindrop). A heavy
+    // whole-screen smear just reads as "out of focus", not "rain on glass".
     this._rainLensEl.style.backdropFilter = this._rainLensEl.style.webkitBackdropFilter =
-      `blur(${(this._rainLevel * 1.6).toFixed(2)}px)`;
+      `blur(${(this._rainLevel * 1.2).toFixed(2)}px)`;
     // Spawn fat drops at RANDOM positions/sizes/timing while it rains — each is a div
     // that slides down + fades then self-removes (no synced loop = real randomness).
     if (this._rainLevel > 0.25) {
       this._rainDropT = (this._rainDropT || 0) + dt;
       if (this._rainDropT >= (this._rainDropNext || 0)) {
         this._rainDropT = 0;
-        this._rainDropNext = 0.05 + Math.random() * 0.16; // next drop 50–210ms out — irregular
+        this._rainDropNext = 0.025 + Math.random() * 0.1; // next drop 25–125ms out — dense + irregular, so lenses cover the screen
         const d = document.createElement("div");
         d.className = "raindrop";
         const sr = Math.random();
-        const w = 18 + sr * sr * 152;             // ~18–170px: biased small, occasional HUGE (≈3x the old max)
-        const dur = 1.4 + Math.random() * 4.0;    // 1.4–5.4s: some crawl slowly down the glass
-        const round = Math.min(1, (dur - 1.4) / 4.0); // slower drops are rounder
+        const w = 22 + sr * sr * 248;             // ~22–270px: biased small, occasional MONSTER bead
+        const dur = 2.8 + Math.random() * 6.4;    // 2.8–9.2s: drops crawl down the glass, no fast streaking
+        const round = Math.min(1, (dur - 2.8) / 6.4); // slower drops are rounder
         const hMul = 2.05 - round * 0.95;         // fast = elongated streak, slow = near-round bead
         d.style.width = `${w.toFixed(0)}px`;
         d.style.height = `${(w * hMul).toFixed(0)}px`;

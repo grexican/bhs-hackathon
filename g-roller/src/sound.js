@@ -44,8 +44,9 @@
 // even repeated sections never feel identical bar-to-bar.
 const TRACKS = [
   // 1) Dreamy, slow, major-key. Clean sine bass, lots of space, brushed drums.
-  //    Song: airy intro (pad only) → verse A → lifted chorus B → quiet bridge →
-  //    chorus reprise. ~36 bars before it loops.
+  //    Song (C major): airy intro (pad only) → introB → verse1 → verse2 →
+  //    pre-chorus → chorus1 → chorus2 → quiet bridge → verse3 (varied) →
+  //    chorus3 → final lifted chorus → outro. ~80 bars before it loops.
   {
     name: "Velvet Horizon", tempo: 84,
     bassWave: "sine", arpWave: "triangle", padWave: "triangle",
@@ -61,18 +62,29 @@ const TRACKS = [
     },
     arrangement: [
       { name: "intro",  chords: ["C", "Am"],            layers: { bass: false, arp: false, drums: false } },
-      { name: "introB", chords: ["F", "G"],             layers: { drums: false } },
+      { name: "introB", chords: ["F", "G", "C", "Em"],  layers: { drums: false } },
       { name: "verse",  chords: ["C", "Am", "Dm", "G"] },
       { name: "verse",  chords: ["C", "Am", "F", "G"] },
+      { name: "pre",    chords: ["Dm", "Em", "F", "G"] },
       { name: "chorus", chords: ["F", "G", "C", "Am"],  lift: 0.35 },
       { name: "chorus", chords: ["F", "G", "Em", "Am"], lift: 0.35 },
+      { name: "verse",  chords: ["Am", "Em", "F", "C"] },
+      { name: "verse",  chords: ["C", "G", "Dm", "G"] },
+      { name: "pre",    chords: ["F", "Em", "Dm", "G"] },
       { name: "bridge", chords: ["Dm", "Am", "Em", "G"], layers: { drums: false } },
-      { name: "chorus", chords: ["F", "G", "C", "G"],   lift: 0.4 },
+      { name: "bridge", chords: ["F", "C", "Dm", "G"],   layers: { drums: false } },
+      { name: "chorus", chords: ["F", "G", "C", "Am"],  lift: 0.35 },
+      { name: "chorus", chords: ["C", "Em", "F", "G"],  lift: 0.4 },
+      { name: "chorus", chords: ["F", "G", "Am", "Em"], lift: 0.45 },
+      { name: "chorus", chords: ["F", "G", "C", "G"],   lift: 0.45 },
+      { name: "outro",  chords: ["C", "Am", "F", "C"],  layers: { drums: false } },
     ],
   },
 
   // 2) Late-night cruise. Warm triangle bass, gentle swing, soft drums, minor 7ths.
-  //    Song: smooth verse → pre-chorus → lifted hook → drum-drop bridge → hook. ~36 bars.
+  //    Song (A minor / jazzy): intro → verse1 → verse2 → pre → hook1 → hook2 →
+  //    verse3 (varied) → pre2 → drum-drop bridge → bridge2 → hook3 → hook4 →
+  //    final lifted hook → outro. ~60 bars.
   {
     name: "Midnight Cruise", tempo: 96,
     bassWave: "triangle", arpWave: "sine", padWave: "triangle",
@@ -88,19 +100,28 @@ const TRACKS = [
     },
     arrangement: [
       { name: "intro", chords: ["Am7", "Fmaj7"],          layers: { arp: false, drums: false } },
+      { name: "intro", chords: ["Dm", "G"],               layers: { drums: false } },
       { name: "verse", chords: ["Am7", "Dm", "G", "C"] },
       { name: "verse", chords: ["Am7", "Dm", "Fmaj7", "G"] },
       { name: "pre",   chords: ["Dm", "Em7", "Fmaj7", "G"] },
       { name: "hook",  chords: ["C", "G", "Am7", "Fmaj7"], lift: 0.35 },
       { name: "hook",  chords: ["C", "G", "Dm", "G"],      lift: 0.35 },
+      { name: "verse", chords: ["Fmaj7", "Em7", "Am7", "Dm"] },
+      { name: "verse", chords: ["Am7", "C", "Dm", "G"] },
+      { name: "pre",   chords: ["Fmaj7", "G", "Em7", "Am7"] },
       { name: "bridge", chords: ["Fmaj7", "Em7", "Dm", "Am7"], layers: { drums: false } },
-      { name: "hook",  chords: ["C", "G", "Am7", "G"],     lift: 0.4 },
+      { name: "bridge", chords: ["Dm", "Em7", "Fmaj7", "G"],   layers: { drums: false } },
+      { name: "hook",  chords: ["C", "G", "Am7", "Fmaj7"], lift: 0.35 },
+      { name: "hook",  chords: ["Fmaj7", "C", "Dm", "G"],  lift: 0.4 },
+      { name: "hook",  chords: ["C", "G", "Am7", "G"],     lift: 0.45 },
+      { name: "outro", chords: ["Am7", "Fmaj7", "Dm", "Am7"], layers: { drums: false } },
     ],
   },
 
   // 3) Surreal ambient drift. No drums, very wide detune, max space, floating arp.
-  //    Song: layers fade IN one at a time, swell to a fuller middle, then thin back
-  //    out — a slow tide rather than a beat. ~40 bars.
+  //    Song (E minor): layers fade IN one at a time, swell through two rises to a
+  //    fuller middle, breathe back with an ebb, swell again, then thin all the way
+  //    back out — a long slow tide rather than a beat. ~52 bars.
   {
     name: "Lucid Drift", tempo: 80,
     bassWave: "sine", arpWave: "sine", padWave: "sine",
@@ -116,18 +137,27 @@ const TRACKS = [
     },
     arrangement: [
       { name: "wash",  chords: ["Em", "Cmaj7"],            layers: { bass: false, arp: false } },
+      { name: "wash",  chords: ["G", "A"],                 layers: { arp: false } },
       { name: "drift", chords: ["Em", "A", "F#m", "B"],    layers: { arp: false } },
       { name: "drift", chords: ["Em", "G", "A", "B"] },
+      { name: "drift", chords: ["Cmaj7", "G", "F#m", "B"] },
       { name: "rise",  chords: ["Cmaj7", "G", "A", "B"],   lift: 0.3 },
       { name: "rise",  chords: ["Em", "A", "Cmaj7", "B"],  lift: 0.3 },
+      { name: "rise",  chords: ["G", "A", "Cmaj7", "B"],   lift: 0.4 },
       { name: "ebb",   chords: ["F#m", "Em", "A", "G"],    layers: { arp: false } },
-      { name: "ebb",   chords: ["Em", "Cmaj7"],            layers: { bass: false, arp: false } },
+      { name: "ebb",   chords: ["Cmaj7", "G", "Em", "A"],  layers: { arp: false } },
+      { name: "rise",  chords: ["Em", "Cmaj7", "A", "B"],  lift: 0.35 },
+      { name: "rise",  chords: ["Cmaj7", "A", "G", "B"],   lift: 0.4 },
+      { name: "ebb",   chords: ["F#m", "Em", "G", "A"],    layers: { arp: false } },
+      { name: "wash",  chords: ["G", "A"],                 layers: { arp: false } },
+      { name: "wash",  chords: ["Em", "Cmaj7"],            layers: { bass: false, arp: false } },
     ],
   },
 
   // 4) Energetic but smooth. Filtered-saw lead, soft grit on bass, full drums, brighter.
-  //    Song: 2-bar kick intro → main A → variation A2 → breakdown (drums drop) →
-  //    DROP (full + lift) → outro. Steady kick throughout the drum sections. ~38 bars.
+  //    Song (A minor): 2-bar kick intro → A → A (var) → A2 → build → DROP → DROP2 →
+  //    breakdown (drums drop) → A3 (var) → build2 → DROP3 → DROP4 → outro.
+  //    Steady kick throughout the drum sections. ~58 bars.
   {
     name: "Neon Highway", tempo: 124,
     bassWave: "sawtooth", arpWave: "sawtooth", padWave: "triangle",
@@ -146,16 +176,24 @@ const TRACKS = [
       { name: "A",     chords: ["Am", "F", "G", "C"] },
       { name: "A",     chords: ["Am", "F", "Dm", "G"] },
       { name: "A2",    chords: ["Am", "Em", "F", "G"] },
-      { name: "break", chords: ["F", "C", "Dm", "G"], layers: { drums: false } },
+      { name: "build", chords: ["Dm", "Em", "F", "G"] },
       { name: "drop",  chords: ["Am", "F", "G", "C"], lift: 0.5 },
-      { name: "drop",  chords: ["Am", "F", "G", "G"], lift: 0.5 },
+      { name: "drop",  chords: ["Am", "F", "C", "G"], lift: 0.5 },
+      { name: "break", chords: ["F", "C", "Dm", "G"], layers: { drums: false } },
+      { name: "break", chords: ["Dm", "Am", "Em", "G"], layers: { drums: false } },
+      { name: "A2",    chords: ["Am", "C", "Em", "G"] },
+      { name: "build", chords: ["F", "G", "Em", "G"] },
+      { name: "drop",  chords: ["Am", "F", "G", "C"], lift: 0.55 },
+      { name: "drop",  chords: ["Am", "Em", "F", "G"], lift: 0.55 },
+      { name: "drop",  chords: ["Am", "F", "G", "G"], lift: 0.6 },
       { name: "outro", chords: ["Am", "G", "F", "Em"] },
     ],
   },
 
   // 5) The one hyper track. Driving but warmed-up: softer drums, capped lead brightness.
-  //    Song: 2-bar kick intro → driving A → A2 → tension break → big DROP → DROP2 →
-  //    outro. Index 4: Audiosurf forces this one, so the kick stays rock-steady. ~38 bars.
+  //    Song (E minor): 2-bar kick intro → A → A (var) → A2 → build → DROP → DROP2 →
+  //    tension break → A3 (var) → build2 → DROP3 → DROP4 → outro. Index 4: Audiosurf
+  //    forces this one, so the kick stays rock-steady. ~54 bars.
   {
     name: "Pulse Runner", tempo: 134,
     bassWave: "sawtooth", arpWave: "triangle", padWave: "sawtooth",
@@ -174,9 +212,15 @@ const TRACKS = [
       { name: "A",     chords: ["Em", "C", "G", "D"] },
       { name: "A",     chords: ["Em", "C", "Am", "D"] },
       { name: "A2",    chords: ["Em", "G", "C", "D"] },
-      { name: "break", chords: ["Am", "Bm", "C", "D"], layers: { drums: false } },
+      { name: "build", chords: ["Am", "Bm", "C", "D"] },
       { name: "drop",  chords: ["Em", "C", "G", "D"],  lift: 0.5 },
-      { name: "drop",  chords: ["Em", "C", "Am", "D"], lift: 0.55 },
+      { name: "drop",  chords: ["Em", "G", "C", "D"],  lift: 0.5 },
+      { name: "break", chords: ["Am", "Bm", "C", "D"], layers: { drums: false } },
+      { name: "break", chords: ["C", "G", "Am", "Bm"], layers: { drums: false } },
+      { name: "A2",    chords: ["Em", "Bm", "C", "D"] },
+      { name: "build", chords: ["C", "D", "Am", "Bm"] },
+      { name: "drop",  chords: ["Em", "C", "G", "D"],  lift: 0.55 },
+      { name: "drop",  chords: ["Em", "C", "Am", "D"], lift: 0.6 },
       { name: "outro", chords: ["Em", "D", "C", "Bm"] },
     ],
   },
