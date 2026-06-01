@@ -111,6 +111,7 @@ export class PlatformField {
     this._biomeTextures = BIOMES[0].textures;
     this._stepIndex = 0;
     this._stepsSinceTunnel = 0;
+    this._stepsSinceSpline = 0;
     this._cursor = { x: 0, y: 0, z: 0 };
     this._drift = { x: 0, y: 0 };  // wandering target the critical path heads toward
     this._driftSteps = 0;
@@ -128,6 +129,7 @@ export class PlatformField {
     this._spreadD = 0;
     this._stepIndex = 0;
     this._stepsSinceTunnel = 0;
+    this._stepsSinceSpline = 0;
     this._drift = { x: 0, y: 0 };
     this._driftSteps = CONFIG.safeStraight;
 
@@ -160,7 +162,7 @@ export class PlatformField {
     return t;
   }
 
-  _addBoard({ x, y, z, w, len, hy, geoType, type, texName, slopeZ = 0, curve = 0, leanX = 0, runePayload = null }) {
+  _addBoard({ x, y, z, w, len, hy, geoType, type, texName, slopeZ = 0, curve = 0, leanX = 0, runePayload = null, spline = null }) {
     const group = new THREE.Group();
     group.position.set(x, y, z);
 
@@ -194,7 +196,13 @@ export class PlatformField {
     }
 
     let visual, ownGeo = null;
-    if (curve) {
+    if (spline) {
+      // Spline ribbon: a long undulating + meandering heightfield you roll along.
+      // Like curved boards, it owns its geometry and IS the landable surfaceMesh.
+      ownGeo = this._makeSplineGeo(w, len, spline);
+      mat.side = THREE.DoubleSide;
+      visual = new THREE.Mesh(ownGeo, mat);
+    } else if (curve) {
       // Curved board: a parabolic surface across its width.
       ownGeo = this._makeCurvedGeo(w, len, curve);
       mat.side = THREE.DoubleSide;
@@ -221,7 +229,7 @@ export class PlatformField {
     // Emergency edge lighting (lit only during blackout). Child of `visual` so it
     // inherits the board's scale and slope automatically. Curved boards need their
     // own edge geometry; flat/round boards share the cached unit-shape edges.
-    const edgeGeo = curve ? new THREE.EdgesGeometry(ownGeo)
+    const edgeGeo = (curve || spline) ? new THREE.EdgesGeometry(ownGeo)
       : geoType === "cyl" ? this._edgeGeoCyl
       : geoType === "hex" ? this._edgeGeoHex
       : this._edgeGeoBox;
@@ -236,7 +244,7 @@ export class PlatformField {
     p._alphaTex = alphaTex; // glass tiles own an alpha-map clone to dispose too
     p._geo = ownGeo;
     p._edge = edge;
-    p._edgeGeo = curve ? edgeGeo : null; // dispose curved edge geo with the board; shared ones stay
+    p._edgeGeo = (curve || spline) ? edgeGeo : null; // dispose curved/spline edge geo with the board; shared ones stay
     p.slopeZ = slopeZ;
     p.curve = curve;
     p.leanX = leanX;
@@ -270,6 +278,59 @@ export class PlatformField {
     }
     pos.needsUpdate = true;
     g.computeVertexNormals();
+    return g;
+  }
+
+  // A long ribbon you roll ALONG: a finely tessellated flat plane whose vertices are
+  // displaced into rolling hills/valleys (Y) that ALSO meander left/right (X). It's a
+  // pure heightfield — exactly one surface height per (x,z), no overhangs — so the
+  // single straight-down collision raycast tracks it perfectly, the same way curved
+  // boards work. Both displacements are windowed by sin(pi*u) so they START and END at
+  // exactly 0: the near edge meets the incoming cursor (x,y), the far edge returns to
+  // the board's center (x,y), keeping the generator's gap/height bookkeeping valid.
+  // `opts`: ampY (hill height), wavesY (hill cycles), meanderX (side drift), wavesX
+  // (side swings), maxSlope (hard cap on |dy/dz| so no face nears the normal.y>0.1
+  // collision cutoff — i.e. the surface never becomes a wall you'd fall through).
+  _makeSplineGeo(w, len, opts) {
+    const { ampY, wavesY, meanderX, wavesX, maxSlope } = opts;
+    const g = new THREE.PlaneGeometry(w, len, CONFIG.splineSegX, CONFIG.splineSegZ);
+    g.rotateX(-Math.PI / 2); // lay flat in xz, facing up (local z = -len/2..+len/2)
+
+    // Height along the ribbon: a couple of gentle sines, windowed to 0 at both ends.
+    // We then SCALE the whole profile down if its steepest slope would exceed maxSlope,
+    // so a tall/short ribbon can never produce a near-vertical face (fall-through).
+    const half = len / 2;
+    const u = (z) => (z + half) / len;             // 0 at near edge, 1 at far edge
+    const win = (uu) => Math.sin(Math.PI * uu);    // 0 at both ends, 1 in the middle
+    const heightRaw = (z) => {
+      const uu = u(z);
+      const a = Math.sin(uu * Math.PI * wavesY * 2);          // primary hills
+      const b = 0.35 * Math.sin(uu * Math.PI * wavesY * 2 * 2 + 1.7); // a softer overtone for variety
+      return win(uu) * ampY * (a + b);
+    };
+    // Probe the slope across the length to find the steepest dy/dz, then pick a scale
+    // that keeps it under maxSlope. (Cheap: sample the same segZ resolution we built.)
+    const stepZ = len / CONFIG.splineSegZ;
+    let maxAbsSlope = 0;
+    for (let z = -half; z < half; z += stepZ) {
+      const s = Math.abs((heightRaw(z + stepZ) - heightRaw(z)) / stepZ);
+      if (s > maxAbsSlope) maxAbsSlope = s;
+    }
+    const yScale = maxAbsSlope > maxSlope ? maxSlope / maxAbsSlope : 1;
+    const height = (z) => heightRaw(z) * yScale;
+
+    // Sideways meander of the centerline: a slow sine, also windowed to 0 at both ends
+    // so the near edge lines up with the incoming x and the far edge returns to center.
+    const meander = (z) => win(u(z)) * meanderX * Math.sin(u(z) * Math.PI * wavesX * 2);
+
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const pz = pos.getZ(i);
+      pos.setX(i, pos.getX(i) + meander(pz)); // slide the strip sideways (still single-valued in (x,z))
+      pos.setY(i, height(pz));
+    }
+    pos.needsUpdate = true;
+    g.computeVertexNormals(); // lighting + the normal.y face filter need correct normals
     return g;
   }
 
@@ -442,6 +503,92 @@ export class PlatformField {
     tube.position.set(0, r - 1.4, 0);
     p.mesh.add(tube);
     p._geo = geo; // dispose this geometry when the platform is culled
+  }
+
+  // A long undulating + meandering ribbon you roll ALONG (tracking its surface) to
+  // the far end, then JUMP to the next piece. It's one traversable heightfield board
+  // (no mid jumps, no obstacles/movers/runes/slope/curve/lean) — its own thing.
+  // SPACING ("track then jump"): the entry gap is a normal jump gap from the cursor;
+  // because both the Y-undulation and the X-meander are windowed to ZERO at both
+  // ends, the near edge sits flush at the incoming (x,y) and the far end returns to
+  // the board's center (x,y) — so we just advance the cursor to the ribbon's far end
+  // and the next board's gap is computed from there, exactly like any other board.
+  _spawnSpline(forwardSpeed) {
+    const sd = this._spreadD, hd = this._difficulty;
+    const reach = jumpReach();
+    const maxGap = forwardSpeed * reach.airTime * CONFIG.pathGapSafety;
+    const gap = clamp(rand(4, maxGap * 0.4), 3, maxGap); // a normal jump onto the ribbon
+
+    // WIDE + gentle early, NARROWER + more dramatic with distance (spread ramp). Every
+    // amplitude is still clamped by splineMaxSlope inside _makeSplineGeo so the surface
+    // can never approach vertical — the ball always rolls the full length safely.
+    const len = ramp(CONFIG.splineLength, sd);
+    const w = ramp(CONFIG.splineWidth, sd);
+    const spline = {
+      ampY: ramp(CONFIG.splineAmpY, sd),
+      wavesY: ramp(CONFIG.splineWavesY, sd),
+      meanderX: ramp(CONFIG.splineMeanderX, sd),
+      wavesX: ramp(CONFIG.splineWavesX, sd),
+      maxSlope: CONFIG.splineMaxSlope,
+    };
+
+    const band = ramp(CONFIG.bandX, sd);
+    const x = clamp(this._cursor.x, -band, band);
+    const y = this._cursor.y; // board center; the displaced near edge meets this height
+    const z = this._cursor.z + gap + len / 2;
+
+    // hy is the COLLISION half-thickness; the rolling surface is the displaced mesh.
+    // hx must cover the FULL extent (half-width + peak meander) so the down-raycast's
+    // x-prefilter (plat.hx + radius*0.5) never skips the ribbon where it has drifted.
+    const p = this._addBoard({
+      x, y, z, w, len, hy: 0.5, geoType: "box", type: "normal", texName: this._groundTex(), spline,
+    });
+    p.hx = w / 2 + spline.meanderX + 1; // widen the landing/raycast box to include the meander
+
+    // Far end: displacement is 0 there by construction, so the exit is the center (x,y).
+    this._cursor = { x, y, z: z + len / 2 };
+    this._stepsSinceSpline = 0;
+    this._stepIndex++;
+
+    // A trail of gems down the ribbon as a reward for riding it — placed on the SURFACE
+    // (follow the undulation + meander) so they sit in the roll lane, not buried/floating.
+    const n = 6;
+    for (let k = 0; k < n; k++) {
+      const uu = (k + 0.5) / n;
+      const lz = -len / 2 + uu * len;
+      const sy = this._splineHeightAt(spline, len, lz);
+      const sx = this._splineMeanderAt(spline, len, lz);
+      this._addGem(x + sx, y + sy + 0.2, z + lz); // +0.8 inside _addGem lifts it to roll height
+    }
+  }
+
+  // Mirror the Y-undulation in _makeSplineGeo (windowed sines, slope-capped) so gem
+  // placement tracks the real surface. Kept in lockstep with the geometry builder.
+  _splineHeightAt(spline, len, lz) {
+    const { ampY, wavesY, maxSlope } = spline;
+    const half = len / 2;
+    const u = (z) => (z + half) / len;
+    const win = (uu) => Math.sin(Math.PI * uu);
+    const raw = (z) => {
+      const uu = u(z);
+      return win(uu) * ampY * (Math.sin(uu * Math.PI * wavesY * 2) + 0.35 * Math.sin(uu * Math.PI * wavesY * 4 + 1.7));
+    };
+    const stepZ = len / CONFIG.splineSegZ;
+    let maxAbsSlope = 0;
+    for (let z = -half; z < half; z += stepZ) {
+      const s = Math.abs((raw(z + stepZ) - raw(z)) / stepZ);
+      if (s > maxAbsSlope) maxAbsSlope = s;
+    }
+    const yScale = maxAbsSlope > maxSlope ? maxSlope / maxAbsSlope : 1;
+    return raw(lz) * yScale;
+  }
+
+  // Mirror the X-meander in _makeSplineGeo so gems follow the ribbon's drift.
+  _splineMeanderAt(spline, len, lz) {
+    const { meanderX, wavesX } = spline;
+    const half = len / 2;
+    const uu = (lz + half) / len;
+    return Math.sin(Math.PI * uu) * meanderX * Math.sin(uu * Math.PI * wavesX * 2);
   }
 
   _addGem(x, top, z) {
@@ -622,6 +769,14 @@ export class PlatformField {
       return;
     }
     this._stepsSinceTunnel++;
+
+    // Or a long undulating "spline" ribbon you roll the whole length of, then jump
+    // off the far end. Gated + cooled-down like tunnels so they never cluster.
+    if (!safe && this._stepsSinceSpline >= CONFIG.splineCooldown && chance(ramp(CONFIG.splineChance, hd))) {
+      this._spawnSpline(forwardSpeed);
+      return;
+    }
+    this._stepsSinceSpline++;
 
     const sd = safe ? 0 : this._spreadD;
     const dd = safe ? 0 : hd;
