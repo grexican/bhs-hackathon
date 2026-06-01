@@ -44,6 +44,7 @@ export class Game {
     this._firstPerson = false;
     this._diffLevel = CONFIG.defaultDifficulty; // index into CONFIG.difficultyLevels
     this._zen = false; // Zen mode: no death (power-bounce instead), no scoring/gems, no hazards
+    this._god = false; // God mode (cheat): no death (power-bounce) but difficulty + scoring stay NORMAL — get harder without dying
     this._audiosurf = false; // Audiosurf mode: the world pulses on the music's beat
     this._beatPulse = 0;     // 0..1 punch fired ON each beat, decays fast (drives bloom + FOV kick)
     this._restartLock = 0; // brief input-dead window after dying (no instant restart)
@@ -119,6 +120,7 @@ export class Game {
       if (e.code === "Escape") this._togglePause(); // pause / resume (NOT quit — quit is "End Run" in ⚙️)
       if (e.code === "KeyZ") this._toggleZen();
       if (e.code === "KeyA") this._toggleAudiosurf();
+      if (this._cheat && e.code === "KeyI") this._toggleGod(); // cheat-only: immortal (still escalates)
       // Cheat-only desktop testing: instantly fire a powerdown on yourself.
       // R rain · F fog · B blackout · T trip · O slow-mo.
       if (this._cheat && this.state === "playing") {
@@ -370,6 +372,14 @@ export class Game {
     document.body.classList.toggle("is-zen", this._zen); // CSS hides the HUD counters — clean, just-zen'ing
     this._toast(this._zen ? "🧘 ZEN: On" : "🧘 ZEN: Off", "#9affd6");
     this._syncSettings();
+  }
+
+  // God mode (cheat-only, key I): you can't die — a fatal fall power-bounces you back up
+  // like zen — BUT difficulty + speed keep escalating and scoring stays ON, so you get
+  // progressively harder without ever dying. Works mid-run (it's a cheat).
+  _toggleGod() {
+    this._god = !this._god;
+    this._toast(this._god ? "😇 GOD MODE: On" : "😇 GOD MODE: Off", "#ffd34e");
   }
 
   // Audiosurf mode: the world visibly pulses ON the music's beat so it feels
@@ -634,6 +644,7 @@ export class Game {
     this.background.dim = this._darkLevel; // fade the skyline/moon down too
     this.background.beat = this._audiosurf ? this._beatPulse : 0; // skyline windows flash on the beat
     this.field.blackout = this._effects.blackout > 0;
+    this.field.beat = this._audiosurf && this._effects.blackout <= 0 ? this._beatPulse : 0; // tiles pulse colour on the beat (not during blackout)
     this.field.setEmissiveScale(m); // dim the self-lit plates (boost green / bouncy red) in step with the lights — otherwise they ignore the blackout
     // Night-driving darkness: a dark film right on the lens. The scene stays faintly
     // lit underneath (dimmed plates + edge outlines + glowing pickups), so you get
@@ -672,10 +683,10 @@ export class Game {
     this._rainLevel += (rainTarget - this._rainLevel) * (1 - Math.exp(-dt / 0.5));
     if (!this._rainLensEl) this._rainLensEl = document.getElementById("rain-lens");
     this._rainLensEl.style.opacity = this._rainLevel;
-    // Stronger blur + a slight warp so heavy rain genuinely DISTORTS the view (a real
-    // "bad" powerdown), not just a faint wash. (Per-drop lensing is on .raindrop in CSS.)
+    // Keep the OVERALL veil blur light — the distortion should come from the DROPS
+    // themselves (per-drop lens on .raindrop), not a heavy whole-screen smear.
     this._rainLensEl.style.backdropFilter = this._rainLensEl.style.webkitBackdropFilter =
-      `blur(${(this._rainLevel * 5).toFixed(2)}px) contrast(${(1 + this._rainLevel * 0.12).toFixed(3)})`;
+      `blur(${(this._rainLevel * 1.6).toFixed(2)}px)`;
     // Spawn fat drops at RANDOM positions/sizes/timing while it rains — each is a div
     // that slides down + fades then self-removes (no synced loop = real randomness).
     if (this._rainLevel > 0.25) {
@@ -798,14 +809,14 @@ export class Game {
     this._renderEffects();
     // Zen mode never dies — ignore the normal death signal. Instead the catch below
     // lets you actually FALL well past the boards before flinging you back up.
-    if (ev.died && !this._zen) this._die();
+    if (ev.died && !this._zen && !this._god) this._die();
 
     // Zen power-bounce: only once you've fallen a real distance BELOW the lowest
     // nearby board (zenCatchDepth) and are still descending. No teleport — the bounce
     // launches you from where you fell, so you watch the drop, then sail back up to
     // land and keep going. The rising apex sits above the catch line, so it won't
     // re-trigger until you fall back down.
-    if (this._zen && this.player.vel.y < 0) {
+    if ((this._zen || this._god) && this.player.vel.y < 0) {
       const floor = this.field.lowestTopNear(this.player.position.z);
       const catchLine = (floor === -Infinity ? 0 : floor) - CONFIG.zenCatchDepth;
       if (this.player.position.y < catchLine) {

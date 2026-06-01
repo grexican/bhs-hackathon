@@ -92,6 +92,8 @@ export class PlatformField {
     this._edgeGeoCyl = new THREE.EdgesGeometry(this._geoCyl);
     this._edgeGeoHex = new THREE.EdgesGeometry(this._geoHex);
     this.blackout = false;
+    this.beat = 0;          // audiosurf: 0..1 beat pulse — tiles glow faintly on the beat
+    this._beatPrev = 0;     // so we run the pulse one extra frame to reset to no-glow
     this._edgeVis = false; // last applied blackout state (so we only re-toggle on change)
     this._emissiveScale = 1; // blackout dims the pieces' OWN glow (emissive) down to ~0; 1 = normal
     this._gemGeo = new THREE.OctahedronGeometry(0.55);
@@ -871,6 +873,21 @@ export class PlatformField {
         else { o.lz = mv.baseLz + off; o.mesh.position.z = mv.baseMeshZ + off; }
       }
     }
+
+    // Audiosurf: faint cool glow pulse on the plain ground tiles in time with the beat
+    // (normal tiles only — coloured plates keep their own emissive). Runs while the beat
+    // is up plus one frame after, to settle the glow back to zero.
+    if (this.beat > 0.003 || this._beatPrev > 0.003) {
+      const g = this.beat;
+      for (const p of this.platforms) {
+        if (p.type !== "normal") continue;
+        const m = p.surfaceMesh && p.surfaceMesh.material;
+        if (!m || !m.isMeshStandardMaterial || m.userData.baseEmissive > 0) continue; // skip plates that already glow
+        m.emissive.setRGB(g * 0.1, g * 0.17, g * 0.22);
+        m.emissiveIntensity = 1;
+      }
+    }
+    this._beatPrev = this.beat;
 
     for (const g of this.gems) {
       if (g.collected) continue;
