@@ -34,6 +34,7 @@ export class Game {
     this._cheat = false;
     this._konami = [];
     this._firstPerson = false;
+    this._diffLevel = CONFIG.defaultDifficulty; // index into CONFIG.difficultyLevels
     this._restartLock = 0; // brief input-dead window after dying (no instant restart)
     this.gems = 0;
     this.score = 0;
@@ -64,6 +65,7 @@ export class Game {
       mult: document.getElementById("mult"),
       distance: document.getElementById("distance"),
       speed: document.getElementById("speed"),
+      diff: document.getElementById("hud-diff"),
       jumps: document.getElementById("jumps"),
       gems: document.getElementById("gems"),
       bestScore: document.getElementById("best-score"),
@@ -251,9 +253,17 @@ export class Game {
     this._syncSettings();
   }
 
+  _cycleDifficulty() {
+    this._diffLevel = (this._diffLevel + 1) % CONFIG.difficultyLevels.length;
+    const lvl = CONFIG.difficultyLevels[this._diffLevel];
+    this.field.difficultyMult = lvl.mult; // takes effect on platforms generated from here on
+    this._toast(`🎚️ ${lvl.name.toUpperCase()}`, "#ffd34e");
+    this._syncSettings();
+  }
+
   _buildSettings() {
     const $ = (id) => document.getElementById(id);
-    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view") };
+    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty") };
     const panel = $("settings-panel");
     const open = (v) => panel.classList.toggle("open", v);
     $("settings-btn").addEventListener("click", () => { this._syncSettings(); open(true); });
@@ -264,6 +274,7 @@ export class Game {
     this._settings.fx.addEventListener("click", () => this._toggleMusicFx());
     this._settings.motion.addEventListener("click", () => this._toggleReduced());
     this._settings.view.addEventListener("click", () => this._toggleView());
+    this._settings.difficulty.addEventListener("click", () => this._cycleDifficulty());
     this._syncSettings();
   }
 
@@ -275,6 +286,7 @@ export class Game {
     s.fx.textContent = `🎚️ Music FX: ${this.sound.reactive ? "On" : "Off"}`;
     s.motion.textContent = `🌿 Reduced Motion: ${this._reducedMotion ? "On" : "Off"}`;
     s.view.textContent = `👁 View: ${this._firstPerson ? "First-person" : "Third-person"}`;
+    s.difficulty.textContent = `🎚️ Difficulty: ${CONFIG.difficultyLevels[this._diffLevel].name}`;
     this._saveSettings(); // every toggle routes through here, so this captures all changes
   }
 
@@ -294,6 +306,12 @@ export class Game {
     if (fx !== null) this.sound.reactive = fx === "1";
     const track = get("gr_track");
     if (track !== null) this.sound.setTrack(Number(track));
+    const diff = get("gr_diff");
+    if (diff !== null) {
+      const i = Number(diff);
+      if (i >= 0 && i < CONFIG.difficultyLevels.length) this._diffLevel = i;
+    }
+    this.field.difficultyMult = CONFIG.difficultyLevels[this._diffLevel].mult; // apply restored (or default) level
   }
 
   _saveSettings() {
@@ -302,6 +320,7 @@ export class Game {
     localStorage.setItem("gr_muted", this.sound.muted ? "1" : "0");
     localStorage.setItem("gr_fx", this.sound.reactive ? "1" : "0");
     localStorage.setItem("gr_track", String(this.sound.trackIndex()));
+    localStorage.setItem("gr_diff", String(this._diffLevel));
   }
 
   _toggleCheat() {
@@ -606,6 +625,7 @@ export class Game {
     this._hud.mult.textContent = `×${this.multiplier}`;
     this._hud.distance.textContent = Math.max(0, Math.floor(this.player.position.z));
     this._hud.speed.textContent = Math.round(this._speed); // smoothed actual speed — spikes when you ride an accel plate
+    if (this._hud.diff) this._hud.diff.textContent = CONFIG.difficultyLevels[this._diffLevel].name;
     this._hud.jumps.textContent = Math.max(0, this.player.jumpCount);
     this._hud.gems.textContent = this.gems;
     this._hud.bestScore.textContent = this.bestScore.toLocaleString();
@@ -620,6 +640,13 @@ export class Game {
     // Hide the ball when we're seeing through its eyes.
     this.player.mesh.visible = !this._firstPerson;
 
+    // How far above the surface we launched from — drives the big-air "look toward
+    // the landing" framing in BOTH views. Ramps in past ~12 up, full by ~47, so
+    // normal hops are untouched.
+    const groundY = this.player.lastGroundedY;
+    const airAbove = Math.max(0, p.y - groundY);
+    const air = Math.min(1, Math.max(0, (airAbove - 12) / 35));
+
     if (this._firstPerson) {
       // Sit just above the ball's center and look down the track.
       const eyeY = p.y + this.player.radius * 0.6;
@@ -630,20 +657,18 @@ export class Game {
         this.camera.position.x += (Math.random() - 0.5) * this._shake;
         this.camera.position.y += (Math.random() - 0.5) * this._shake;
       }
-      this.camera.lookAt(p.x, eyeY + 1, p.z + 16);
+      // During big air, drop the gaze toward the ground ahead so you can spot a
+      // landing instead of staring at the horizon.
+      const lookY = (eyeY + 1) + (groundY - p.y) * 0.7 * air;
+      const lookZ = p.z + 16 + air * 8;
+      this.camera.lookAt(p.x, lookY, lookZ);
     } else {
       // Smooth the steer input so the lean eases gently in and out of turns
       // instead of snapping to it. (Kept subtle.)
       this._lean += (this.input.steer - this._lean) * (snap ? 1 : 0.05);
 
-      // Big-air framing: the higher you climb above the surface you launched from,
-      // the more the camera rises, pulls back, and pitches its gaze DOWN and ahead
-      // — so the platforms below come back into the frame instead of dropping out
-      // of it. Ramps in past ~12 units up, full by ~47, so normal hops are untouched.
-      const groundY = this.player.lastGroundedY;
-      const airAbove = Math.max(0, p.y - groundY);
-      const air = Math.min(1, Math.max(0, (airAbove - 12) / 35));
-
+      // Big-air framing: the higher you climb, the more the camera rises, pulls back,
+      // and pitches its gaze DOWN and ahead so the platforms below come back into frame.
       this.camera.position.x += (p.x - this._lean * 0.55 - this.camera.position.x) * k;
       this.camera.position.y += (p.y + 9 + airAbove * 0.35 - this.camera.position.y) * k;
       // Pull the camera back a touch when accelerating, in when braking — adds a

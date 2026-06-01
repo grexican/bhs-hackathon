@@ -83,10 +83,20 @@ export const CONFIG = {
 
   // --- Hazards: a small floor right after the safe intro (so spikes, obstacles
   // and moving platforms show up early), ramping to their peak. ---
-  obstacleChance: [0.1, 0.6],
+  obstacleChance: [0.18, 0.7],    // more obstacles now there are 4 kinds (barrier/spikes/pillars/overhead)
   movingChance: [0.2, 0.7],       // moving boards are a big part of the mix (calmer early floor)
   moveAmp: [4, 12],
   sharpTurnChance: [0.08, 0.38],
+
+  // Difficulty levels (cycled in the ⚙️ panel, shown in the HUD): a multiplier on
+  // the STARTING floor of the hazard ramps (obstacle/moving/sharp-turn chances), so
+  // Easy opens calmer and Hard busier — all converging toward the same late peak.
+  difficultyLevels: [
+    { name: "Easy", mult: 0.55 },
+    { name: "Medium", mult: 1.0 },
+    { name: "Hard", mult: 1.7 },
+  ],
+  defaultDifficulty: 1, // index into difficultyLevels (Medium)
   goodPowerupChance: [0.4, 0.25],  // chance a pickup is GOOD — powerdowns are the majority (they're dodgeable obstacles), more so deeper in
   roundGeoChance: [0.04, 0.4],    // hex/round pads: rare & small early, common later
 
@@ -107,8 +117,8 @@ export const CONFIG = {
   rampSlope: [0.22, 0.42],   // rise/run (tan of the ramp angle)
   rampLaunch: 0.7,           // fraction of climb speed kept as a hop off an up-ramp
   curveChance: [0.05, 0.25],  // boards curved across their width
-  curveAmount: 0.01,        // parabola steepness (concave funnels in, convex rolls off)
-  curveForce: 25,            // how hard a curved board pushes you sideways
+  curveAmount: [0.04, 0.14], // parabola steepness, RANDOM per board: gentle slopes up to dramatic half-pipes
+  curveForce: 16,            // sideways "gravity" — multiplied by the (random) curve, so a deep bowl pulls hard, a soft one barely
 
   // Powerups / powerdowns
   powerupChance: 0.3,     // chance a path platform spawns a pickup (bumped — the wide sprawl has room for more)

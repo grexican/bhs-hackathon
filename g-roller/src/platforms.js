@@ -76,6 +76,7 @@ export class PlatformField {
     this._difficulty = 0;  // hazard ramp (slow)
     this._spreadD = 0;     // spread ramp (fast)
     this.itemMultiplier = 1; // cheat code bumps this to spawn extra gems/powerups
+    this.difficultyMult = 1; // Easy/Medium/Hard scales the floor of the hazard ramps
     this._biomeTextures = BIOMES[0].textures;
     this._stepIndex = 0;
     this._stepsSinceTunnel = 0;
@@ -186,8 +187,16 @@ export class PlatformField {
     return g;
   }
 
-  // Hang an obstacle off a platform. "barrier" = a low wall you jump; "spikes" =
-  // a hazard strip on one side you steer around. Always leaves a way past.
+  // Difficulty scales the FLOOR of a hazard ramp (obstacle/moving/sharp-turn): Easy
+  // opens calmer, Hard busier. Clamped so a high multiplier can't push past the peak.
+  _hazRamp(pair, d) {
+    return ramp([Math.min(pair[0] * this.difficultyMult, pair[1]), pair[1]], d);
+  }
+
+  // Hang an obstacle off a platform. Four kinds, each needing a different move:
+  // "barrier" = low wall you JUMP; "spikes" = one-side strip you STEER around;
+  // "overhead" = a bar you must roll UNDER (don't jump!); "pillars" = a slalom you
+  // thread between. Always leaves a way past.
   _addObstacle(p, kind) {
     let lx, ly, lz, hx, hy, hz, mesh;
     if (kind === "barrier") {
@@ -199,6 +208,37 @@ export class PlatformField {
       mesh.scale.set(hx * 2, hy * 2, hz * 2);
       mesh.position.set(lx, ly, lz);
       p.mesh.add(mesh);
+    } else if (kind === "overhead") {
+      // A bar you must roll UNDER — DON'T jump here. Spans the width and floats with
+      // a gap beneath: a grounded ball (r≈0.9) clears it, but any jump clips it.
+      hx = p.hx * 0.9; hy = 0.45; hz = 0.5;
+      lx = 0; lz = rand(-p.hz * 0.2, p.hz * 0.3); ly = p.hy + 2.6;
+      mesh = new THREE.Group();
+      const barMat = new THREE.MeshStandardMaterial({ color: 0x2a2f3d, emissive: 0xffd23b, emissiveIntensity: 0.55, roughness: 0.5 });
+      const bar = new THREE.Mesh(this._geoBox, barMat);
+      bar.scale.set(hx * 2, hy * 2, hz * 2); bar.position.set(0, ly, lz); bar.castShadow = true;
+      mesh.add(bar);
+      for (const sx of [-1, 1]) { // posts so it reads as a gate to duck under
+        const post = new THREE.Mesh(this._geoBox, barMat);
+        post.scale.set(0.4, ly - p.hy, 0.4); post.position.set(sx * hx, p.hy + (ly - p.hy) / 2, lz);
+        mesh.add(post);
+      }
+      p.mesh.add(mesh);
+    } else if (kind === "pillars") {
+      // A slalom: two tall narrow pillars with a clear lane between (and lanes on the
+      // sides). Steer through or jump. Each pillar is its OWN collision box so the
+      // gaps are real openings, not one wide wall.
+      hx = p.hx * 0.16; hy = 1.7; hz = 0.5;
+      lz = rand(-p.hz * 0.2, p.hz * 0.2); ly = p.hy + hy;
+      const pmat = new THREE.MeshStandardMaterial({ color: 0x2a2f3d, emissive: 0xff7a1c, emissiveIntensity: 0.5, roughness: 0.5 });
+      for (const sx of [-1, 1]) {
+        const px = sx * p.hx * 0.42;
+        const pillar = new THREE.Mesh(this._geoBox, pmat);
+        pillar.scale.set(hx * 2, hy * 2, hz * 2); pillar.position.set(px, ly, lz); pillar.castShadow = true;
+        p.mesh.add(pillar);
+        p.obstacles.push({ hx, hy, hz, lx: px, ly, lz, kind, mesh: pillar });
+      }
+      return; // pushed each pillar as its own collision box
     } else { // spikes on one side
       const side = chance(0.5) ? 1 : -1;
       hx = p.hx * 0.4; hy = 0.85; hz = p.hz * 0.55;
@@ -450,7 +490,7 @@ export class PlatformField {
       dy = rand(-1.2, 1.2);
     } else {
       const toX = clamp(this._drift.x - this._cursor.x, -lateral, lateral);
-      const sharp = chance(ramp(CONFIG.sharpTurnChance, hd));
+      const sharp = chance(this._hazRamp(CONFIG.sharpTurnChance, hd));
       dx = sharp ? clamp(toX + (chance(0.5) ? 1 : -1) * rand(lateral * 0.5, lateral), -lateral, lateral)
                  : toX * 0.6 + rand(-lateral, lateral) * 0.4;
       const toY = clamp(this._drift.y - this._cursor.y, dyDown, dyUp);
@@ -472,7 +512,11 @@ export class PlatformField {
         if (!round) len *= ramp(CONFIG.rampLenBoost, sd); // box ramps run longer; keep round tiles small
       }
       if (!round && chance(ramp(CONFIG.curveChance, sd))) {
-        curve = (chance(0.6) ? 1 : -1) * CONFIG.curveAmount; // + concave (in), - convex (out)
+        // Random magnitude: most are gentle, some are dramatic half-pipes. Concave
+        // (+, funnels in) favored over convex (-, rolls off). curveForce reads this
+        // magnitude, so a deep bowl also pulls you sideways hard ("gravity").
+        const mag = rand(CONFIG.curveAmount[0], CONFIG.curveAmount[1]);
+        curve = (chance(0.7) ? 1 : -1) * mag;
       }
     }
 
@@ -492,10 +536,16 @@ export class PlatformField {
 
     if (!safe) {
       // Movement is a property too — a board can slide/lift while tilted or bowed.
-      if (chance(ramp(CONFIG.movingChance, hd))) this._makeMover(p, false);
+      if (chance(this._hazRamp(CONFIG.movingChance, hd))) this._makeMover(p, false);
       // Obstacles stay off ramps/curves: a spike mid-climb you can't avoid is unfair.
-      if (type === "normal" && !slopeZ && !curve && len > 12 && chance(ramp(CONFIG.obstacleChance, hd))) {
-        this._addObstacle(p, chance(0.55) ? "barrier" : "spikes");
+      if (type === "normal" && !slopeZ && !curve && len > 12 && chance(this._hazRamp(CONFIG.obstacleChance, hd))) {
+        const r = Math.random();
+        let kind;
+        if (r < 0.34) kind = "spikes";
+        else if (r < 0.6) kind = "barrier";
+        else if (r < 0.8) kind = "pillars";
+        else kind = len > 22 ? "overhead" : "barrier"; // overhead needs grounded runway to be fair
+        this._addObstacle(p, kind);
       }
     }
     // Item multiplier (1 normally, more with the cheat code) spawns extra
