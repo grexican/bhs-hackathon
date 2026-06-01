@@ -33,7 +33,7 @@ function skylineTexture(hue) {
   }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
-  tex.repeat.set(4, 1); // more repeats: the skyline planes are much longer now, this keeps buildings the same size (not stretched)
+  tex.repeat.set(6, 1.1); // more repeats: the skyline planes are much longer now, this keeps buildings the same size (not stretched)
   return tex;
 }
 
@@ -180,7 +180,12 @@ export class Background {
 
     // Two skyline ranges (near + far) on each side for parallax depth.
     this.ranges = [];
-    const make = (dist, height, hue, opacity) => {
+    // Each wall is yawed (toed in) AND pitched about the WORLD X axis so its far (+z)
+    // end sinks DOWN toward the floor in the distance while the behind end (off-camera)
+    // rises — so the city descends to meet the ground far away instead of running flat.
+    const WORLD_X = new THREE.Vector3(1, 0, 0);
+    const CITY_TILT = 0.17; // ~10° downward pitch of the far end
+    const make = (dist, height, hue, opacity, yaw) => {
       const tex = skylineTexture(hue);
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
@@ -191,6 +196,8 @@ export class Background {
         depthWrite: false,
       });
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(2600, height), mat); // long wall so the city stretches FAR into the distance, not just right in front
+      plane.rotation.y = yaw;
+      plane.rotateOnWorldAxis(WORLD_X, CITY_TILT); // far end pitches down to the floor
       plane.userData = { dist, tex, parallax: 1 / dist, baseOpacity: opacity, hue: hue / 360 };
       this.ranges.push(plane);
       this.group.add(plane);
@@ -200,10 +207,10 @@ export class Background {
     // Wider apart (more open / vast), and each side TOED IN toward +z (the distance)
     // so the walls converge into a vanishing-point funnel that "closes in" far away.
     const toe = 0.13; // ~7.5° inward lean of the far end
-    make(540, 355, 230, 0.5).rotation.y = Math.PI / 2 - toe; // far, right
-    make(540, 355, 230, 0.5).rotation.y = -Math.PI / 2 + toe; // far, left
-    make(380, 295, 265, 0.7).rotation.y = Math.PI / 2 - toe; // near, right
-    make(380, 295, 265, 0.7).rotation.y = -Math.PI / 2 + toe; // near, left
+    make(540, 355, 230, 0.5, Math.PI / 2 - toe);  // far, right
+    make(540, 355, 230, 0.5, -Math.PI / 2 + toe); // far, left
+    make(380, 295, 265, 0.7, Math.PI / 2 - toe);  // near, right
+    make(380, 295, 265, 0.7, -Math.PI / 2 + toe); // near, left
     this._sides = [1, -1, 1, -1];
 
     // --- "WAY up high, no ground" atmosphere (replaces the old floor grid's sense
