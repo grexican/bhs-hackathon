@@ -6,7 +6,8 @@ import * as THREE from "three";
 
 function skylineTexture(hue) {
   const c = document.createElement("canvas");
-  c.width = 512; c.height = 256;
+  c.width = 512;
+  c.height = 256;
   const ctx = c.getContext("2d");
   ctx.clearRect(0, 0, 512, 256);
   // Near-black tower bodies (NOT hue-tinted) so the cycling material colour barely
@@ -24,14 +25,15 @@ function skylineTexture(hue) {
     // Bright white windows — these are what the cycling colour lights up.
     ctx.fillStyle = "rgba(255,252,255,0.92)";
     for (let i = 0; i < 8; i++) {
-      if (Math.random() < 0.5) ctx.fillRect(x + 4 + (i % 3) * (w / 3), 256 - h + 8 + Math.floor(i / 3) * 14, 5, 7);
+      if (Math.random() < 0.5)
+        ctx.fillRect(x + 4 + (i % 3) * (w / 3), 256 - h + 8 + Math.floor(i / 3) * 14, 5, 7);
     }
     ctx.fillStyle = body;
     x += w + 4;
   }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
-  tex.repeat.set(6, 1);
+  tex.repeat.set(4, 1); // more repeats: the skyline planes are much longer now, this keeps buildings the same size (not stretched)
   return tex;
 }
 
@@ -42,7 +44,8 @@ function cloudTexture() {
   const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
   g.addColorStop(0, "rgba(150,120,255,0.5)");
   g.addColorStop(1, "rgba(150,120,255,0)");
-  ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(c);
 }
 
@@ -50,7 +53,8 @@ function cloudTexture() {
 // at the edges. Tiled across a huge plane far below to read as a cloud deck.
 function mistTexture() {
   const c = document.createElement("canvas");
-  c.width = 512; c.height = 512;
+  c.width = 512;
+  c.height = 512;
   const ctx = c.getContext("2d");
   ctx.clearRect(0, 0, 512, 512);
   // scatter many soft blobs, biased into horizontal smears for a layered-cloud feel
@@ -60,7 +64,7 @@ function mistTexture() {
     const rx = 50 + Math.random() * 120;
     const ry = 12 + Math.random() * 40;
     const g = ctx.createRadialGradient(x, y, 0, x, y, rx);
-    const a = 0.04 + Math.random() * 0.10;
+    const a = 0.04 + Math.random() * 0.1;
     g.addColorStop(0, `rgba(190,170,255,${a})`);
     g.addColorStop(1, "rgba(190,170,255,0)");
     ctx.fillStyle = g;
@@ -90,11 +94,12 @@ function farLightsTexture() {
   base.addColorStop(0, "rgba(10,9,20,0.5)");
   base.addColorStop(0.6, "rgba(5,5,11,0.24)");
   base.addColorStop(1, "rgba(2,2,6,0)");
-  ctx.fillStyle = base; ctx.fillRect(0, 0, 512, 512);
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, 512, 512);
   // tiny lit specks, denser toward the centre, like a distant illuminated city
   for (let i = 0; i < 460; i++) {
     const ang = Math.random() * Math.PI * 2;
-    const r = Math.pow(Math.random(), 0.6) * 240; // bias inward
+    const r = Math.random() ** 0.6 * 240; // bias inward
     const x = 256 + Math.cos(ang) * r;
     const y = 256 + Math.sin(ang) * r;
     const fade = 1 - r / 256;
@@ -119,7 +124,8 @@ function darkPoolTexture() {
   g.addColorStop(0, "rgba(3,3,5,1)");
   g.addColorStop(0.7, "rgba(2,2,4,0.85)");
   g.addColorStop(1, "rgba(1,1,2,0)");
-  ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
   return new THREE.CanvasTexture(c);
 }
 
@@ -145,14 +151,18 @@ export class Background {
 
     this.dim = 0; // 0 = normal sky, 1 = blacked out (driven by the blackout powerdown)
 
-    this._t = 0;       // colour-cycle time (always advances)
-    this._driftT = 0;  // building-scroll time (only advances while playing)
+    this._t = 0; // colour-cycle time (always advances)
+    this._driftT = 0; // building-scroll time (only advances while playing)
 
     // Drifting nebula sprites.
     this.clouds = [];
     const cloudMat = new THREE.SpriteMaterial({
-      map: cloudTexture(), transparent: true, depthWrite: false, opacity: 0.35,
-      blending: THREE.AdditiveBlending, fog: false,
+      map: cloudTexture(),
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.35,
+      blending: THREE.AdditiveBlending,
+      fog: false,
     });
     this._cloudMat = cloudMat;
     for (let i = 0; i < 7; i++) {
@@ -160,7 +170,9 @@ export class Background {
       const scale = 60 + Math.random() * 90;
       s.scale.set(scale, scale, 1);
       s.userData.offset = new THREE.Vector3(
-        (Math.random() - 0.5) * 360, 60 + Math.random() * 120, 180 + Math.random() * 160
+        (Math.random() - 0.5) * 360,
+        60 + Math.random() * 120,
+        180 + Math.random() * 160
       );
       this.clouds.push(s);
       this.group.add(s);
@@ -171,9 +183,14 @@ export class Background {
     const make = (dist, height, hue, opacity) => {
       const tex = skylineTexture(hue);
       const mat = new THREE.MeshBasicMaterial({
-        map: tex, transparent: true, opacity, fog: false, side: THREE.DoubleSide, depthWrite: false,
+        map: tex,
+        transparent: true,
+        opacity,
+        fog: false,
+        side: THREE.DoubleSide,
+        depthWrite: false,
       });
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(1200, height), mat);
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(2600, height), mat); // long wall so the city stretches FAR into the distance, not just right in front
       plane.userData = { dist, tex, parallax: 1 / dist, baseOpacity: opacity, hue: hue / 360 };
       this.ranges.push(plane);
       this.group.add(plane);
@@ -183,10 +200,10 @@ export class Background {
     // Wider apart (more open / vast), and each side TOED IN toward +z (the distance)
     // so the walls converge into a vanishing-point funnel that "closes in" far away.
     const toe = 0.13; // ~7.5° inward lean of the far end
-    make(540, 355, 230, 0.5).rotation.y = Math.PI / 2 - toe;   // far, right
-    make(540, 355, 230, 0.5).rotation.y = -Math.PI / 2 + toe;  // far, left
-    make(380, 295, 265, 0.7).rotation.y = Math.PI / 2 - toe;   // near, right
-    make(380, 295, 265, 0.7).rotation.y = -Math.PI / 2 + toe;  // near, left
+    make(540, 355, 230, 0.5).rotation.y = Math.PI / 2 - toe; // far, right
+    make(540, 355, 230, 0.5).rotation.y = -Math.PI / 2 + toe; // far, left
+    make(380, 295, 265, 0.7).rotation.y = Math.PI / 2 - toe; // near, right
+    make(380, 295, 265, 0.7).rotation.y = -Math.PI / 2 + toe; // near, left
     this._sides = [1, -1, 1, -1];
 
     // --- "WAY up high, no ground" atmosphere (replaces the old floor grid's sense
@@ -199,8 +216,12 @@ export class Background {
     this.farLights = new THREE.Mesh(
       new THREE.PlaneGeometry(2600, 2600),
       new THREE.MeshBasicMaterial({
-        map: farLightsTexture(), transparent: true, opacity: 0.6,
-        depthWrite: false, fog: false, blending: THREE.AdditiveBlending,
+        map: farLightsTexture(),
+        transparent: true,
+        opacity: 0.6,
+        depthWrite: false,
+        fog: false,
+        blending: THREE.AdditiveBlending,
       })
     );
     this.farLights.rotation.x = -Math.PI / 2; // lay it flat, facing up at us
@@ -213,7 +234,13 @@ export class Background {
     //     the floor reads as black with glowing specks rather than a purple slab.
     this.farDark = new THREE.Mesh(
       new THREE.PlaneGeometry(2900, 2900),
-      new THREE.MeshBasicMaterial({ map: darkPoolTexture(), transparent: true, opacity: 0.9, depthWrite: false, fog: false })
+      new THREE.MeshBasicMaterial({
+        map: darkPoolTexture(),
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+        fog: false,
+      })
     );
     this.farDark.rotation.x = -Math.PI / 2;
     this.farDark.renderOrder = -2; // behind the lights
@@ -229,8 +256,12 @@ export class Background {
       tex.needsUpdate = true;
       tex.repeat.set(repeat, repeat);
       const mat = new THREE.MeshBasicMaterial({
-        map: tex, transparent: true, opacity, depthWrite: false,
-        fog: false, blending: THREE.AdditiveBlending,
+        map: tex,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        fog: false,
+        blending: THREE.AdditiveBlending,
       });
       const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
       m.rotation.x = -Math.PI / 2;
@@ -239,7 +270,7 @@ export class Background {
       this.group.add(m);
     };
     addMist(-170, 2000, 5, 0.5, 255, 0.25); // deep, slow
-    addMist(-90, 1500, 4, 0.42, 280, 0.5);  // mid, faster
+    addMist(-90, 1500, 4, 0.42, 280, 0.5); // mid, faster
 
     // 3) Slow-rising motes — sparse glints drifting UP out of the abyss, reinforcing
     //    "we're high and there's a long way down." One cheap Points cloud.
@@ -249,17 +280,31 @@ export class Background {
     for (let i = 0; i < N; i++) {
       const x = (Math.random() - 0.5) * 700;
       const y = -260 + Math.random() * 300; // somewhere between lights and track
-      const z = 120 + Math.random() * 360;  // ahead of the player
-      pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
-      this._moteData.push({ x, z, ySpan: 300, baseY: -260, speed: 6 + Math.random() * 14, phase: Math.random() * 6.28 });
+      const z = 120 + Math.random() * 360; // ahead of the player
+      pos[i * 3] = x;
+      pos[i * 3 + 1] = y;
+      pos[i * 3 + 2] = z;
+      this._moteData.push({
+        x,
+        z,
+        ySpan: 300,
+        baseY: -260,
+        speed: 6 + Math.random() * 14,
+        phase: Math.random() * 6.28,
+      });
     }
     const moteGeo = new THREE.BufferGeometry();
     moteGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     this._motePos = moteGeo.getAttribute("position");
     this._moteMat = new THREE.PointsMaterial({
-      color: 0xbfd0ff, size: 4, sizeAttenuation: true,
-      transparent: true, opacity: 0.55, depthWrite: false,
-      fog: false, blending: THREE.AdditiveBlending,
+      color: 0xbfd0ff,
+      size: 4,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+      fog: false,
+      blending: THREE.AdditiveBlending,
     });
     this.motes = new THREE.Points(moteGeo, this._moteMat);
     this.group.add(this.motes);
@@ -321,7 +366,7 @@ export class Background {
     const arr = this._motePos.array;
     for (let i = 0; i < this._moteData.length; i++) {
       const d = this._moteData[i];
-      const rise = (d.baseY + ((t * d.speed) % d.ySpan));
+      const rise = d.baseY + ((t * d.speed) % d.ySpan);
       arr[i * 3] = d.x + Math.sin(t * 0.3 + d.phase) * 18;
       arr[i * 3 + 1] = rise;
       arr[i * 3 + 2] = playerZ + d.z;

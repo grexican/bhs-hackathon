@@ -40,8 +40,8 @@ export const CONFIG = {
   // Flipper plate (orange): a hinged springboard that pivots forward and SENDS you
   // up AND forward — a directed launch. Survive the landing. Reuses the box plate;
   // the "flip" is just an animated hinge kick (no new geometry).
-  flipperVertical: 1.75,  // launch v.y = jumpSpeed * this — dramatic (above the trampoline; energy also goes forward)
-  flipperForward: 52,     // forward speed BLAST on launch — injected straight into live speed (uncapped by accelMax) so you really fly forward, then eases back
+  flipperVertical: 1.2,   // launch v.y = jumpSpeed * this — LOWER than the trampoline (1.7) on purpose: the flipper is a flat FORWARD cannon, the red bouncy is the vertical pop
+  flipperForward: 64,     // forward speed BLAST on launch — injected straight into live speed (uncapped) so you fly FAR forward, then eases back. This (not height) is the flipper's identity
   flipperFlipTime: 0.4,   // seconds the hinge-kick animation lasts
   flipperChance: 0.08,    // chance a non-safe main-path board is a flipper (not gated by zen/difficulty — just rare)
 
