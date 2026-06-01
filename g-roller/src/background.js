@@ -136,17 +136,20 @@ export class Background {
 
     // Glowing moon.
     this.moon = new THREE.Mesh(
-      new THREE.SphereGeometry(26, 32, 24),
+      new THREE.SphereGeometry(80, 32, 24),
       new THREE.MeshBasicMaterial({ color: 0xffe9b0, fog: false })
     );
     const halo = new THREE.Mesh(
-      new THREE.SphereGeometry(34, 32, 24),
+      new THREE.SphereGeometry(102, 32, 24),
       new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.18, fog: false })
     );
     this.moon.add(halo);
     this.moon.material.transparent = true; // so the blackout powerdown can fade it
     this._halo = halo;
-    this.moonOffset = new THREE.Vector3(70, 70, 240);
+    // Pegged FAR in the distance (z within the 1200 far-plane), high in the sky. It
+    // also tracks the player's x/y (see update) so you can never wander/climb "up to"
+    // it — it stays a fixed, distant moon beyond the city. Bigger so it reads at range.
+    this.moonOffset = new THREE.Vector3(120, 165, 960);
     this.group.add(this.moon);
 
     this.dim = 0; // 0 = normal sky, 1 = blacked out (driven by the blackout powerdown)
@@ -349,7 +352,7 @@ export class Background {
     if (nebula != null) this._nebTarget.setHex(nebula);
   }
 
-  update(playerZ, dt = 0, playing = false) {
+  update(playerZ, dt = 0, playing = false, playerX = 0, playerY = 0) {
     this._t += dt;
     if (playing) this._driftT += dt; // city only moves while you're actually rolling
     const t = this._t;
@@ -374,7 +377,7 @@ export class Background {
     this._halo.material.opacity = 0.18 * f;
     this._cloudMat.opacity = f;
 
-    this.moon.position.set(this.moonOffset.x, this.moonOffset.y, playerZ + this.moonOffset.z);
+    this.moon.position.set(playerX + this.moonOffset.x, playerY + this.moonOffset.y, playerZ + this.moonOffset.z);
     this.moon.rotation.y += 0.0006;
     // Moon body + halo carry the biome's moon tint (eased above).
     this.moon.material.color.copy(this._moonTint);

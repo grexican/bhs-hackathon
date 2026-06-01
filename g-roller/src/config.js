@@ -40,8 +40,9 @@ export const CONFIG = {
   // Flipper plate (orange): a hinged springboard that pivots forward and SENDS you
   // up AND forward — a directed launch. Survive the landing. Reuses the box plate;
   // the "flip" is just an animated hinge kick (no new geometry).
-  flipperVertical: 1.2,   // launch v.y = jumpSpeed * this — LOWER than the trampoline (1.7) on purpose: the flipper is a flat FORWARD cannon, the red bouncy is the vertical pop
-  flipperForward: 64,     // forward speed BLAST on launch — injected straight into live speed (uncapped) so you fly FAR forward, then eases back. This (not height) is the flipper's identity
+  flipperVertical: 1.75,  // launch v.y = jumpSpeed * this — big air (it's a CANNON). Still distinct from the red bouncy because of the huge forward blast below.
+  flipperForward: 95,     // forward speed BLAST on launch — injected into live speed (clamped to flipperMaxSpeed, well above normal max) so you genuinely FLY forward fast + far, then ease back
+  flipperMaxSpeed: 150,   // the flipper launch can fling you THIS fast forward (vs the normal ~111 ceiling) — that's what makes it feel powerful
   flipperFlipTime: 0.4,   // seconds the hinge-kick animation lasts
   flipperChance: 0.08,    // chance a non-safe main-path board is a flipper (not gated by zen/difficulty — just rare)
 
@@ -133,8 +134,8 @@ export const CONFIG = {
   // here is tuned GENTLE-and-WIDE early, narrower + more dramatic with distance,
   // but always clamped so the ball can roll the whole length without being flung
   // off or falling through. ---
-  splineChance: [0.0, 0.16],   // chance a non-safe step becomes a spline ribbon (ramps with HAZARD)
-  splineCooldown: 7,            // min normal steps between spline boards (so they don't cluster)
+  splineChance: [0.08, 0.34],  // chance a non-safe step becomes a spline ribbon (ramps with HAZARD) — present from early on
+  splineCooldown: 4,           // min normal steps between spline boards (so they don't cluster)
   splineLength: [70, 110],     // ribbon length grows with SPREAD — a real long traverse
   splineWidth: [22, 12],       // WIDE early (easy to stay on), NARROWER with SPREAD
   splineSegZ: 56,              // tessellation along the length (smooth hills)

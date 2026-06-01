@@ -589,7 +589,7 @@ export class Game {
     }
 
     this.particles.update(dt);
-    this.background.update(this.player.position.z, dt, this.state === "playing");
+    this.background.update(this.player.position.z, dt, this.state === "playing", this.player.position.x, this.player.position.y);
     this._followCamera(false);
     this._tickCamera(dt);
     this.composer.render(); // bloom (was wrongly blamed for the flip — that was the camera roll)
@@ -837,7 +837,7 @@ export class Game {
       // Forward BLAST on top of the big vertical. Inject straight into the live speed
       // (uncapped by accelMax) so you genuinely fly FORWARD, not just up like a
       // trampoline — then it eases back. The accel bonus + hold sustain it briefly.
-      this._speed = Math.min(CONFIG.maxForwardSpeed + CONFIG.accelMax + 6, this._speed + CONFIG.flipperForward);
+      this._speed = Math.min(CONFIG.flipperMaxSpeed, this._speed + CONFIG.flipperForward); // fling FASTER than the normal ceiling — that's the power
       this._accelBonus = Math.min(CONFIG.accelMax, this._accelBonus + CONFIG.flipperForward);
       this._accelHold = CONFIG.accelHold;
       this.particles.burst(p, 0xff7a1c, 28); this._shake = 0.5; this._toast("LAUNCH!", "#ff7a1c"); this.sound.bounce();
