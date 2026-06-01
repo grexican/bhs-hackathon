@@ -6,8 +6,8 @@ const ONE = new THREE.Vector3(1, 1, 1);
 // Effects without a dedicated mesh get an orbiting glyph around the ball so you
 // can always see what you've got running. (flight=wings, doublejump=board,
 // shield=bubble are shown separately.)
-const ORBIT_KEYS = ["magnet", "slow", "reverse", "surge", "morph", "trip", "lowgrav", "flubber"];
-const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡", morph: "🌀", trip: "🌈", lowgrav: "🌙", flubber: "🫧" };
+const ORBIT_KEYS = ["magnet", "slow", "reverse", "surge", "morph", "trip", "lowgrav", "flubber", "blackout", "fog"];
+const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡", morph: "🌀", trip: "🌈", lowgrav: "🌙", flubber: "🫧", blackout: "🌑", fog: "🌫️" };
 
 // A gold checker-grid skin for the ball so you can read its spin under the light.
 function ballTexture() {

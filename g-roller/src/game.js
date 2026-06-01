@@ -15,7 +15,7 @@ const EFFECT_DURATIONS = {
   magnet: "magnetDuration", slow: "slowDuration", doublejump: "doubleJumpDuration",
   flight: "flightDuration", reverse: "reverseDuration", surge: "surgeDuration",
   morph: "morphDuration", trip: "tripDuration", lowgrav: "lowgravDuration",
-  flubber: "flubberDuration", blackout: "blackoutDuration",
+  flubber: "flubberDuration", blackout: "blackoutDuration", fog: "fogDuration",
 };
 
 // The conductor. Builds the 3D world, runs the game loop, owns the Start ->
@@ -46,7 +46,7 @@ export class Game {
     this._lean = 0; // smoothed steer for a soft camera lean
     this._throttleSmooth = 0; // smoothed Up/Down throttle for the speed camera response
     this._shake = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0 };
     this._invuln = 0;
 
     this._buildRenderer();
@@ -162,7 +162,8 @@ export class Game {
 
   _buildScene() {
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x141a33, 80, 230);
+    this.scene.fog = new THREE.Fog(0x141a33, CONFIG.fogNear, CONFIG.fogFar);
+    this._fogLevel = 0; // smoothed 0..1 fog-powerdown amount (pulls the horizon in)
 
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 1200);
     this._updateBaseFov();
@@ -202,13 +203,16 @@ export class Game {
     this._biome = 0;
     this._throttleSmooth = 0;
     this._invuln = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0 };
     this._clearSplats();
     this._darkLevel = 0; // lights back to full for a fresh run
     this.hemi.intensity = this._hemiBase;
     this.sun.intensity = this._sunBase;
     this.background.dim = 0;
     this.field.blackout = false;
+    this._fogLevel = 0;
+    this.scene.fog.near = CONFIG.fogNear;
+    this.scene.fog.far = CONFIG.fogFar;
     this.canvas.classList.remove("is-tripping");
     this.scene.fog.color.setHex(BIOMES[0].fog);
     this.sun.color.setHex(BIOMES[0].sun);
@@ -268,6 +272,7 @@ export class Game {
   _togglePowerupType(key) {
     const s = this.field.enabledPowerups;
     if (s.has(key)) s.delete(key); else s.add(key);
+    this.field.pruneDisabledPowerups(); // clear already-spawned ones that are now blocked
     this._syncSettings();
   }
 
@@ -275,6 +280,7 @@ export class Game {
     const s = this.field.enabledPowerups;
     s.clear();
     if (on) for (const k of Object.keys(POWERUP_DEFS)) s.add(k);
+    this.field.pruneDisabledPowerups();
     this._syncSettings();
   }
 
@@ -424,7 +430,7 @@ export class Game {
       this.baseSpeed = Math.min(CONFIG.maxForwardSpeed, this.baseSpeed + CONFIG.speedRampAmount);
     }
     if (this._invuln > 0) this._invuln -= dt;
-    for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip", "lowgrav", "flubber", "blackout"])
+    for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip", "lowgrav", "flubber", "blackout", "fog"])
       if (this._effects[k] > 0) this._effects[k] -= dt;
     // Psychedelic powerdown: recolor the view (gentle variant if reduced-motion).
     const tripping = this._effects.trip > 0;
@@ -442,6 +448,13 @@ export class Game {
     this.sun.intensity = this._sunBase * m;
     this.background.dim = this._darkLevel; // fade the skyline/moon down too
     this.field.blackout = this._effects.blackout > 0;
+
+    // Fog powerdown: ease the horizon in (distinct from blackout — this hides
+    // DISTANCE while the lights stay on, so you can't read far-off platforms).
+    const fogTarget = this._effects.fog > 0 ? 1 : 0;
+    this._fogLevel += (fogTarget - this._fogLevel) * (1 - Math.exp(-dt / 0.5));
+    this.scene.fog.near = CONFIG.fogNear + (CONFIG.fogBlindNear - CONFIG.fogNear) * this._fogLevel;
+    this.scene.fog.far = CONFIG.fogFar + (CONFIG.fogBlindFar - CONFIG.fogFar) * this._fogLevel;
 
     // Ease the actual speed toward the target. Easing INTO a slow-mo is extra
     // gradual (slowEase) so it doesn't yank the speed out and drop you short.
@@ -585,6 +598,7 @@ export class Game {
       morph: ["🌀 MORPH!", "#ff4bd6"], splat: ["💦 SPLAT!", "#8a5a2b"], trip: ["🌈 TRIPPING!", "#a94bff"],
       flubber: ["🫧 FLUBBER! — steer in the air", "#6aff6a"],
       blackout: ["🌑 BLACKOUT! — follow the edge lights", "#9fb3d0"],
+      fog: ["🌫️ FOGGED! — distance is gone", "#9aa6b5"],
     };
     // Different effects stack (run at once). Re-grabbing the same one tops its
     // timer back up without ever shortening it.
@@ -673,6 +687,7 @@ export class Game {
     add("morph", "🌀", "#ff4bd6");
     add("flubber", "🫧", "#6aff6a");
     add("blackout", "🌑", "#9fb3d0");
+    add("fog", "🌫️", "#9aa6b5");
     add("trip", "🌈", "#a94bff");
     this._hud.effects.innerHTML = rows
       .map(([icon, label, color, frac]) => {

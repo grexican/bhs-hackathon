@@ -25,6 +25,7 @@ export const POWERUP_DEFS = {
   morph:      { color: 0xff4bd6, shape: "ico",   icon: "🌀", good: false, weight: 2.5 },
   flubber:    { color: 0x6aff6a, shape: "ico",   icon: "🫧", good: false, weight: 2.5 },
   blackout:   { color: 0x44507a, shape: "octa",  icon: "🌑", good: false, weight: 2 },
+  fog:        { color: 0x9aa6b5, shape: "box",   icon: "🌫️", good: false, weight: 2 },
   trip:       { color: 0xa94bff, shape: "tetra", icon: "🌈", good: false, weight: 1.3 },
 };
 const GOOD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => POWERUP_DEFS[k].good);
@@ -714,11 +715,20 @@ export class PlatformField {
     return min === Infinity ? -Infinity : min;
   }
 
+  // Pickups sit grounded now, but the high jump + pogo keep you airborne a lot — so
+  // collect on LANE proximity (x/z) within a TALL vertical band, not a tight 3D
+  // sphere. That way you grab a grounded pickup whether you roll or hop over it,
+  // instead of sailing straight through it.
+  _reach(pos, playerPos, lane, height) {
+    const dx = pos.x - playerPos.x, dz = pos.z - playerPos.z;
+    return dx * dx + dz * dz < lane * lane && Math.abs(pos.y - playerPos.y) < height;
+  }
+
   harvestGems(playerPos, radius) {
     const grabbed = [];
     for (const g of this.gems) {
       if (g.collected) continue;
-      if (g.mesh.position.distanceTo(playerPos) < radius + 1.1) {
+      if (this._reach(g.mesh.position, playerPos, radius + 1.4, radius + 5)) {
         g.collected = true; g.mesh.visible = false; grabbed.push(g.mesh.position.clone());
       }
     }
@@ -729,12 +739,24 @@ export class PlatformField {
     const grabbed = [];
     for (const u of this.powerups) {
       if (u.collected) continue;
-      if (u.mesh.position.distanceTo(playerPos) < radius + 1.3) {
+      if (this._reach(u.mesh.position, playerPos, radius + 1.5, radius + 5)) {
         u.collected = true; u.mesh.visible = false;
         grabbed.push({ type: u.type, good: u.good, pos: u.mesh.position.clone() });
       }
     }
     return grabbed;
+  }
+
+  // Cheat menu changed the allowed types — yank any already-spawned pickups whose
+  // type is no longer enabled, so the filter takes effect immediately (not just on
+  // platforms generated from here on).
+  pruneDisabledPowerups() {
+    for (let i = this.powerups.length - 1; i >= 0; i--) {
+      const u = this.powerups[i];
+      if (!u.collected && !this.enabledPowerups.has(u.type)) {
+        this.scene.remove(u.mesh); this.powerups.splice(i, 1);
+      }
+    }
   }
 
   // Remove an obstacle (e.g. after a shielded hit smashes through it).
