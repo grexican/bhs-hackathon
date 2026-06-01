@@ -715,10 +715,11 @@ export class PlatformField {
     return min === Infinity ? -Infinity : min;
   }
 
-  // Pickups sit grounded now, but the high jump + pogo keep you airborne a lot — so
-  // collect on LANE proximity (x/z) within a TALL vertical band, not a tight 3D
-  // sphere. That way you grab a grounded pickup whether you roll or hop over it,
-  // instead of sailing straight through it.
+  // Pickups sit grounded now, but jumpSpeed 50 + pogo keep you airborne almost the
+  // whole time, way above any tight collection radius — that's the "passing right
+  // through them" bug. So collect on LANE proximity (x/z) within a TALL vertical
+  // column (covers a full jump arc): if you pass over a grounded pickup, you get it,
+  // whether you're rolling or 30 units up mid-hop. `height` is the tunable knob.
   _reach(pos, playerPos, lane, height) {
     const dx = pos.x - playerPos.x, dz = pos.z - playerPos.z;
     return dx * dx + dz * dz < lane * lane && Math.abs(pos.y - playerPos.y) < height;
@@ -728,7 +729,7 @@ export class PlatformField {
     const grabbed = [];
     for (const g of this.gems) {
       if (g.collected) continue;
-      if (this._reach(g.mesh.position, playerPos, radius + 1.4, radius + 5)) {
+      if (this._reach(g.mesh.position, playerPos, radius + 2, radius + 34)) {
         g.collected = true; g.mesh.visible = false; grabbed.push(g.mesh.position.clone());
       }
     }
@@ -739,7 +740,7 @@ export class PlatformField {
     const grabbed = [];
     for (const u of this.powerups) {
       if (u.collected) continue;
-      if (this._reach(u.mesh.position, playerPos, radius + 1.5, radius + 5)) {
+      if (this._reach(u.mesh.position, playerPos, radius + 2.2, radius + 34)) {
         u.collected = true; u.mesh.visible = false;
         grabbed.push({ type: u.type, good: u.good, pos: u.mesh.position.clone() });
       }
