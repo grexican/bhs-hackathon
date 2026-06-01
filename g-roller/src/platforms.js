@@ -284,13 +284,19 @@ export class PlatformField {
     this.gems.push({ mesh, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
   }
 
-  // Floating power pickup, telegraphed by color + shape + a glyph sprite so you
-  // can read it from a distance. Early on pickups are almost all good; powerdowns
-  // ramp in with difficulty.
-  _addPowerup(x, y, z, d = 0) {
+  // Power pickup, telegraphed by color + shape + a glyph sprite so you can read it
+  // from a distance. Powerdowns are the majority (they act like dodgeable obstacles)
+  // and skew further that way with difficulty.
+  _addPowerup(x, top, z, d = 0) {
     const good = chance(ramp(CONFIG.goodPowerupChance, d));
     const type = weightedPick(good ? GOOD_POWERUPS : BAD_POWERUPS);
     const def = POWERUP_DEFS[type];
+
+    // Good pickups FLOAT (you choose to go grab them). PowerDOWNs sit GROUNDED right
+    // in the roll lane (ball-center height), so they're hard to dodge — you have to
+    // jump over or steer around one, you can't just decline it.
+    const grounded = !good;
+    const y = grounded ? top + 0.95 : this._floatY(top);
 
     const group = new THREE.Group();
     const mesh = new THREE.Mesh(this._powerGeo(def.shape), new THREE.MeshStandardMaterial({
@@ -300,7 +306,7 @@ export class PlatformField {
     group.add(this._iconSprite(def.icon)); // floating glyph above the shape
     group.position.set(x, y, z);
     this.scene.add(group);
-    this.powerups.push({ mesh: group, type, good, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
+    this.powerups.push({ mesh: group, type, good, grounded, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
   }
 
   // Cached geometry per pickup shape.
@@ -498,7 +504,7 @@ export class PlatformField {
     for (let k = 0; k < this.itemMultiplier; k++) {
       const ox = (k - (this.itemMultiplier - 1) / 2) * 3;
       if (chance(0.4)) this._addGem(x + ox, this._floatY(py + p.hy), z);
-      if (chance(CONFIG.powerupChance)) this._addPowerup(x + ox, this._floatY(py + p.hy), z + rand(-len * 0.3, len * 0.3), hd);
+      if (chance(CONFIG.powerupChance)) this._addPowerup(x + ox, py + p.hy, z + rand(-len * 0.3, len * 0.3), hd);
     }
 
     if (!safe) this._scatterCloud(x, exitY, z, sd, hd);
@@ -533,7 +539,7 @@ export class PlatformField {
       for (let m = 0; m < this.itemMultiplier; m++) {
         const ox = (m - (this.itemMultiplier - 1) / 2) * 2.5;
         if (chance(0.5)) this._addGem(x + ox, this._floatY(y + p.hy), z); // reward exploring off-path
-        if (chance(0.12)) this._addPowerup(x + ox, this._floatY(y + p.hy), z, hd);
+        if (chance(0.2)) this._addPowerup(x + ox, y + p.hy, z, hd);
       }
     }
   }
@@ -583,7 +589,8 @@ export class PlatformField {
       if (u.collected) continue;
       u.mesh.rotation.y += dt * 1.6;             // spin the group; glyph sits on the y-axis so it stays put
       u.mesh.children[0].rotation.x += dt * 1.3; // tumble just the shape
-      u.mesh.position.y = u.baseY + Math.sin(this._time * 2 + u.phase) * 0.4;
+      // Grounded powerdowns bob only slightly so they never sink into the platform.
+      u.mesh.position.y = u.baseY + Math.sin(this._time * 2 + u.phase) * (u.grounded ? 0.12 : 0.4);
     }
 
     // Cull everything left behind.

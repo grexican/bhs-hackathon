@@ -87,7 +87,7 @@ export const CONFIG = {
   movingChance: [0.2, 0.7],       // moving boards are a big part of the mix (calmer early floor)
   moveAmp: [4, 12],
   sharpTurnChance: [0.08, 0.38],
-  goodPowerupChance: [0.9, 0.5],
+  goodPowerupChance: [0.4, 0.25],  // chance a pickup is GOOD — powerdowns are the majority (they're dodgeable obstacles), more so deeper in
   roundGeoChance: [0.04, 0.4],    // hex/round pads: rare & small early, common later
 
   // --- Tunnels: a short run of glowing rings you roll through. Kept short so
@@ -111,7 +111,7 @@ export const CONFIG = {
   curveForce: 17,            // how hard a curved board pushes you sideways
 
   // Powerups / powerdowns
-  powerupChance: 0.18,    // chance a path platform floats a power pickup
+  powerupChance: 0.3,     // chance a path platform spawns a pickup (bumped — the wide sprawl has room for more)
   magnetDuration: 12,
   magnetRadius: 32,       // gems within this distance get sucked in
   magnetPull: 22,         // how hard the magnet yanks gems (higher = they catch up)
