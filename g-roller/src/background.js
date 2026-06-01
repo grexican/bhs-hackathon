@@ -180,10 +180,13 @@ export class Background {
       return plane;
     };
     // left/right, far (dim) then near (brighter)
-    make(360, 355, 230, 0.5).rotation.y = Math.PI / 2;   // far, right
-    make(360, 355, 230, 0.5).rotation.y = -Math.PI / 2;  // far, left
-    make(220, 295, 265, 0.7).rotation.y = Math.PI / 2;   // near, right
-    make(220, 295, 265, 0.7).rotation.y = -Math.PI / 2;  // near, left
+    // Wider apart (more open / vast), and each side TOED IN toward +z (the distance)
+    // so the walls converge into a vanishing-point funnel that "closes in" far away.
+    const toe = 0.13; // ~7.5° inward lean of the far end
+    make(470, 355, 230, 0.5).rotation.y = Math.PI / 2 - toe;   // far, right
+    make(470, 355, 230, 0.5).rotation.y = -Math.PI / 2 + toe;  // far, left
+    make(310, 295, 265, 0.7).rotation.y = Math.PI / 2 - toe;   // near, right
+    make(310, 295, 265, 0.7).rotation.y = -Math.PI / 2 + toe;  // near, left
     this._sides = [1, -1, 1, -1];
 
     // --- "WAY up high, no ground" atmosphere (replaces the old floor grid's sense
