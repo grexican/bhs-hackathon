@@ -200,6 +200,16 @@ export const CONFIG = {
   // Starter platform
   starterLength: 64,
   starterWidth: 18,
+
+  // --- Audiosurf mode: the world pulses ON the music's beat. The two rhythmic
+  // tracks ("Neon Highway" #4 124bpm, "Pulse Runner" #5 134bpm) are the only ones
+  // with full drums — the other three are ambient and wouldn't feel synced. We
+  // force #5 (the driving one) when the mode turns on.
+  audiosurfTrack: 4,        // index into TRACKS — "Pulse Runner" (the most beat-forward)
+  audiosurfBloomKick: 0.55, // bloom strength added on each beat (folds into the bloom line)
+  audiosurfFovKick: 4,      // degrees of FOV punch on each beat (quick widen, eases back)
+  audiosurfDecay: 7,        // how fast the pulse decays per second (higher = punchier/snappier)
+  audiosurfReducedScale: 0.4, // soften the whole pulse this much when reduced-motion is on
 };
 
 // Themed zones the run passes through. Each retints the fog + sun, restricts the

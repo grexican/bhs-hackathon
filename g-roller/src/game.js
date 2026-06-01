@@ -41,6 +41,8 @@ export class Game {
     this._firstPerson = false;
     this._diffLevel = CONFIG.defaultDifficulty; // index into CONFIG.difficultyLevels
     this._zen = false; // Zen mode: no death (power-bounce instead), no scoring/gems, no hazards
+    this._audiosurf = false; // Audiosurf mode: the world pulses on the music's beat
+    this._beatPulse = 0;     // 0..1 punch fired ON each beat, decays fast (drives bloom + FOV kick)
     this._restartLock = 0; // brief input-dead window after dying (no instant restart)
     this.gems = 0;
     this.score = 0;
@@ -113,6 +115,7 @@ export class Game {
       if (e.code === "KeyL") this._cycleDifficulty();
       if (e.code === "Escape") this._togglePause(); // pause / resume (NOT quit — quit is "End Run" in ⚙️)
       if (e.code === "KeyZ") this._toggleZen();
+      if (e.code === "KeyA") this._toggleAudiosurf();
       // Cheat-only desktop testing: instantly fire a powerdown on yourself.
       // R rain · F fog · B blackout · T trip · O slow-mo.
       if (this._cheat && this.state === "playing") {
@@ -366,6 +369,52 @@ export class Game {
     this._syncSettings();
   }
 
+  // Audiosurf mode: the world visibly pulses ON the music's beat so it feels
+  // music-driven. Forces a rhythmic track and installs a per-beat callback that
+  // fires a bloom + FOV punch landing exactly on the audible kick. Title/game-over
+  // only (like Zen) — it changes the track + audio, so toggling mid-run is blocked.
+  _toggleAudiosurf() {
+    if (this.state === "playing" || this.state === "paused") {
+      this._toast("🎵 Set Audiosurf on the title screen", "#ff4bd6");
+      return;
+    }
+    this._audiosurf = !this._audiosurf;
+    if (this._audiosurf) {
+      this.sound.start(); // a toggle is a user gesture, so audio is allowed to start
+      this.sound.setTrack(CONFIG.audiosurfTrack); // force the driving rhythmic track
+      this._installBeatHook();
+      this._toast("🎵 AUDIOSURF: On", "#ff4bd6");
+    } else {
+      this.sound.onBeat = null; // stop all pulses — normal play is untouched, no perf cost
+      this._beatPulse = 0;      // reset the bloom add so no leftover glow
+      this.bloom.strength = this._bloomBase; // clear any pulse left on the bloom line
+      // Leave the current track playing (don't yank it) — the player can cycle it freely.
+      this._toast("🎵 AUDIOSURF: Off", "#ff4bd6");
+    }
+    this._syncSettings();
+  }
+
+  // Install the per-beat callback. Schedules each pulse to land ON the audible beat:
+  // `time` is when the kick will SOUND, so we wait out the lead (t - now) before
+  // firing instead of pulsing ~100ms early. Safe to call repeatedly (just reassigns).
+  _installBeatHook() {
+    this.sound.onBeat = (b) => {
+      const lead = Math.max(0, (b.time - this.sound.ctx.currentTime) * 1000);
+      setTimeout(() => this._fireBeatPulse(), lead);
+    };
+  }
+
+  // One beat hit: punch the pulse to 1 (softened under reduced-motion) and a quick
+  // gem-sparkle accent at the ball. The decay (in _loop) folds it into bloom + FOV.
+  _fireBeatPulse() {
+    if (!this._audiosurf) return; // a stale scheduled callback after toggling off
+    this._beatPulse = this._reducedMotion ? CONFIG.audiosurfReducedScale : 1;
+    // Light gameplay accent: a small cyan sparkle on the ball, in sync with the beat.
+    if (this.state === "playing" && !this._reducedMotion) {
+      this.particles.burst(this.player.position, 0xff4bd6, 6);
+    }
+  }
+
   _cycleSkin() {
     this._skinIndex = this.player.setSkin((this._skinIndex ?? 0) + 1); // applies + wraps + returns the new index
     this._toast(`🎨 ${BALL_SKINS[this._skinIndex].name}`, "#ffd34e");
@@ -380,7 +429,7 @@ export class Game {
 
   _buildSettings() {
     const $ = (id) => document.getElementById(id);
-    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty"), skin: $("set-skin"), zen: $("set-zen"), endrun: $("set-endrun"), powerups: $("set-powerups") };
+    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty"), skin: $("set-skin"), zen: $("set-zen"), audiosurf: $("set-audiosurf"), endrun: $("set-endrun"), powerups: $("set-powerups") };
 
     // Build the cheat-only per-powerup spawn-pool chips (one toggle per type).
     const grid = $("set-powerups-grid");
@@ -407,6 +456,7 @@ export class Game {
     this._settings.difficulty.addEventListener("click", () => this._cycleDifficulty());
     this._settings.skin.addEventListener("click", () => this._cycleSkin());
     this._settings.zen.addEventListener("click", () => this._toggleZen());
+    if (this._settings.audiosurf) this._settings.audiosurf.addEventListener("click", () => this._toggleAudiosurf());
     this._settings.endrun.addEventListener("click", () => { this._quitRun(); open(false); }); // mobile way out of a run / zen
     this._syncSettings();
   }
@@ -422,6 +472,7 @@ export class Game {
     s.difficulty.textContent = `🎚️ Difficulty: ${CONFIG.difficultyLevels[this._diffLevel].name}`;
     if (s.skin) s.skin.textContent = `🎨 Ball Skin: ${BALL_SKINS[this._skinIndex ?? 0].name}`;
     if (s.zen) s.zen.textContent = "🧘 Zen Mode: " + (this._zen ? "On" : "Off");
+    if (s.audiosurf) s.audiosurf.textContent = "🎵 Audiosurf: " + (this._audiosurf ? "On" : "Off");
     // Per-powerup spawn pool is a cheat-only tool — only show it when cheat is on.
     if (s.powerups) s.powerups.style.display = this._cheat ? "" : "none";
     if (this._puButtons) {
@@ -458,6 +509,11 @@ export class Game {
     }
     const zen = get("gr_zen");
     if (zen !== null) this._zen = zen === "1";
+    // Audiosurf: if it was left on, force the rhythmic track now. The onBeat hook is
+    // wired up lazily once audio starts (in _startGame), since there's no AudioContext yet.
+    const audiosurf = get("gr_audiosurf");
+    if (audiosurf !== null) this._audiosurf = audiosurf === "1";
+    if (this._audiosurf) this.sound.setTrack(CONFIG.audiosurfTrack);
     this._applyDifficultyMult(); // apply restored (or default) level — forced to 0 in zen
     document.body.classList.toggle("is-zen", this._zen); // hide HUD counters if restored into zen
     this._diffSpeedMult = CONFIG.difficultyLevels[this._diffLevel].speedMult ?? 1;
@@ -474,6 +530,7 @@ export class Game {
     localStorage.setItem("gr_diff", String(this._diffLevel));
     localStorage.setItem("gr_skin", String(this._skinIndex ?? 0));
     localStorage.setItem("gr_zen", this._zen ? "1" : "0");
+    localStorage.setItem("gr_audiosurf", this._audiosurf ? "1" : "0");
   }
 
   _toggleCheat() {
@@ -509,6 +566,15 @@ export class Game {
       this._startGame();
     }
 
+    // Audiosurf: decay the beat pulse every frame (fast, so it reads as a punch on
+    // the beat, not a glow that lingers). _tickPlaying / _tickCamera fold the live
+    // value into bloom + FOV; on the title screen we add the bloom kick here so the
+    // pulse is visible there too (where the loop below skips _tickPlaying's bloom line).
+    if (this._beatPulse > 0) this._beatPulse = Math.max(0, this._beatPulse - dt * CONFIG.audiosurfDecay);
+    if (this._audiosurf && this.state !== "playing") {
+      this.bloom.strength = this._bloomBase + (this._biomeBloom || 0) + this._beatPulse * CONFIG.audiosurfBloomKick;
+    }
+
     this.particles.update(dt);
     this.background.update(this.player.position.z, dt, this.state === "playing");
     this._followCamera(false);
@@ -518,6 +584,12 @@ export class Game {
 
   _startGame() {
     this.sound.start(); // this runs from a keypress/tap, so audio is allowed
+    // If Audiosurf is on (e.g. restored from a saved pref before audio existed), make
+    // sure the rhythmic track is forced and the beat hook is live now that audio runs.
+    if (this._audiosurf) {
+      if (this.sound.trackIndex() !== CONFIG.audiosurfTrack) this.sound.setTrack(CONFIG.audiosurfTrack);
+      if (!this.sound.onBeat) this._installBeatHook();
+    }
     if (this.state === "dead") this._resetWorld();
     this.player.jumpCount = 0;
     this.player._seenPresses = this.input.jumpPresses; // don't let the start press auto-jump
@@ -582,7 +654,10 @@ export class Game {
     this._fogLensEl.style.backdropFilter = this._fogLensEl.style.webkitBackdropFilter = `blur(${blur}px)`;
     // Bloom = base + fog crank + the active biome's signature flare + a brief
     // entry-flash punch when you cross into a new zone.
-    this.bloom.strength = this._bloomBase + this._fogLevel * 0.7 + this._biomeBloom + this._biomeFlash;
+    // Audiosurf adds a brief bloom kick on each beat (decayed in _loop) on top of
+    // the usual base + fog + biome flare — the core "pulses with the music" feel.
+    this.bloom.strength = this._bloomBase + this._fogLevel * 0.7 + this._biomeBloom + this._biomeFlash
+      + (this._audiosurf ? this._beatPulse * CONFIG.audiosurfBloomKick : 0);
 
     // Rain powerdown: heavy windshield rain. Fade the lens overlay in/out with the
     // effect + ramp a blur (wet, blurred vision — cousin of fog). The streaks and
@@ -1025,7 +1100,10 @@ export class Game {
     // accelerating widens the view, braking narrows it.
     this._throttleSmooth += (this.input.throttle - this._throttleSmooth) * 0.1;
     const speedFov = Math.min(14, Math.max(0, this._speed - CONFIG.forwardSpeed) * 0.4);
-    const targetFov = this._baseFov + speedFov + this._throttleSmooth * 6;
+    // Audiosurf: a quick FOV widen on each beat (rides the same decaying pulse as the
+    // bloom kick) so the camera "breathes" with the music alongside the glow flash.
+    const beatFov = this._audiosurf ? this._beatPulse * CONFIG.audiosurfFovKick : 0;
+    const targetFov = this._baseFov + speedFov + this._throttleSmooth * 6 + beatFov;
     if (Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.camera.fov += (targetFov - this.camera.fov) * 0.08;
       this.camera.updateProjectionMatrix();

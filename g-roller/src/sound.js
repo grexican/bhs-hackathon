@@ -108,6 +108,7 @@ export class Sound {
     this._nextStepTime = 0;
     this._timer = null;
     this._trackIndex = 0;
+    this.onBeat = null; // optional per-beat callback (set by Audiosurf mode; null = no cost)
   }
 
   // Lazily create the audio graph. Safe to call repeatedly; only builds once.
@@ -258,6 +259,13 @@ export class Sound {
     const bar = Math.floor(step / 16) % prog.length;
     const s = step % 16;
     const chord = prog[bar];
+
+    // Beat hook: fire on every kick (quarter note, s % 4 === 0) so the game can
+    // sync visuals to the audible beat. `time` is the AudioContext time the kick
+    // will SOUND — the game converts that to a lead delay so a pulse lands ON the
+    // beat, not early. Only set when a beat-reactive mode (Audiosurf) is on, so
+    // normal play pays no cost.
+    if (s % 4 === 0 && this.onBeat) this.onBeat({ time: t, sec16: this._sec16 });
 
     // Swing: push odd (offbeat) 16ths a little later for a looser, smoother feel.
     const swing = track.swing || 0;
