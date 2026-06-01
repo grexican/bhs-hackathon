@@ -81,25 +81,17 @@ export class Game {
     this._resetWorld();
     this._refreshHud();
 
-    // 'M' mutes/unmutes the audio; 'V' toggles first-person view.
+    // Keyboard shortcuts (touch players use the ⚙️ settings panel instead).
+    this._isTouch = document.body.classList.contains("is-touch");
+    if (this._isTouch) this._hud.hint.textContent = "Tap JUMP to roll";
     window.addEventListener("keydown", (e) => {
-      if (e.code === "KeyM") this._toast(this.sound.toggleMute() ? "🔇 SOUND OFF" : "🔊 SOUND ON", "#bcd0ff");
+      if (e.code === "KeyM") this._toggleSound();
       if (e.code === "KeyV") this._toggleView();
-      if (e.code === "KeyN") {
-        // First press starts the music (this keydown is the needed gesture) so
-        // you can audition tracks on the title screen; later presses cycle.
-        if (!this.sound.ctx) { this.sound.start(); this._toast(`🎵 ${this.sound.trackName()}`, "#a94bff"); }
-        else this._toast(`🎵 ${this.sound.nextTrack()}`, "#a94bff");
-      }
-      if (e.code === "KeyX") this._toast(this.sound.toggleReactive() ? "🎚️ MUSIC FX ON" : "🎚️ MUSIC FX OFF", "#a94bff");
-      if (e.code === "KeyG") {
-        this._reducedMotion = !this._reducedMotion;
-        this._toast(this._reducedMotion ? "🌿 REDUCED MOTION ON" : "REDUCED MOTION OFF", "#4dff8a");
-      }
+      if (e.code === "KeyN") this._cycleTrack();
+      if (e.code === "KeyX") this._toggleMusicFx();
+      if (e.code === "KeyG") this._toggleReduced();
     });
-    const viewBtn = document.getElementById("view-btn");
-    if (viewBtn) viewBtn.addEventListener("click", () => this._toggleView());
-    this._viewBtn = viewBtn;
+    this._buildSettings();
 
     // Secret cheat code, entered on the start / game-over screen.
     window.addEventListener("keydown", (e) => {
@@ -203,8 +195,59 @@ export class Game {
 
   _toggleView() {
     this._firstPerson = !this._firstPerson;
-    if (this._viewBtn) this._viewBtn.textContent = this._firstPerson ? "👁 3rd person" : "👁 1st person";
     this._followCamera(true); // snap so the switch isn't jarring
+    this._syncSettings();
+  }
+
+  // --- Settings (keyboard shortcuts + the ⚙️ touch panel both call these) ---
+
+  _toggleSound() {
+    if (!this.sound.ctx) { this.sound.start(); this._toast("🔊 SOUND ON", "#bcd0ff"); }
+    else this._toast(this.sound.toggleMute() ? "🔇 SOUND OFF" : "🔊 SOUND ON", "#bcd0ff");
+    this._syncSettings();
+  }
+
+  _cycleTrack() {
+    if (!this.sound.ctx) { this.sound.start(); this._toast(`🎵 ${this.sound.trackName()}`, "#a94bff"); }
+    else this._toast(`🎵 ${this.sound.nextTrack()}`, "#a94bff");
+    this._syncSettings();
+  }
+
+  _toggleMusicFx() {
+    this._toast(this.sound.toggleReactive() ? "🎚️ MUSIC FX ON" : "🎚️ MUSIC FX OFF", "#a94bff");
+    this._syncSettings();
+  }
+
+  _toggleReduced() {
+    this._reducedMotion = !this._reducedMotion;
+    this._toast(this._reducedMotion ? "🌿 REDUCED MOTION ON" : "REDUCED MOTION OFF", "#4dff8a");
+    this._syncSettings();
+  }
+
+  _buildSettings() {
+    const $ = (id) => document.getElementById(id);
+    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view") };
+    const panel = $("settings-panel");
+    const open = (v) => panel.classList.toggle("open", v);
+    $("settings-btn").addEventListener("click", () => { this._syncSettings(); open(true); });
+    $("set-close").addEventListener("click", () => open(false));
+    panel.addEventListener("click", (e) => { if (e.target === panel) open(false); });
+    this._settings.sound.addEventListener("click", () => this._toggleSound());
+    this._settings.track.addEventListener("click", () => this._cycleTrack());
+    this._settings.fx.addEventListener("click", () => this._toggleMusicFx());
+    this._settings.motion.addEventListener("click", () => this._toggleReduced());
+    this._settings.view.addEventListener("click", () => this._toggleView());
+    this._syncSettings();
+  }
+
+  _syncSettings() {
+    const s = this._settings;
+    if (!s) return;
+    s.sound.textContent = `🔊 Sound: ${this.sound.muted ? "Off" : "On"}`;
+    s.track.textContent = `🎵 Track: ${this.sound.trackName()}`;
+    s.fx.textContent = `🎚️ Music FX: ${this.sound.reactive ? "On" : "Off"}`;
+    s.motion.textContent = `🌿 Reduced Motion: ${this._reducedMotion ? "On" : "Off"}`;
+    s.view.textContent = `👁 View: ${this._firstPerson ? "First-person" : "Third-person"}`;
   }
 
   _toggleCheat() {
@@ -273,7 +316,8 @@ export class Game {
     const tau = this._effects.slow > 0 && target < this._speed ? CONFIG.slowEase : 0.33;
     this._speed += (target - this._speed) * (1 - Math.exp(-dt / tau));
     const speed = this._speed;
-    this.field.update(dt, this.player.position.z, speed);
+    const magnetPos = this._effects.magnet > 0 ? this.player.position : null;
+    this.field.update(dt, this.player.position.z, speed, magnetPos);
 
     // Score = distance * multiplier; the multiplier decays if you stop taking risks.
     this.score += speed * dt * CONFIG.scorePerMeter * this.multiplier;
@@ -316,9 +360,8 @@ export class Game {
     this.grid.position.z = Math.round(this.player.position.z / 5) * 5;
     this.grid.position.x = Math.round(this.player.position.x / 5) * 5;
 
-    // Magnet pulls gems toward the player's current (post-move) position, then
-    // we harvest — so they get yanked in and eaten instead of trailing behind.
-    if (this._effects.magnet > 0) this.field.attract(this.player.position, dt);
+    // Magnet pull happens inside field.update (so it doesn't fight the gem bob);
+    // here we just harvest whatever's now in range.
     const grabbed = this.field.harvestGems(this.player.position, this.player.radius);
     for (const pos of grabbed) {
       this.gems += 1;
@@ -455,7 +498,7 @@ export class Game {
 
     const best = score >= this.bestScore ? " · 🏆 NEW BEST!" : "";
     this._hud.subtitle.innerHTML = `Score <b>${score.toLocaleString()}</b>${best}<br>${dist} m · ${jumps} jumps · ${this.gems} 💎`;
-    this._hud.hint.textContent = "Press SPACE to roll again";
+    this._hud.hint.textContent = this._isTouch ? "Tap JUMP to roll again" : "Press SPACE to roll again";
     this._hud.overlay.classList.remove("is-hidden");
     this._refreshHud();
   }

@@ -7,7 +7,7 @@ export const CONFIG = {
   sideSpeed: 20,
   forwardSpeed: 24,         // starting auto-run speed (eases up from here) — 5% slower
   maxForwardSpeed: 63,
-  jumpSpeed: 33,            // another ~10% jump height
+  jumpSpeed: 35.5,          // ~15% more jump height again
   gravity: 39,
   playerRadius: 0.9,
 
@@ -21,8 +21,8 @@ export const CONFIG = {
   // Acceleration plates (the green-arrow boards): the longer you ride one, the
   // faster you go — speed builds up smoothly while on it and eases back off when
   // you leave it.
-  accelRate: 10,      // speed gained per second while standing on a plate
-  accelMax: 22,       // cap on the accumulated acceleration bonus
+  accelRate: 17,      // speed gained per second while standing on a plate (steeper)
+  accelMax: 30,       // cap on the accumulated acceleration bonus
   accelDecay: 8,      // speed lost per second once you leave the plate
 
   // Trampoline boards (the pink ones): launch you up like a boosted jump.
@@ -49,7 +49,7 @@ export const CONFIG = {
   pathRiseSafety: 0.62,     // fraction of max jump height a step may rise
   pathGapSafety: 0.5,       // fraction of jump distance a forward gap may span
   pathLateralSafety: 0.44,  // fraction of strafe reach a sideways step may take
-  safeStraight: 6,          // first few pads run straight ahead, big and easy
+  safeStraight: 2,          // just a plank or two to ease in, then it spreads out fast
 
   // --- Critical path (the guaranteed-reachable chain). Opens up with SPREAD.
   // Like a spline drawn through the city: it winds up, over, down and across in
@@ -94,11 +94,13 @@ export const CONFIG = {
   tunnelRadius: 4.5,
 
   // --- Ramps & curved boards ---
-  // Ramps temporarily disabled: the sloped surface collision isn't following the
-  // slant yet (you fall through instead of rolling up/down). Re-enable once fixed.
+  // Ramps DISABLED again: the swept-collision fix stopped the fall-through but the
+  // sloped-surface collision is still wrong (clipping). The analytic plane doesn't
+  // match the rotated/scaled box geometry. Researcher #2 investigating the proper
+  // Three.js way (likely raycast-against-mesh) before re-enabling.
   rampChance: [0.0, 0.0],    // tilted boards you roll up/down (and launch off the top)
-  rampSlope: [0.24, 0.5],    // rise/run (tan of the ramp angle)
-  rampLaunch: 0.8,           // fraction of climb speed kept as a hop off an up-ramp
+  rampSlope: [0.22, 0.44],   // rise/run (tan of the ramp angle)
+  rampLaunch: 0.7,           // fraction of climb speed kept as a hop off an up-ramp
   curveChance: [0.0, 0.16],  // boards curved across their width
   curveAmount: 0.055,        // parabola steepness (concave funnels in, convex rolls off)
   curveForce: 17,            // how hard a curved board pushes you sideways
@@ -117,7 +119,7 @@ export const CONFIG = {
   invulnTime: 1.2,        // brief mercy window after a shielded hit
   doubleJumpDuration: 16, // grants one mid-air jump
   flightDuration: 25,     // hold jump to soar
-  flightLift: 18,         // upward speed while flying
+  flightLift: 19,         // upward speed while flying
   morphDuration: 11,      // ball deforms and steering goes wobbly
   morphWobble: 7,         // strength of the steering wobble while morphed
   tripDuration: 13,       // psychedelic powerdown: colors go wild, hard to see
@@ -147,7 +149,7 @@ export const CONFIG = {
   fallMargin: 16,
 
   // Starter platform
-  starterLength: 92,
+  starterLength: 64,
   starterWidth: 18,
 };
 

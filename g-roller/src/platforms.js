@@ -462,9 +462,10 @@ export class PlatformField {
       }
     }
 
-    // Acceleration plates are always flat boxes so the forward arrows read right.
+    // Acceleration plates are always flat boxes (forward arrows); ramps use a
+    // thin box too so their near edge meets the incoming height cleanly.
     const geoType = type === "boost" ? "box" : g.geoType;
-    const hy = type === "boost" ? 0.5 : g.hy;
+    const hy = type === "boost" || slopeZ ? 0.5 : g.hy;
     const p = this._addBoard({ x, y: yCenter, z, w, len, hy, geoType, type, texName, slopeZ, curve });
     const exitY = slopeZ ? yCenter + slopeZ * (len / 2) : yCenter;
     this._cursor = { x, y: exitY, z: z + len / 2 };
@@ -532,7 +533,7 @@ export class PlatformField {
 
   // --- Per-frame ------------------------------------------------------------
 
-  update(dt, playerZ, forwardSpeed) {
+  update(dt, playerZ, forwardSpeed, magnetPos = null) {
     this._time += dt;
     this._difficulty = smoothstep(playerZ / CONFIG.difficultyDistance);
     this._spreadD = smoothstep(playerZ / CONFIG.spreadDistance);
@@ -555,7 +556,14 @@ export class PlatformField {
     for (const g of this.gems) {
       if (g.collected) continue;
       g.mesh.rotation.y += dt * 2.2; g.mesh.rotation.x += dt * 1.1;
-      g.mesh.position.y = g.baseY + Math.sin(this._time * 2.5 + g.phase) * 0.35;
+      // While the magnet is pulling a gem, fly it STRAIGHT to the player on all
+      // axes — don't bob, or the bob fights the pull and the gem just hovers near
+      // you (offset in Y) and never reaches collection range.
+      if (magnetPos && g.mesh.position.distanceTo(magnetPos) < CONFIG.magnetRadius) {
+        g.mesh.position.lerp(magnetPos, Math.min(1, dt * CONFIG.magnetPull));
+      } else {
+        g.mesh.position.y = g.baseY + Math.sin(this._time * 2.5 + g.phase) * 0.35;
+      }
     }
     for (const u of this.powerups) {
       if (u.collected) continue;
@@ -586,19 +594,6 @@ export class PlatformField {
       if (p.topY < min) min = p.topY;
     }
     return min === Infinity ? -Infinity : min;
-  }
-
-  // Pull uncollected gems toward the player while a magnet is active. The pull
-  // is strong enough that gems accelerate in and catch up to the moving player
-  // (instead of trailing behind in an uncatchable tail).
-  attract(playerPos, dt) {
-    const k = Math.min(1, dt * CONFIG.magnetPull);
-    for (const g of this.gems) {
-      if (g.collected) continue;
-      if (g.mesh.position.distanceTo(playerPos) < CONFIG.magnetRadius) {
-        g.mesh.position.lerp(playerPos, k);
-      }
-    }
   }
 
   harvestGems(playerPos, radius) {

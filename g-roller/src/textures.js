@@ -130,10 +130,11 @@ const PAINTERS = {
     ctx.shadowColor = "#39ff7a"; ctx.shadowBlur = 18;
     for (let i = 0; i < 4; i++) {
       const y = i * (s / 4) + 10;
+      // Chevrons point DOWN in the canvas, which maps to "forward" on the board.
       ctx.beginPath();
-      ctx.moveTo(s * 0.2, y + 30); ctx.lineTo(s * 0.5, y);
-      ctx.lineTo(s * 0.8, y + 30); ctx.lineTo(s * 0.8, y + 46);
-      ctx.lineTo(s * 0.5, y + 16); ctx.lineTo(s * 0.2, y + 46);
+      ctx.moveTo(s * 0.2, y + 16); ctx.lineTo(s * 0.5, y + 46);
+      ctx.lineTo(s * 0.8, y + 16); ctx.lineTo(s * 0.8, y);
+      ctx.lineTo(s * 0.5, y + 30); ctx.lineTo(s * 0.2, y);
       ctx.closePath(); ctx.fill();
     }
     ctx.shadowBlur = 0;

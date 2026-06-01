@@ -5,13 +5,16 @@ focused on the moment-to-moment experience). Pull any of these forward anytime.
 
 ## Known bugs
 
-### Ramp collision doesn't follow the slant
-Ramps are visually tilted (`_addBoard` rotates the mesh by `atan(slopeZ)`) but the
-player falls through instead of rolling up/down. The ground-follow in
-`player.js` uses `_topAt` (which adds `slopeZ * (z - pos.z)`), so the math is
-there — likely the `wasAbove`/landing-tolerance logic doesn't hug the rising
-surface, or the entry handoff from the previous board is off. Currently DISABLED
-via `rampChance: [0,0]`. Re-enable and fix together (curved boards are fine).
+### Ramp collision STILL broken (disabled again)
+Researcher #1's swept-collision fix (sample `_topAt` at the PREVIOUS position +
+`wasGrounded` exemption) stopped the hard fall-through, but ramps still clip /
+feel wrong in play. Root issue suspected: the analytic sloped-plane in `_topAt`
+(`slopeZ*(z-pos.z)`) doesn't actually match the rotated+SCALED box geometry
+(`visual.scale.set(w,2hy,len)` then `rotation.x = atan(slopeZ)`), so collision and
+visuals diverge. Researcher #2 to find the PROPER Three.js approach (likely a
+downward `THREE.Raycaster` against the platform meshes for an exact surface height,
+or a true OBB). Disabled via `rampChance: [0,0]`. The swept fix is kept (it's a
+correct general improvement and is harmless for flat boards).
 
 ## Deferred (explicitly)
 

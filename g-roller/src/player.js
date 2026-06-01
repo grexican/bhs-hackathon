@@ -74,6 +74,7 @@ export class Player {
     this._seenPresses = 0;
     this._coyote = 0;     // grace time left to still jump after leaving a ledge
     this._jumpBuffer = 0; // time left on a remembered jump press
+    this._controlledJump = false; // true only for player jumps (so auto-bounces aren't chopped)
     this.airJumps = 0;
     this._t = 0;
   }
@@ -133,11 +134,13 @@ export class Player {
       v.y = CONFIG.flightLift; this.grounded = false; // hold jump to soar
     } else if (this._jumpBuffer > 0 && canGroundJump) {
       v.y = CONFIG.jumpSpeed; this.grounded = false; this.airJumps = 0;
-      this._coyote = 0; this._jumpBuffer = 0; jumped = true;
+      this._coyote = 0; this._jumpBuffer = 0; jumped = true; this._controlledJump = true;
     } else if (this._jumpBuffer > 0 && this.airJumps < ctx.maxAirJumps) {
-      v.y = CONFIG.jumpSpeed; this.airJumps++; this._jumpBuffer = 0; jumped = true; // double jump
-    } else if (!input.jumpHeld && v.y > 0 && !this.grounded) {
-      v.y /= CONFIG.quickDescentDivisor; // release early to drop fast
+      v.y = CONFIG.jumpSpeed; this.airJumps++; this._jumpBuffer = 0; jumped = true; this._controlledJump = true; // double jump
+    } else if (this._controlledJump && !input.jumpHeld && v.y > 0 && !this.grounded) {
+      // "Hold for height" only chops a jump the PLAYER initiated — auto-launches
+      // (trampolines, flubber) keep their full velocity so they go big.
+      v.y /= CONFIG.quickDescentDivisor;
     }
 
     // Steering (steerMult flips for the "reverse" powerdown). When morphed, the
@@ -149,6 +152,8 @@ export class Player {
     v.y -= CONFIG.gravity * (ctx.gravityScale || 1) * dt; // low-grav powerup floats you
 
     const prevBottom = p.y - this.radius;
+    const prevX = p.x, prevZ = p.z;     // where we were, for the swept landing test
+    const wasGrounded = this.grounded;  // were we on a surface last frame?
     p.x += v.x * dt;
     p.y += v.y * dt;
     p.z += v.z * dt;
@@ -167,23 +172,28 @@ export class Player {
         if (Math.abs(p.x - plat.pos.x) > plat.hx + this.radius * 0.5) continue;
         if (Math.abs(p.z - plat.pos.z) > plat.hz + this.radius * 0.5) continue;
         const top = this._topAt(plat, p.x, p.z);
-        // Only stand on a surface we were above (pass-through from below), unless
-        // we were already riding it — that lets us hug a ramp as it climbs.
-        if (prevBottom < top - 0.6 && plat !== prevRide) continue;
+        // Swept pass-through test: were our feet above this surface where we WERE
+        // last frame? If so we're descending onto it (or riding it up a ramp),
+        // not punching through from below. Sampling at the PREVIOUS position is
+        // what makes rising ramps work — sampling "here, now" wrongly skips them.
+        const prevTop = this._topAt(plat, prevX, prevZ);
+        const cameFromBelow = prevBottom < prevTop - 0.6;
+        if (cameFromBelow && plat !== prevRide && !wasGrounded) continue;
         if (newBottom <= top + 0.05 && top > bestTop) { bestTop = top; best = plat; }
       }
       if (best) {
         let fresh = !prevRide;
         if (best.type === "bouncy") {
-          // Trampoline: a big boosted launch (goes huge under low gravity).
-          v.y = CONFIG.jumpSpeed * CONFIG.bounceBoost; this.airJumps = 0;
+          // Trampoline: a MASSIVE auto-launch (not chopped — see _controlledJump).
+          v.y = CONFIG.jumpSpeed * CONFIG.bounceBoost; this.airJumps = 0; this._controlledJump = false;
         } else if (ctx.flubber) {
           // Flubber powerdown: auto-bounce off ANY surface, a bit higher than a
           // jump — you have to steer in the air to stay on course.
           p.y = bestTop + this.radius; v.y = CONFIG.jumpSpeed * CONFIG.flubberBounce; this.airJumps = 0;
-          fresh = true; landed = "flubber";
+          this._controlledJump = false; fresh = true; landed = "flubber";
         } else {
           p.y = bestTop + this.radius; v.y = 0; this.grounded = true; this._ridePlat = best; this.airJumps = 0;
+          this._controlledJump = false;
           if (best.type === "boost") this.onBoost = true; // game ramps speed while you ride it
           // Curved board: drift toward the middle (concave) or off the sides (convex).
           if (best.curve) p.x += -CONFIG.curveForce * best.curve * (p.x - best.pos.x) * dt;
@@ -195,9 +205,10 @@ export class Player {
         else if (landed === "flubber") this.jumpCount += 1;
       }
     }
-    // Launch off the top of an up-ramp: keep some of the climb as a hop.
+    // Launch off the top of an up-ramp: keep some of the climb as a hop (clamped
+    // so a fast steep ramp doesn't fling you like a full jump).
     if (!this.grounded && prevRide && prevRide.slopeZ > 0 && prevRide !== this._ridePlat && v.y <= 0) {
-      v.y = Math.max(v.y, prevRide.slopeZ * v.z * CONFIG.rampLaunch);
+      v.y = Math.max(v.y, Math.min(prevRide.slopeZ * v.z * CONFIG.rampLaunch, CONFIG.jumpSpeed * 0.8));
     }
 
     // --- Obstacle collision + near-miss detection ---
