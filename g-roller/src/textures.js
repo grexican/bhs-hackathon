@@ -82,6 +82,59 @@ function neonFrame(ctx, s, color, inset = 7, core = 2.2) {
   neonLine(ctx, color, a, b, a, a, core);
 }
 
+// BOLD readability grid for the GLASS ground tiles. The tile body is see-through
+// (you glimpse the city-lights floor far below), so the grid is what keeps the
+// platform unmistakably readable: bright, thick neon cell divisions + a heavy
+// outer edge frame. Drawn opaque/near-opaque so the lattice always reads as a
+// solid lit cage even when the surface behind it is transparent. n = cells/side.
+function boldGrid(ctx, s, color, n = 3) {
+  const t = s / n;
+  ctx.save();
+  ctx.lineCap = "square";
+  // Inner cell divisions: a wide soft halo under a thick bright core, so each
+  // grid line glows like a lit seam (matches the neon family) but stays heavy.
+  for (let i = 1; i < n; i++) {
+    const p = i * t;
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.28; ctx.lineWidth = 11;
+    ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(s, p); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(s, p); ctx.stroke();
+  }
+  ctx.restore();
+  // Heavy outer edge frame so the tile's extent/edges are crystal clear.
+  neonFrame(ctx, s, color, 5, 6);
+  neonFrame(ctx, s, color, 5, 2.4);
+}
+
+// Alpha companion to boldGrid: WHITE where the grid lines + frame are (opaque),
+// near-black in the cell interiors (see-through). Used as the material's
+// `alphaMap` so the bright lattice stays solid while the cells show the floor
+// through them — the lines carry readability, the body is glass. baseCell is the
+// cell's residual opacity (a faint glass tint, never fully invisible).
+function gridAlphaCanvas(s = 256, n = 3, baseCell = 0.34) {
+  const { c, ctx } = makeCanvas(s);
+  // Cell interior: a dim grey = partly transparent glass body.
+  const v = Math.round(baseCell * 255);
+  ctx.fillStyle = `rgb(${v},${v},${v})`;
+  ctx.fillRect(0, 0, s, s);
+  const t = s / n;
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineCap = "square";
+  // Grid lines + frame painted opaque-white so they survive as the solid lattice.
+  for (let i = 1; i < n; i++) {
+    const p = i * t;
+    ctx.lineWidth = 9;
+    ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(s, p); ctx.stroke();
+  }
+  ctx.lineWidth = 11;
+  ctx.strokeRect(5, 5, s - 10, s - 10); // heavy outer edge stays fully opaque
+  return c;
+}
+
 const PAINTERS = {
   // Default slab: a dark panel rimmed by a cyan light-line with a faint inner
   // grid — the cleanest member of the family, the "Neon City" baseline.
@@ -95,7 +148,7 @@ const PAINTERS = {
       ctx.beginPath(); ctx.moveTo(0, i * t); ctx.lineTo(s, i * t); ctx.stroke();
     }
     ctx.restore();
-    neonFrame(ctx, s, NEON.concrete, 8, 2);
+    boldGrid(ctx, s, NEON.concrete, 3); // glass tile: bold readable grid carries the surface
   },
 
   // Masonry reimagined: dark blocks separated by glowing rose mortar lines in a
@@ -113,6 +166,7 @@ const PAINTERS = {
       }
     }
     ctx.restore();
+    boldGrid(ctx, s, NEON.brick, 3); // glass tile: bold readable grid over the masonry
   },
 
   // Wet boardwalk: dark planks running lengthwise, each seam an amber light-line
@@ -132,6 +186,7 @@ const PAINTERS = {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + (Math.random() - 0.5) * 8, s); ctx.stroke();
     }
     ctx.restore();
+    boldGrid(ctx, s, NEON.wood, 3); // glass tile: bold readable grid over the planks
   },
 
   // Veined glass marble: dark stone shot through with branching violet light-
@@ -154,7 +209,7 @@ const PAINTERS = {
       ctx.stroke();
     }
     ctx.restore();
-    neonFrame(ctx, s, NEON.marble, 9, 1.6);
+    boldGrid(ctx, s, NEON.marble, 3); // glass tile: bold readable grid over the veins
   },
 
   // Lit plaza tiling: a clean grid of dark tiles, every grout line a teal light-
@@ -175,6 +230,7 @@ const PAINTERS = {
       neonLine(ctx, NEON.tile, 0, i * t, s, i * t, 1.3);
     }
     ctx.restore();
+    boldGrid(ctx, s, NEON.tile, 4); // glass tile: thicken the plaza grid to match the 4-cell checker
   },
 
   // Scattered glowing stones: dark pebbles, each with a soft periwinkle rim-light
@@ -195,6 +251,7 @@ const PAINTERS = {
       ctx.globalAlpha = 1;
     }
     ctx.restore();
+    boldGrid(ctx, s, NEON.pebble, 3); // glass tile: bold readable grid over the stones
   },
 
   // "Round dot rubber" — the bouncy board. Bright pink studs on the dark panel.
@@ -239,8 +296,15 @@ const PAINTERS = {
   },
 };
 
+// How many grid cells each ground texture is divided into — the alpha lattice
+// has to line up with the painter's own grid. `tile` is a 4-cell plaza; the rest
+// share the default 3-cell bold grid.
+const GRID_CELLS = { tile: 4 };
+
 // Build one base texture per material, cached. Platforms clone these (cheap —
-// the clone shares the bitmap) and set their own tiling repeat.
+// the clone shares the bitmap) and set their own tiling repeat. Ground materials
+// also get a matching `alphaMap` (`<name>Alpha`) so the GLASS tiles keep their
+// bright grid lattice solid while the cells go see-through.
 export function makeTextureLibrary() {
   const lib = {};
   for (const [name, paint] of Object.entries(PAINTERS)) {
@@ -250,6 +314,13 @@ export function makeTextureLibrary() {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.anisotropy = 4;
     lib[name] = tex;
+  }
+  // One alpha lattice per ground texture: lines/frame opaque, cells transparent.
+  for (const name of GROUND_TEXTURES) {
+    const a = new THREE.CanvasTexture(gridAlphaCanvas(256, GRID_CELLS[name] || 3));
+    a.wrapS = a.wrapT = THREE.RepeatWrapping;
+    a.anisotropy = 4;
+    lib[`${name}Alpha`] = a;
   }
   return lib;
 }

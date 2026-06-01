@@ -134,8 +134,11 @@ export class PlatformField {
   // Pick a ground texture from the current biome's palette.
   _groundTex() { return pick(this._biomeTextures || GROUND_TEXTURES); }
 
-  _texFor(name, w, len) {
-    const t = this.tex[name].clone();
+  // Clone a library texture and set its tiling repeat. `src` lets us tile an
+  // alpha map (a different bitmap) with the SAME repeat as its diffuse `name`,
+  // so the glass lattice lines up exactly with the grid drawn into the texture.
+  _texFor(name, w, len, src = null) {
+    const t = (src || this.tex[name]).clone();
     t.needsUpdate = true;
     if (name === "boost") {
       // Boost arrows: one column, tiled along the length so they always run
@@ -159,6 +162,22 @@ export class PlatformField {
       emissive: type === "bouncy" ? 0xff1f5a : type === "boost" ? 0x1fbf4c : type === "flipper" ? 0xff7a1c : 0x000000,
       emissiveIntensity: type === "bouncy" ? 0.5 : type === "boost" ? 0.32 : type === "flipper" ? 0.55 : 0,
     });
+
+    // GLASS ground tiles: the standard "normal" boards go semi-transparent so the
+    // glowing city-lights floor (far below at y≈-260) reads through them. The bold
+    // neon grid baked into the texture stays bright, and an alphaMap keeps that
+    // lattice near-solid while the cells turn to glass — so the tile's shape, edges
+    // and extent stay crystal-clear even though you can see through the surface.
+    // Boost/bouncy/flipper/rubber keep their own opaque identity (not glassed).
+    let alphaTex = null;
+    if (type === "normal") {
+      const alpha = this.tex[`${texName}Alpha`];
+      if (alpha) { alphaTex = this._texFor(texName, w, len, alpha); mat.alphaMap = alphaTex; }
+      mat.transparent = true;
+      mat.opacity = 0.5;          // glass body; the grid carries readability
+      mat.side = THREE.DoubleSide; // so the underside doesn't vanish
+      mat.depthWrite = true;       // keep depth so balls/obstacles sort correctly
+    }
 
     let visual, ownGeo = null;
     if (curve) {
@@ -200,6 +219,7 @@ export class PlatformField {
 
     const p = new Platform(group, w / 2, hy, len / 2, type);
     p._tex = tex;
+    p._alphaTex = alphaTex; // glass tiles own an alpha-map clone to dispose too
     p._geo = ownGeo;
     p._edge = edge;
     p._edgeGeo = curve ? edgeGeo : null; // dispose curved edge geo with the board; shared ones stay
@@ -708,6 +728,7 @@ export class PlatformField {
     this.scene.remove(p.mesh);
     p.mesh.traverse((o) => { if (o.isMesh) o.material.dispose(); });
     if (p._tex) p._tex.dispose();
+    if (p._alphaTex) p._alphaTex.dispose();
     if (p._geo) p._geo.dispose();
     if (p._edgeGeo) p._edgeGeo.dispose(); // curved boards own their edge geometry
   }

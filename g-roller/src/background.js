@@ -171,7 +171,7 @@ export class Background {
     const make = (dist, height, hue, opacity) => {
       const tex = skylineTexture(hue);
       const mat = new THREE.MeshBasicMaterial({
-        map: tex, transparent: true, opacity, fog: true, side: THREE.DoubleSide, depthWrite: false,
+        map: tex, transparent: true, opacity, fog: false, side: THREE.DoubleSide, depthWrite: false,
       });
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(1200, height), mat);
       plane.userData = { dist, tex, parallax: 1 / dist, baseOpacity: opacity, hue: hue / 360 };
