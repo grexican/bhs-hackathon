@@ -89,14 +89,17 @@ export const CONFIG = {
   moveAmp: [4, 12],
   sharpTurnChance: [0.08, 0.38],
 
-  // Difficulty levels (cycled in the ⚙️ panel, shown in the HUD): a multiplier on
-  // the STARTING floor of the hazard ramps (obstacle/moving/sharp-turn chances), so
-  // Easy opens calmer and Hard busier — all converging toward the same late peak.
+  // Difficulty levels (cycled in the ⚙️ panel, shown in the HUD). `mult` scales the
+  // WHOLE hazard ramp — floor AND ceiling — so the tiers stay distinct even deep in
+  // a run (not just early), capped by hazardCeil so Hard can't hit 100%. `speedMult`
+  // scales the base auto-run speed (gaps are sized to live speed, so this stays
+  // reachable). Together they make Easy/Medium/Hard feel like different games.
   difficultyLevels: [
-    { name: "Easy", mult: 0.55 },
-    { name: "Medium", mult: 1.0 },
-    { name: "Hard", mult: 1.7 },
+    { name: "Easy", mult: 0.55, speedMult: 0.92 },
+    { name: "Medium", mult: 1.0, speedMult: 1.0 },
+    { name: "Hard", mult: 1.7, speedMult: 1.15 },
   ],
+  hazardCeil: 0.92, // global cap on any hazard chance after the difficulty mult (so Hard stays < 100%)
   defaultDifficulty: 1, // index into difficultyLevels (Medium)
   goodPowerupChance: [0.4, 0.25],  // chance a pickup is GOOD — powerdowns are the majority (they're dodgeable obstacles), more so deeper in
   roundGeoChance: [0.04, 0.4],    // hex/round pads: rare & small early, common later
@@ -168,6 +171,13 @@ export const CONFIG = {
   nearMissMargin: 1.2,  // grazing an obstacle within this extra distance = near-miss
   multiplierMax: 12,
   comboDecay: 4,        // seconds without a combo event before the multiplier drops 1
+
+  // Risk/reward: riding out powerdowns cranks your scoring multiplier. Each active
+  // powerdown adds this much, and every powerdown beyond the first adds an extra
+  // STACK bonus on top — so surviving three at once scores far more than three
+  // one-at-a-time. Adds on top of the combo multiplier; lasts only while they're active.
+  powerdownMult: 1,        // multiplier added per active powerdown
+  powerdownStackBonus: 1,  // extra multiplier per powerdown beyond the first (when several stack)
 
   // Death: game over only once you fall this far below the LOWEST floor still
   // drawn near you (i.e. there's genuinely nothing left to land on).

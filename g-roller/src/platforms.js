@@ -227,7 +227,13 @@ export class PlatformField {
   // Difficulty scales the FLOOR of a hazard ramp (obstacle/moving/sharp-turn): Easy
   // opens calmer, Hard busier. Clamped so a high multiplier can't push past the peak.
   _hazRamp(pair, d) {
-    return ramp([Math.min(pair[0] * this.difficultyMult, pair[1]), pair[1]], d);
+    // Scale BOTH ends of the ramp by the difficulty mult (not just the floor), so
+    // Hard stays busier than Medium even at the late plateau — capped so it can't
+    // reach 100%. (Old version capped the floor at pair[1], making every tier
+    // converge to the same ceiling — that's why Hard ≈ Medium deep in a run.)
+    const lo = pair[0] * this.difficultyMult;
+    const hi = pair[1] * this.difficultyMult;
+    return Math.min(ramp([lo, hi], d), CONFIG.hazardCeil);
   }
 
   // Blackout can't dim pieces that light THEMSELVES — boost (green) and bouncy (red)

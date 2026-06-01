@@ -4,7 +4,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { CONFIG, BIOMES, biomeAt } from "./config.js";
 import { Input } from "./input.js";
-import { Player } from "./player.js";
+import { Player, BALL_SKINS } from "./player.js";
 import { PlatformField, POWERUP_DEFS } from "./platforms.js";
 import { Particles } from "./effects.js";
 import { Background } from "./background.js";
@@ -18,6 +18,10 @@ const EFFECT_DURATIONS = {
   flubber: "flubberDuration", blackout: "blackoutDuration", fog: "fogDuration",
 };
 
+// The timed POWERDOWNS (bad effects). Having these active cranks the scoring
+// multiplier — risk/reward for riding them out instead of avoiding them.
+const BAD_EFFECTS = ["reverse", "surge", "morph", "trip", "flubber", "blackout", "fog"];
+
 // The conductor. Builds the 3D world, runs the game loop, owns the Start ->
 // Playing -> Dead state machine, scoring, powerups, the chase camera, and the
 // juice. This is the web stand-in for Unity's GameManager.
@@ -26,6 +30,7 @@ export class Game {
     this.canvas = canvas;
     this.state = "start";
     this.baseSpeed = CONFIG.forwardSpeed;
+    this._diffSpeedMult = 1; // per-difficulty base-speed factor (set from the chosen level below)
     this._speed = CONFIG.forwardSpeed; // smoothed actual speed (eases toward the target)
     this._speedTimer = 0;
     this._accelBonus = 0;  // speed bonus accumulated while riding acceleration plates
@@ -223,8 +228,17 @@ export class Game {
     this._followCamera(true);
   }
 
+  // Extra scoring multiplier from active powerdowns: one per powerdown, plus a
+  // stack bonus for every powerdown beyond the first. Zero when none are active.
+  _dangerBonus() {
+    let n = 0;
+    for (const k of BAD_EFFECTS) if (this._effects[k] > 0) n++;
+    if (n === 0) return 0;
+    return n * CONFIG.powerdownMult + (n - 1) * CONFIG.powerdownStackBonus;
+  }
+
   _effectiveSpeed() {
-    let s = this.baseSpeed;
+    let s = this.baseSpeed * this._diffSpeedMult; // Hard runs faster, Easy slower (gaps scale to live speed, so still reachable)
     s += this._accelBonus; // built up by riding acceleration plates
     if (this._effects.surge > 0) s += CONFIG.surgeAmount;
     s += this.input.throttle * CONFIG.manualSpeed; // Up/Down arrows or thumbstick Y
@@ -290,13 +304,20 @@ export class Game {
     this._diffLevel = (this._diffLevel + 1) % CONFIG.difficultyLevels.length;
     const lvl = CONFIG.difficultyLevels[this._diffLevel];
     this.field.difficultyMult = lvl.mult; // takes effect on platforms generated from here on
+    this._diffSpeedMult = lvl.speedMult ?? 1; // Hard runs faster, Easy slower
     this._toast(`🎚️ ${lvl.name.toUpperCase()}`, "#ffd34e");
+    this._syncSettings();
+  }
+
+  _cycleSkin() {
+    this._skinIndex = this.player.setSkin((this._skinIndex ?? 0) + 1); // applies + wraps + returns the new index
+    this._toast(`🎨 ${BALL_SKINS[this._skinIndex].name}`, "#ffd34e");
     this._syncSettings();
   }
 
   _buildSettings() {
     const $ = (id) => document.getElementById(id);
-    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty"), powerups: $("set-powerups") };
+    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty"), skin: $("set-skin"), powerups: $("set-powerups") };
 
     // Build the cheat-only per-powerup spawn-pool chips (one toggle per type).
     const grid = $("set-powerups-grid");
@@ -321,6 +342,7 @@ export class Game {
     this._settings.motion.addEventListener("click", () => this._toggleReduced());
     this._settings.view.addEventListener("click", () => this._toggleView());
     this._settings.difficulty.addEventListener("click", () => this._cycleDifficulty());
+    this._settings.skin.addEventListener("click", () => this._cycleSkin());
     this._syncSettings();
   }
 
@@ -333,6 +355,7 @@ export class Game {
     s.motion.textContent = `🌿 Reduced Motion: ${this._reducedMotion ? "On" : "Off"}`;
     s.view.textContent = `👁 View: ${this._firstPerson ? "First-person" : "Third-person"}`;
     s.difficulty.textContent = `🎚️ Difficulty: ${CONFIG.difficultyLevels[this._diffLevel].name}`;
+    if (s.skin) s.skin.textContent = `🎨 Ball Skin: ${BALL_SKINS[this._skinIndex ?? 0].name}`;
     // Per-powerup spawn pool is a cheat-only tool — only show it when cheat is on.
     if (s.powerups) s.powerups.style.display = this._cheat ? "" : "none";
     if (this._puButtons) {
@@ -368,6 +391,9 @@ export class Game {
       if (i >= 0 && i < CONFIG.difficultyLevels.length) this._diffLevel = i;
     }
     this.field.difficultyMult = CONFIG.difficultyLevels[this._diffLevel].mult; // apply restored (or default) level
+    this._diffSpeedMult = CONFIG.difficultyLevels[this._diffLevel].speedMult ?? 1;
+    const skin = get("gr_skin");
+    this._skinIndex = this.player.setSkin(skin !== null ? Number(skin) : 0); // apply saved (or default) skin
   }
 
   _saveSettings() {
@@ -377,6 +403,7 @@ export class Game {
     localStorage.setItem("gr_fx", this.sound.reactive ? "1" : "0");
     localStorage.setItem("gr_track", String(this.sound.trackIndex()));
     localStorage.setItem("gr_diff", String(this._diffLevel));
+    localStorage.setItem("gr_skin", String(this._skinIndex ?? 0));
   }
 
   _toggleCheat() {
@@ -491,7 +518,10 @@ export class Game {
     this.field.update(dt, this.player.position.z, speed, magnetPos);
 
     // Score = distance * multiplier; the multiplier decays if you stop taking risks.
-    this.score += speed * dt * CONFIG.scorePerMeter * this.multiplier;
+    // _effMult folds in the powerdown risk/reward bonus on top of the combo multiplier
+    // (also used for gem pickups + the HUD this frame).
+    this._effMult = this.multiplier + this._dangerBonus();
+    this.score += speed * dt * CONFIG.scorePerMeter * this._effMult;
     this._comboTimer += dt;
     if (this._comboTimer >= CONFIG.comboDecay && this.multiplier > 1) {
       this.multiplier -= 1; this._comboTimer = 0;
@@ -545,7 +575,7 @@ export class Game {
     const grabbed = this.field.harvestGems(this.player.position, this.player.radius);
     for (const pos of grabbed) {
       this.gems += 1;
-      this.score += CONFIG.gemScore * this.multiplier;
+      this.score += CONFIG.gemScore * (this._effMult ?? this.multiplier);
       this.particles.burst(pos, 0x66f0ff, 16);
     }
     if (grabbed.length) this.sound.gem();
@@ -725,7 +755,10 @@ export class Game {
 
   _refreshHud() {
     this._hud.score.textContent = Math.floor(this.score).toLocaleString();
-    this._hud.mult.textContent = `×${this.multiplier}`;
+    // Show the EFFECTIVE multiplier (combo + powerdown risk bonus). Mark it when a
+    // powerdown is juicing it, so the risk/reward is visible.
+    const danger = this._dangerBonus();
+    this._hud.mult.textContent = danger > 0 ? `×${this.multiplier + danger}🔥` : `×${this.multiplier}`;
     this._hud.distance.textContent = Math.max(0, Math.floor(this.player.position.z));
     this._hud.speed.textContent = Math.round(this._speed); // smoothed actual speed — spikes when you ride an accel plate
     if (this._hud.diff) this._hud.diff.textContent = CONFIG.difficultyLevels[this._diffLevel].name;

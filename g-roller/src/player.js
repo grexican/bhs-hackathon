@@ -9,18 +9,31 @@ const ONE = new THREE.Vector3(1, 1, 1);
 const ORBIT_KEYS = ["magnet", "slow", "reverse", "surge", "morph", "trip", "lowgrav", "flubber", "blackout", "fog"];
 const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡", morph: "🌀", trip: "🌈", lowgrav: "🌙", flubber: "🫧", blackout: "🌑", fog: "🌫️" };
 
-// A gold checker-grid skin for the ball so you can read its spin under the light.
-function ballTexture() {
+// Selectable ball skins (chosen in the ⚙️ panel). Each is just a two-tone checker
+// palette + grid-line colour — the texture is drawn procedurally below, so adding a
+// skin is one entry here. Index 0 is the default classic gold.
+export const BALL_SKINS = [
+  { name: "Classic Gold", light: "#ffce3a", dark: "#ff9f1c", line: "rgba(40,28,8,0.55)" },
+  { name: "Cyber Cyan",   light: "#2bd6ff", dark: "#1b6fae", line: "rgba(6,26,38,0.55)" },
+  { name: "Magma",        light: "#ff7a3a", dark: "#c01e1e", line: "rgba(40,8,8,0.55)" },
+  { name: "Slime",        light: "#b6ff3a", dark: "#3a9f1c", line: "rgba(12,40,8,0.55)" },
+  { name: "Bubblegum",    light: "#ff8fd0", dark: "#d63a8f", line: "rgba(40,8,28,0.55)" },
+  { name: "Steel",        light: "#d0d6e0", dark: "#6a7280", line: "rgba(10,12,18,0.55)" },
+  { name: "Void",         light: "#b06bff", dark: "#5a2faf", line: "rgba(20,8,40,0.55)" },
+];
+
+// A checker-grid skin for the ball so you can read its spin under the light.
+function ballTexture(skin = BALL_SKINS[0]) {
   const c = document.createElement("canvas");
   c.width = c.height = 256;
   const ctx = c.getContext("2d");
-  ctx.fillStyle = "#ffce3a";
+  ctx.fillStyle = skin.light;
   ctx.fillRect(0, 0, 256, 256);
   const n = 8, t = 256 / n;
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-    if ((x + y) % 2 === 0) { ctx.fillStyle = "#ff9f1c"; ctx.fillRect(x * t, y * t, t, t); }
+    if ((x + y) % 2 === 0) { ctx.fillStyle = skin.dark; ctx.fillRect(x * t, y * t, t, t); }
   }
-  ctx.strokeStyle = "rgba(40,28,8,0.55)";
+  ctx.strokeStyle = skin.line;
   ctx.lineWidth = 3;
   for (let i = 0; i <= n; i++) {
     ctx.beginPath(); ctx.moveTo(i * t, 0); ctx.lineTo(i * t, 256); ctx.stroke();
@@ -83,6 +96,19 @@ export class Player {
     this._controlledJump = false; // true only for player jumps (so auto-bounces aren't chopped)
     this.airJumps = 0;
     this._t = 0;
+    this._skinIndex = 0;
+  }
+
+  // Swap the ball's checker skin to BALL_SKINS[index] (wraps). Disposes the old
+  // canvas texture so we don't leak one per change. Returns the applied index.
+  setSkin(index) {
+    const n = BALL_SKINS.length;
+    this._skinIndex = ((index % n) + n) % n;
+    const mat = this._ball.material;
+    if (mat.map) mat.map.dispose();
+    mat.map = ballTexture(BALL_SKINS[this._skinIndex]);
+    mat.needsUpdate = true;
+    return this._skinIndex;
   }
 
   reset() {

@@ -12,6 +12,8 @@
     "dev": "npm-run-all --parallel dev:server dev:client",
     "dev:client": "npm --workspace apps/client run dev",
     "dev:server": "npm --workspace apps/server run dev",
+    "groller": "npm --prefix g-roller run dev",
+    "groller:build": "npm --prefix g-roller run build",
     "build": "npm-run-all build:server build:client",
     "build:client": "npm --workspace apps/client run build",
     "build:server": "npm --workspace apps/server run build",
