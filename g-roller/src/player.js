@@ -6,20 +6,28 @@ const ONE = new THREE.Vector3(1, 1, 1);
 // Effects without a dedicated mesh get an orbiting glyph around the ball so you
 // can always see what you've got running. (flight=wings, doublejump=board,
 // shield=bubble are shown separately.)
-const ORBIT_KEYS = ["magnet", "slow", "reverse", "surge", "morph", "trip", "lowgrav", "flubber", "blackout", "fog"];
+// Only the effects you can't otherwise see/feel get an orbit glyph. The visible
+// ones (morph wobble, trip rainbow, lowgrav float, flubber bounce, blackout dark,
+// fog) are dropped here — they still show as countdown chips in the HUD.
+const ORBIT_KEYS = ["magnet", "slow", "reverse", "surge"];
 const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡", morph: "🌀", trip: "🌈", lowgrav: "🌙", flubber: "🫧", blackout: "🌑", fog: "🌫️" };
+const ORBIT_RING_SEG = 48; // segments in a glyph's depletion ring
 
 // Selectable ball skins (chosen in the ⚙️ panel). Each entry names a procedural
 // `pattern` (drawn by ballTexture below) plus the colours that pattern needs.
 // Every entry MUST keep a `name` (the menu reads it). Index 0 stays classic gold.
+// `glassy` flags a marble where the WHOLE sphere is translucent glass (Galaxy:
+// the star/nebula art glows from within). `glassZones` flags a marble where only
+// the SOLID coloured zones (flames, stripe, dots) stay opaque and everything else
+// is see-through glass — driven by an alpha mask the texture function also draws.
 export const BALL_SKINS = [
   { name: "Classic Gold", pattern: "checker", light: "#ffce3a", dark: "#ff9f1c", line: "rgba(40,28,8,0.55)" },
-  { name: "Racing Stripe", pattern: "stripes", light: "#f5f5f5", dark: "#d11321", accent: "#101010" },
+  { name: "Racing Stripe", pattern: "stripes", light: "#f5f5f5", dark: "#d11321", accent: "#101010", glassZones: true },
   { name: "Galaxy",       pattern: "galaxy",  light: "#7b4bff", dark: "#04030f", accent: "#ffffff", glassy: true },
   { name: "Carbon",       pattern: "carbon",  light: "#454b54", dark: "#101216", accent: "#8a93a3" },
   { name: "Hazard",       pattern: "hazard",  light: "#ffe600", dark: "#141414" },
-  { name: "Magma",        pattern: "flames",  light: "#fff4b0", dark: "#1a0402", accent: "#ff7a1a" },
-  { name: "Bubblegum",    pattern: "dots",    light: "#ff9ed6", dark: "#ff5fb0", accent: "#ffe3f4" },
+  { name: "Magma",        pattern: "flames",  light: "#fff4b0", dark: "#1a0402", accent: "#ff7a1a", glassZones: true },
+  { name: "Bubblegum",    pattern: "dots",    light: "#ff9ed6", dark: "#ff5fb0", accent: "#ffe3f4", glassZones: true },
 ];
 
 // Tiny deterministic PRNG so "random" speckles (stars, carbon flecks) look the
@@ -37,33 +45,46 @@ function mulberry32(seed) {
 // Draws a distinct 256x256 procedural pattern per skin and returns a sphere
 // texture. Patterns are built to tile across the 256-wide wrap so the vertical
 // seam isn't jarring (counts divide evenly; full-canvas fills hide it best).
-function ballTexture(skin = BALL_SKINS[0]) {
+//
+// `mode` picks WHICH map this canvas becomes:
+//   "color"    — the visible diffuse surface (default).
+//   "alpha"    — a black/white mask for glass-zone skins: WHITE = solid/opaque,
+//                BLACK = see-through glass. Fed to material.alphaMap so the gaps
+//                between flames/stripes/dots actually vanish into the glass.
+//   "emissive" — for the galaxy: the same dark star art, used as emissiveMap so
+//                only the stars/nebula glow from within the marble.
+function ballTexture(skin = BALL_SKINS[0], mode = "color") {
   const S = 256;
   const c = document.createElement("canvas");
   c.width = c.height = S;
   const ctx = c.getContext("2d");
+  const alpha = mode === "alpha"; // drawing the opacity mask, not the colour
 
   switch (skin.pattern) {
     case "stripes": {
       // Racing livery: crisp white field, two bold red center stripes flanked by
       // sharp black pinstripes, plus a thin checkered band — clearly NOT fire.
-      ctx.fillStyle = skin.light; ctx.fillRect(0, 0, S, S);
+      // In alpha mode the SOLID livery (stripes + pinstripes + checker band) is
+      // white (opaque) and the white "field" is left black (transparent glass).
+      if (alpha) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S); }
+      else { ctx.fillStyle = skin.light; ctx.fillRect(0, 0, S, S); }
       // Two vertical red bands (tile cleanly: centered + wrapped at the seam halves).
       const stripeW = S * 0.16, gap = S * 0.06;
       const centers = [S * 0.5, 0]; // one mid-band, one straddling the wrap seam
       for (const cx of centers) {
         // Red core stripe.
-        ctx.fillStyle = skin.dark;
+        ctx.fillStyle = alpha ? "#fff" : skin.dark;
         ctx.fillRect(cx - stripeW / 2, 0, stripeW, S);
         // Black sharp pinstripes hugging each edge of the red.
-        ctx.fillStyle = skin.accent;
+        ctx.fillStyle = alpha ? "#fff" : skin.accent;
         ctx.fillRect(cx - stripeW / 2 - gap, 0, gap * 0.5, S);
         ctx.fillRect(cx + stripeW / 2 + gap * 0.5, 0, gap * 0.5, S);
       }
       // A thin checkered accent band across the equator (race-flag flavour).
       const cb = 12, by = S * 0.5 - cb / 2;
       for (let x = 0; x < S; x += cb) {
-        ctx.fillStyle = (x / cb) % 2 === 0 ? skin.accent : skin.light;
+        if (alpha) ctx.fillStyle = "#fff"; // whole band stays solid in the marble
+        else ctx.fillStyle = (x / cb) % 2 === 0 ? skin.accent : skin.light;
         ctx.fillRect(x, by, cb, cb);
       }
       break;
@@ -88,17 +109,20 @@ function ballTexture(skin = BALL_SKINS[0]) {
         ctx.fillStyle = rg; ctx.fillRect(0, 0, S, S);
       }
       ctx.globalCompositeOperation = "source-over";
-      // Stars: small bright cores with a faint halo so they glow.
-      for (let i = 0; i < 260; i++) {
+      // Stars: small bright cores with a faint halo so they glow. The emissive
+      // pass pushes brighter/bigger halos so the sparkle truly blooms from within.
+      const starCount = mode === "emissive" ? 300 : 260;
+      for (let i = 0; i < starCount; i++) {
         const x = rnd() * S, y = rnd() * S, r = rnd() * 1.7 + 0.4;
         const hot = rnd() > 0.85; // a few big "lens-flare" stars
         const rr = hot ? r + 2 : r;
-        const halo = ctx.createRadialGradient(x, y, 0, x, y, rr * 3);
-        halo.addColorStop(0, "rgba(255,255,255,0.9)");
-        halo.addColorStop(0.4, "rgba(180,200,255,0.4)");
+        const haloR = rr * (mode === "emissive" ? 4 : 3);
+        const halo = ctx.createRadialGradient(x, y, 0, x, y, haloR);
+        halo.addColorStop(0, "rgba(255,255,255,0.95)");
+        halo.addColorStop(0.4, "rgba(180,200,255,0.45)");
         halo.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = halo;
-        ctx.beginPath(); ctx.arc(x, y, rr * 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, haloR, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = skin.accent;
         ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
       }
@@ -142,18 +166,26 @@ function ballTexture(skin = BALL_SKINS[0]) {
       break;
     }
     case "flames": {
-      // Magma: dark charred base, hot orange mid, bright yellow-white core, with
-      // many tall layered flame tongues plus glowing embers/sparks rising up.
-      const g = ctx.createLinearGradient(0, S, 0, 0);
-      g.addColorStop(0, skin.dark);
-      g.addColorStop(0.45, "#8a1602");
-      g.addColorStop(0.75, skin.accent);
-      g.addColorStop(1, "#ffb347");
-      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      // Magma: hot flame tongues stay SOLID, the rest is see-through glass.
+      // Color pass paints a charred-to-amber gradient and layered tongues; alpha
+      // pass paints the SAME tongue shapes white on a black ground, so only the
+      // flames are opaque and you see straight through the gaps between them.
       const rnd = mulberry32(13);
+      if (alpha) {
+        // Mask: black field (glass), white flames (solid). Embers stay glassy.
+        ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S);
+      } else {
+        const g = ctx.createLinearGradient(0, S, 0, 0);
+        g.addColorStop(0, skin.dark);
+        g.addColorStop(0.45, "#8a1602");
+        g.addColorStop(0.75, skin.accent);
+        g.addColorStop(1, "#ffb347");
+        ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      }
       // Helper: draw one tongue as nested layers (outer orange -> inner yellow-white).
+      // In alpha mode every layer is white so the whole tongue silhouette is solid.
       const tongue = (bx, h, bw, col, topFrac) => {
-        ctx.fillStyle = col;
+        ctx.fillStyle = alpha ? "#fff" : col;
         ctx.beginPath();
         ctx.moveTo(bx - bw / 2, S);
         ctx.quadraticCurveTo(bx - bw * 0.35, S - h * 0.55, bx - bw * 0.08, S - h * topFrac);
@@ -170,28 +202,41 @@ function ballTexture(skin = BALL_SKINS[0]) {
         tongue(bx, h * 0.82, bw * 0.6, "#ffb000", 0.95);    // mid amber
         tongue(bx, h * 0.6, bw * 0.32, skin.light, 0.98);   // bright yellow-white core
       }
-      // Embers / sparks floating above the flames.
-      for (let i = 0; i < 70; i++) {
-        const x = rnd() * S, y = rnd() * S * 0.7, r = rnd() * 1.6 + 0.4;
-        ctx.globalAlpha = 0.5 + rnd() * 0.5;
-        ctx.fillStyle = rnd() > 0.5 ? "#ffd06a" : "#ff8a2a";
-        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      // Embers / sparks floating above the flames (colour pass only — in the mask
+      // they'd punch tiny opaque dots into the glass, so skip them there).
+      if (!alpha) {
+        for (let i = 0; i < 70; i++) {
+          const x = rnd() * S, y = rnd() * S * 0.7, r = rnd() * 1.6 + 0.4;
+          ctx.globalAlpha = 0.5 + rnd() * 0.5;
+          ctx.fillStyle = rnd() > 0.5 ? "#ffd06a" : "#ff8a2a";
+          ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
       }
-      ctx.globalAlpha = 1;
       break;
     }
     case "dots": {
-      // Glossy bubblegum: candy-pink field with varied-size dots and soft white
-      // specular highlights so each dot reads like a shiny candy bead.
-      const bg = ctx.createLinearGradient(0, 0, 0, S);
-      bg.addColorStop(0, skin.light); bg.addColorStop(1, skin.dark);
-      ctx.fillStyle = bg; ctx.fillRect(0, 0, S, S);
+      // Glossy bubblegum marble: the candy dots stay SOLID, the field between them
+      // is see-through glass. Color pass paints a pink field + shiny beads; alpha
+      // pass paints those same dots white on black so only the beads are opaque.
       const rnd = mulberry32(21);
+      if (alpha) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S); }
+      else {
+        const bg = ctx.createLinearGradient(0, 0, 0, S);
+        bg.addColorStop(0, skin.light); bg.addColorStop(1, skin.dark);
+        ctx.fillStyle = bg; ctx.fillRect(0, 0, S, S);
+      }
       const step = 32;
       for (let gy = 0; gy * step <= S; gy++) for (let gx = 0; gx * step <= S; gx++) {
         const ox = (gy % 2) * step / 2;
         const cx = gx * step + ox, cy = gy * step;
         const r = 7 + rnd() * 6; // varied dot sizes
+        if (alpha) {
+          // Mask: a slightly fatter white disc so the bead's edge isn't cut off.
+          ctx.fillStyle = "#fff";
+          ctx.beginPath(); ctx.arc(cx, cy, r + 0.5, 0, Math.PI * 2); ctx.fill();
+          continue;
+        }
         // Candy body with a radial shade for roundness.
         const rg = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.2, cx, cy, r);
         rg.addColorStop(0, skin.accent); rg.addColorStop(1, "#d63a8f");
@@ -229,9 +274,16 @@ export class Player {
     this.radius = CONFIG.playerRadius;
 
     const group = new THREE.Group();
+    // ONE MeshPhysicalMaterial for every skin. It extends MeshStandardMaterial, so
+    // emissive writes in updateVisuals keep working, but it also gives us real glass
+    // (transmission, ior, clearcoat) that setSkin dials in per skin. Opaque skins
+    // just set transmission 0 / transparent false and it behaves like the old standard.
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(this.radius, 32, 24),
-      new THREE.MeshStandardMaterial({ map: ballTexture(), roughness: 0.4, metalness: 0.15 })
+      new THREE.MeshPhysicalMaterial({
+        map: ballTexture(), roughness: 0.4, metalness: 0.15,
+        transmission: 0, ior: 1.4, clearcoat: 0.25, clearcoatRoughness: 0.3,
+      })
     );
     ball.castShadow = true;
     this._ball = ball;
@@ -252,6 +304,7 @@ export class Player {
     this._orbit = new THREE.Group();
     group.add(this._wings, this._board, this._orbit);
     this._orbitSprites = {};
+    this._orbitRings = {}; // depletion ring (THREE.Line) per active orbit glyph
     this._emojiTex = {};
     this._vt = 0;
 
@@ -280,36 +333,81 @@ export class Player {
   }
 
   // Swap the ball's skin to BALL_SKINS[index] (wraps). Disposes the old canvas
-  // texture(s) so we don't leak one per change. Galaxy gets a glassy marble look
-  // (glowing star map as both map + emissiveMap, wet sheen); every other skin
-  // RESETS the material back to plain opaque standard. Returns the applied index.
+  // map(s) so we don't leak one per change, then dials the SINGLE physical
+  // material into one of three looks:
+  //   • glassy  (Galaxy) — whole sphere is translucent glass, star/nebula art
+  //     glows from within via emissiveMap.
+  //   • glassZones (Magma/Racing/Bubblegum) — solid coloured zones stay opaque,
+  //     the rest is see-through glass via an alphaMap (white=solid, black=glass).
+  //   • opaque  (Classic/Carbon/Hazard) — plain solid ball; ALL glass props reset.
+  // Getting that reset right is the whole game: every glass prop set in one branch
+  // must be cleared in the opaque branch, or a glass→opaque switch keeps see-through.
   setSkin(index) {
     const n = BALL_SKINS.length;
     this._skinIndex = ((index % n) + n) % n;
     const skin = BALL_SKINS[this._skinIndex];
     const mat = this._ball.material;
 
+    // Dispose every old map before reassigning so we never leak GPU textures.
     if (mat.map) mat.map.dispose();
     if (mat.emissiveMap) mat.emissiveMap.dispose();
-    mat.map = ballTexture(skin);
+    if (mat.alphaMap) mat.alphaMap.dispose();
+    mat.emissiveMap = null;
+    mat.alphaMap = null;
+    mat.map = ballTexture(skin, "color");
+
+    // A little extra premium sheen on every skin (subtle clearcoat lacquer).
+    mat.clearcoat = 0.3;
+    mat.clearcoatRoughness = 0.25;
+    mat.envMapIntensity = 1.2;
 
     if (skin.glassy) {
-      // Marble look: the dark star canvas doubles as an emissiveMap so only the
-      // stars/nebula glow from within, plus a wet, near-mirror sheen on the glass.
-      mat.emissiveMap = ballTexture(skin);
+      // Galaxy marble: real glass (transmission) so light passes through, with the
+      // star canvas as an emissiveMap so the sparkles/nebula glow from within. Back
+      // faces draw too (DoubleSide) so it reads as a solid glass orb, not a shell.
+      mat.emissiveMap = ballTexture(skin, "emissive");
       mat.emissive.setHex(0xffffff);
-      this._skinGlow = 1.1; // base emissive kept up even when no blackout (see updateVisuals)
+      this._skinGlow = 1.2; // base emissive kept up even with no blackout (updateVisuals)
       mat.emissiveIntensity = this._skinGlow;
-      mat.metalness = 0.1;
-      mat.roughness = 0.12;
-    } else {
-      // Reset to the normal opaque standard material for every non-glassy skin.
-      mat.emissiveMap = null;
+      mat.transparent = true;
+      mat.transmission = 0.85;
+      mat.thickness = this.radius * 1.6;
+      mat.ior = 1.45;
+      mat.opacity = 1;
+      mat.metalness = 0.0;
+      mat.roughness = 0.08;
+      mat.side = THREE.DoubleSide;
+    } else if (skin.glassZones) {
+      // Solid zones opaque, the rest glass: the alphaMap (white=solid, black=glass)
+      // drives per-pixel transparency, and transmission turns those clear pixels into
+      // refracting glass rather than a flat hole. No emissive base — these aren't lit
+      // from within (blackout still adds its cool ember on top in updateVisuals).
+      mat.alphaMap = ballTexture(skin, "alpha");
       mat.emissive.setHex(0x000000);
       this._skinGlow = 0;
       mat.emissiveIntensity = 0;
+      mat.transparent = true;
+      mat.transmission = 0.9;
+      mat.thickness = this.radius * 1.4;
+      mat.ior = 1.45;
+      mat.opacity = 1;
+      mat.metalness = 0.05;
+      mat.roughness = 0.12;
+      mat.side = THREE.DoubleSide;
+    } else {
+      // Opaque reset — clear EVERY glass prop the branches above set, so the ball
+      // is a normal solid sphere again (FrontSide, no transmission/alpha/glow).
+      mat.emissive.setHex(0x000000);
+      this._skinGlow = 0;
+      mat.emissiveIntensity = 0;
+      mat.transparent = false;
+      mat.transmission = 0;
+      mat.thickness = 0;
+      mat.ior = 1.4;
+      mat.opacity = 1;
       mat.metalness = 0.15;
       mat.roughness = 0.4;
+      mat.side = THREE.FrontSide;
     }
     mat.needsUpdate = true;
     return this._skinIndex;
@@ -324,6 +422,9 @@ export class Player {
     for (const k of Object.keys(this._orbitSprites)) {
       this._orbit.remove(this._orbitSprites[k]);
       delete this._orbitSprites[k];
+    }
+    for (const k of Object.keys(this._orbitRings)) {
+      this._removeOrbitRing(k);
     }
     this.vel.set(0, 0, 0);
     this.grounded = false;
@@ -547,7 +648,7 @@ export class Player {
   // Called every frame with the live effects state so you can read what's
   // active straight off the ball. `e` is the game's effects object (seconds
   // remaining per timed effect, or a bool for shield).
-  updateVisuals(e, dt) {
+  updateVisuals(e, dt, fracs = {}) {
     this._vt += dt;
     const t = this._vt;
     // Fast blink in the final 5 seconds so you know an effect's about to end.
@@ -583,23 +684,61 @@ export class Player {
     if (!base) bm.emissive.setHex(0x5a78a8); // only the non-glowing skins tint cool
     bm.emissiveIntensity += (ballGlow - bm.emissiveIntensity) * Math.min(1, dt * 4);
 
-    this._updateOrbit(e, t, blink);
+    this._updateOrbit(e, t, blink, fracs);
   }
 
   // Orbiting glyphs around the ball for the effects without a dedicated mesh.
-  _updateOrbit(e, t, blink) {
+  // Each glyph carries a depletion ring that sweeps closed as the effect runs out.
+  _updateOrbit(e, t, blink, fracs = {}) {
     const active = ORBIT_KEYS.filter((k) => e[k] > 0);
     for (const k of Object.keys(this._orbitSprites)) {
       if (!active.includes(k)) { this._orbit.remove(this._orbitSprites[k]); delete this._orbitSprites[k]; }
     }
+    for (const k of Object.keys(this._orbitRings)) {
+      if (!active.includes(k)) this._removeOrbitRing(k);
+    }
     active.forEach((k, i) => {
       let s = this._orbitSprites[k];
       if (!s) { s = this._emojiSprite(ORBIT_EMOJI[k]); this._orbit.add(s); this._orbitSprites[k] = s; }
+      let ring = this._orbitRings[k];
+      if (!ring) { ring = this._makeOrbitRing(); this._orbit.add(ring); this._orbitRings[k] = ring; }
       const ang = t * 1.3 + (i / active.length) * Math.PI * 2;
       const rr = this.radius * 2.4;
-      s.position.set(Math.cos(ang) * rr, this.radius * 1.5, Math.sin(ang) * rr);
-      s.material.opacity = blink(e[k]);
+      const x = Math.cos(ang) * rr, y = this.radius * 1.5, z = Math.sin(ang) * rr;
+      s.position.set(x, y, z);
+      const op = blink(e[k]);
+      s.material.opacity = op;
+      // Ride along with the glyph and reveal only the remaining sweep. setDrawRange
+      // just changes how many existing vertices draw — no GPU re-upload per frame.
+      ring.position.set(x, y, z);
+      const frac = Math.max(0, Math.min(1, fracs[k] ?? 0));
+      ring.geometry.setDrawRange(0, Math.ceil(ORBIT_RING_SEG * frac) + 1);
+      ring.material.opacity = op;
     });
+  }
+
+  // Build one depletion ring: a circle of points as a Line, started at the top
+  // (-π/2) and wound clockwise so setDrawRange peels it back like a clock hand.
+  _makeOrbitRing() {
+    const pts = [];
+    for (let i = 0; i <= ORBIT_RING_SEG; i++) {
+      const a = -Math.PI / 2 + (i / ORBIT_RING_SEG) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(a) * 0.7, Math.sin(a) * 0.7, 0));
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color: 0xeaf2ff, transparent: true, opacity: 1, depthWrite: false });
+    return new THREE.Line(geo, mat);
+  }
+
+  // Remove a ring from the orbit group and dispose its (non-cached) geometry +
+  // material so we don't leak GPU resources when the effect expires or resets.
+  _removeOrbitRing(k) {
+    const ring = this._orbitRings[k];
+    if (!ring) return;
+    this._orbit.remove(ring);
+    ring.geometry.dispose();
+    ring.material.dispose();
+    delete this._orbitRings[k];
   }
 
   // Angelic layered wings for the flight powerup. Each side is ONE mesh (so the

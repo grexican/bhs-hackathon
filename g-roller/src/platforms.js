@@ -661,7 +661,8 @@ export class PlatformField {
     for (let k = 0; k < this.itemMultiplier; k++) {
       const ox = (k - (this.itemMultiplier - 1) / 2) * 3;
       if (chance(0.4)) this._addGem(x + ox, py + p.hy, z);
-      if (chance(CONFIG.powerupChance)) this._addPowerup(x + ox, py + p.hy, z + rand(-len * 0.3, len * 0.3), hd);
+      // difficultyMult 0 = zen / no-hazards: skip powerups entirely (gems are harmless candy).
+      if (this.difficultyMult > 0 && chance(CONFIG.powerupChance)) this._addPowerup(x + ox, py + p.hy, z + rand(-len * 0.3, len * 0.3), hd);
     }
 
     if (!safe) this._scatterCloud(x, exitY, z, sd, hd);
@@ -696,7 +697,8 @@ export class PlatformField {
       for (let m = 0; m < this.itemMultiplier; m++) {
         const ox = (m - (this.itemMultiplier - 1) / 2) * 2.5;
         if (chance(0.5)) this._addGem(x + ox, y + p.hy, z); // reward exploring off-path
-        if (chance(0.2)) this._addPowerup(x + ox, y + p.hy, z, hd);
+        // difficultyMult 0 = zen / no-hazards: skip powerups (gems still spawn — harmless).
+        if (this.difficultyMult > 0 && chance(0.2)) this._addPowerup(x + ox, y + p.hy, z, hd);
       }
     }
   }

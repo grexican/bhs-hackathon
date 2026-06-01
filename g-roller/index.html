@@ -101,21 +101,23 @@
         position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0; overflow: hidden;
         background: linear-gradient(rgba(110,135,160,0.12), rgba(95,120,150,0.20));
       }
-      #rain-lens::after { /* slanted falling streaks */
+      #rain-lens::after { /* faint sparse streaks — just a hint of falling rain, not stripes */
         content: ""; position: absolute; inset: -25%;
-        background: repeating-linear-gradient(101deg,
-          transparent 0 7px, rgba(205,220,235,0.16) 7px 8px, transparent 8px 15px);
-        animation: rain-fall 0.42s linear infinite;
+        background: repeating-linear-gradient(99deg,
+          transparent 0 18px, rgba(205,220,235,0.045) 18px 19px, transparent 19px 38px);
+        animation: rain-fall 0.7s linear infinite;
       }
-      #rain-lens::before { /* fat drops crawling down the glass */
-        content: ""; position: absolute; inset: -10% 0;
+      #rain-lens::before { /* big fat droplets clinging to and sliding down the glass */
+        content: ""; position: absolute; inset: -18% 0;
         background:
-          radial-gradient(7px 12px at 18% 20%, rgba(225,235,245,0.55), transparent 70%),
-          radial-gradient(5px 9px at 47% 0%, rgba(225,235,245,0.45), transparent 70%),
-          radial-gradient(9px 15px at 72% 35%, rgba(225,235,245,0.55), transparent 70%),
-          radial-gradient(4px 8px at 88% 10%, rgba(225,235,245,0.4), transparent 70%),
-          radial-gradient(6px 11px at 33% 55%, rgba(225,235,245,0.5), transparent 70%);
-        animation: rain-drip 2.6s linear infinite;
+          radial-gradient(24px 32px at 15% 16%, rgba(232,242,252,0.6), rgba(200,220,238,0.22) 58%, transparent 74%),
+          radial-gradient(17px 24px at 39% 2%,  rgba(232,242,252,0.5), transparent 72%),
+          radial-gradient(32px 42px at 69% 28%, rgba(232,242,252,0.62), rgba(200,220,238,0.2) 56%, transparent 74%),
+          radial-gradient(15px 21px at 88% 10%, rgba(232,242,252,0.46), transparent 72%),
+          radial-gradient(21px 29px at 29% 48%, rgba(232,242,252,0.56), transparent 74%),
+          radial-gradient(28px 37px at 56% 64%, rgba(232,242,252,0.58), rgba(200,220,238,0.2) 56%, transparent 74%),
+          radial-gradient(19px 26px at 81% 76%, rgba(232,242,252,0.5), transparent 74%);
+        animation: rain-drip 3.3s linear infinite;
       }
       @keyframes rain-fall { to { transform: translateY(22%); } }
       @keyframes rain-drip { from { transform: translateY(-12%); } to { transform: translateY(112%); } }
@@ -332,6 +334,7 @@
           <button class="settings__row" id="set-motion">🌿 Reduced Motion</button>
           <button class="settings__row" id="set-view">👁 View</button>
           <button class="settings__row" id="set-skin">🎨 Ball Skin</button>
+          <button class="settings__row" id="set-zen">🧘 Zen Mode</button>
           <div id="set-powerups" style="display:none">
             <div class="settings__puhdr">
               🧪 Spawn pool (cheat)
@@ -353,7 +356,7 @@
         <div class="hud__controls hud__controls--keys">
           <kbd>Space</kbd> / <kbd>W</kbd> jump — hold for height, release early to drop fast<br />
           <kbd>A</kbd><kbd>D</kbd> / <kbd>&larr;</kbd><kbd>&rarr;</kbd> steer &nbsp;·&nbsp; <kbd>&uarr;</kbd><kbd>&darr;</kbd> speed up / down<br />
-          <kbd>M</kbd> mute &nbsp;·&nbsp; <kbd>N</kbd> next track &nbsp;·&nbsp; <kbd>V</kbd> 1st-person &nbsp;·&nbsp; <kbd>X</kbd> music FX &nbsp;·&nbsp; <kbd>G</kbd> reduced motion &nbsp;·&nbsp; ⚙️ for settings
+          <kbd>M</kbd> mute &nbsp;·&nbsp; <kbd>N</kbd> next track &nbsp;·&nbsp; <kbd>V</kbd> 1st-person &nbsp;·&nbsp; <kbd>X</kbd> music FX &nbsp;·&nbsp; <kbd>G</kbd> reduced motion &nbsp;·&nbsp; <kbd>Z</kbd> zen &nbsp;·&nbsp; ⚙️ for settings
         </div>
         <div class="hud__controls hud__controls--touch">
           <b>Left stick</b> to steer · push it <b>up/down</b> for speed<br />

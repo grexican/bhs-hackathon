@@ -33,12 +33,13 @@ export const CONFIG = {
 
   // Trampoline boards (the pink ones): launch you up like a boosted jump.
   bounceBoost: 1.7,   // launch velocity = jumpSpeed * this (trimmed — jumpSpeed 50 made 2.05 absurd)
+  zenBounce: 2.0,     // Zen mode: a would-be-fatal fall instead power-bounces you up at jumpSpeed * this (~200% jump)
 
   // Flipper plate (orange): a hinged springboard that pivots forward and SENDS you
   // up AND forward — a directed launch. Survive the landing. Reuses the box plate;
   // the "flip" is just an animated hinge kick (no new geometry).
   flipperVertical: 1.75,  // launch v.y = jumpSpeed * this — dramatic (above the trampoline; energy also goes forward)
-  flipperForward: 42,     // forward speed BLAST on launch (added to the accel bonus, then decays off)
+  flipperForward: 52,     // forward speed BLAST on launch — injected straight into live speed (uncapped by accelMax) so you really fly forward, then eases back
   flipperFlipTime: 0.4,   // seconds the hinge-kick animation lasts
   flipperChance: 0.05,    // chance a non-safe main-path board is a flipper (rare — it's a big event)
 

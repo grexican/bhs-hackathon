@@ -40,6 +40,7 @@ export class Game {
     this._konami = [];
     this._firstPerson = false;
     this._diffLevel = CONFIG.defaultDifficulty; // index into CONFIG.difficultyLevels
+    this._zen = false; // Zen mode: no death (power-bounce instead), no scoring/gems, no hazards
     this._restartLock = 0; // brief input-dead window after dying (no instant restart)
     this.gems = 0;
     this.score = 0;
@@ -100,7 +101,7 @@ export class Game {
     window.addEventListener("keydown", (e) => {
       if (e.repeat) return;
       // Settings shortcuts (desktop): M sound · V view · N track · X music-fx ·
-      // G reduced-motion · K ball skin · L difficulty.
+      // G reduced-motion · K ball skin · L difficulty · Z zen.
       if (e.code === "KeyM") this._toggleSound();
       if (e.code === "KeyV") this._toggleView();
       if (e.code === "KeyN") this._cycleTrack();
@@ -108,6 +109,7 @@ export class Game {
       if (e.code === "KeyG") this._toggleReduced();
       if (e.code === "KeyK") this._cycleSkin();
       if (e.code === "KeyL") this._cycleDifficulty();
+      if (e.code === "KeyZ") this._toggleZen();
       // Cheat-only desktop testing: instantly fire a powerdown on yourself.
       // R rain · F fog · B blackout · T trip · O slow-mo.
       if (this._cheat && this.state === "playing") {
@@ -315,12 +317,27 @@ export class Game {
     this._syncSettings();
   }
 
+  // Push the effective hazard mult into the field. Zen mode forces it to 0, which
+  // makes _hazRamp return 0 — so no obstacles, movers, sharp turns, lean or powerups.
+  _applyDifficultyMult() {
+    this.field.difficultyMult = this._zen ? 0 : CONFIG.difficultyLevels[this._diffLevel].mult;
+  }
+
   _cycleDifficulty() {
     this._diffLevel = (this._diffLevel + 1) % CONFIG.difficultyLevels.length;
     const lvl = CONFIG.difficultyLevels[this._diffLevel];
-    this.field.difficultyMult = lvl.mult; // takes effect on platforms generated from here on
+    this._applyDifficultyMult(); // takes effect on platforms generated from here on
     this._diffSpeedMult = lvl.speedMult ?? 1; // Hard runs faster, Easy slower
     this._toast(`🎚️ ${lvl.name.toUpperCase()}`, "#ffd34e");
+    this._syncSettings();
+  }
+
+  // Zen mode: a calm, no-pressure toggle. Flips no-death (power-bounce), scoring/gems
+  // off, and zeroes the hazard mult so the field stops spawning anything dangerous.
+  _toggleZen() {
+    this._zen = !this._zen;
+    this._applyDifficultyMult();
+    this._toast(this._zen ? "🧘 ZEN: On" : "🧘 ZEN: Off", "#9affd6");
     this._syncSettings();
   }
 
@@ -338,7 +355,7 @@ export class Game {
 
   _buildSettings() {
     const $ = (id) => document.getElementById(id);
-    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty"), skin: $("set-skin"), powerups: $("set-powerups") };
+    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty"), skin: $("set-skin"), zen: $("set-zen"), powerups: $("set-powerups") };
 
     // Build the cheat-only per-powerup spawn-pool chips (one toggle per type).
     const grid = $("set-powerups-grid");
@@ -364,6 +381,7 @@ export class Game {
     this._settings.view.addEventListener("click", () => this._toggleView());
     this._settings.difficulty.addEventListener("click", () => this._cycleDifficulty());
     this._settings.skin.addEventListener("click", () => this._cycleSkin());
+    this._settings.zen.addEventListener("click", () => this._toggleZen());
     this._syncSettings();
   }
 
@@ -377,6 +395,7 @@ export class Game {
     s.view.textContent = `👁 View: ${this._firstPerson ? "First-person" : "Third-person"}`;
     s.difficulty.textContent = `🎚️ Difficulty: ${CONFIG.difficultyLevels[this._diffLevel].name}`;
     if (s.skin) s.skin.textContent = `🎨 Ball Skin: ${BALL_SKINS[this._skinIndex ?? 0].name}`;
+    if (s.zen) s.zen.textContent = "🧘 Zen Mode: " + (this._zen ? "On" : "Off");
     // Per-powerup spawn pool is a cheat-only tool — only show it when cheat is on.
     if (s.powerups) s.powerups.style.display = this._cheat ? "" : "none";
     if (this._puButtons) {
@@ -411,7 +430,9 @@ export class Game {
       const i = Number(diff);
       if (i >= 0 && i < CONFIG.difficultyLevels.length) this._diffLevel = i;
     }
-    this.field.difficultyMult = CONFIG.difficultyLevels[this._diffLevel].mult; // apply restored (or default) level
+    const zen = get("gr_zen");
+    if (zen !== null) this._zen = zen === "1";
+    this._applyDifficultyMult(); // apply restored (or default) level — forced to 0 in zen
     this._diffSpeedMult = CONFIG.difficultyLevels[this._diffLevel].speedMult ?? 1;
     const skin = get("gr_skin");
     this._skinIndex = this.player.setSkin(skin !== null ? Number(skin) : 0); // apply saved (or default) skin
@@ -425,6 +446,7 @@ export class Game {
     localStorage.setItem("gr_track", String(this.sound.trackIndex()));
     localStorage.setItem("gr_diff", String(this._diffLevel));
     localStorage.setItem("gr_skin", String(this._skinIndex ?? 0));
+    localStorage.setItem("gr_zen", this._zen ? "1" : "0");
   }
 
   _toggleCheat() {
@@ -551,7 +573,7 @@ export class Game {
     // _effMult folds in the powerdown risk/reward bonus on top of the combo multiplier
     // (also used for gem pickups + the HUD this frame).
     this._effMult = this.multiplier + this._dangerBonus();
-    this.score += speed * dt * CONFIG.scorePerMeter * this._effMult;
+    if (!this._zen) this.score += speed * dt * CONFIG.scorePerMeter * this._effMult; // scoring is off in zen
     this._comboTimer += dt;
     if (this._comboTimer >= CONFIG.comboDecay && this.multiplier > 1) {
       this.multiplier -= 1; this._comboTimer = 0;
@@ -590,7 +612,11 @@ export class Game {
     if (ev.nearMiss) this._onNearMiss();
 
     // Show every active effect on the ball (wings, hover board, orbiting glyphs).
-    this.player.updateVisuals(this._effects, dt);
+    // The orbit glyphs draw a depletion ring, so hand them remaining/total per
+    // effect (same math the HUD chips use) — player.js doesn't know durations.
+    const fracs = {};
+    for (const k of ["magnet", "slow", "reverse", "surge"]) fracs[k] = this._effects[k] / this._dur(k);
+    this.player.updateVisuals(this._effects, dt, fracs);
 
     // Ball speed-trail.
     const tp = this.player.position.clone(); tp.y -= this.player.radius * 0.6;
@@ -604,8 +630,11 @@ export class Game {
     // here we just harvest whatever's now in range.
     const grabbed = this.field.harvestGems(this.player.position, this.player.radius);
     for (const pos of grabbed) {
-      this.gems += 1;
-      this.score += CONFIG.gemScore * (this._effMult ?? this.multiplier);
+      // Zen mode doesn't count gems or score them — but they still sparkle on pickup.
+      if (!this._zen) {
+        this.gems += 1;
+        this.score += CONFIG.gemScore * (this._effMult ?? this.multiplier);
+      }
       this.particles.burst(pos, 0x66f0ff, 16);
     }
     if (grabbed.length) this.sound.gem();
@@ -615,7 +644,22 @@ export class Game {
 
     this._refreshHud();
     this._renderEffects();
-    if (ev.died) this._die();
+    if (ev.died) {
+      if (this._zen) {
+        // Zen mode never lets you die: catch the fall and POWER-BOUNCE back up so you
+        // land on something and keep rolling. Snap up to just above the lowest floor
+        // still on screen (or stay put if nothing's nearby), then fling upward.
+        const floor = this.field.lowestTopNear(this.player.position.z); // -Infinity if none nearby
+        const catchY = (floor === -Infinity ? this.player.position.y : floor) + this.player.radius + 2;
+        this.player.position.y = Math.max(this.player.position.y, catchY);
+        this.player.vel.y = CONFIG.jumpSpeed * CONFIG.zenBounce;
+        this.player.vel.x *= 0.5;
+        this.particles.burst(this.player.position, 0x9affd6, 18);
+        this.sound.bounce();
+      } else {
+        this._die();
+      }
+    }
   }
 
   _onLanded(ev) {
@@ -624,8 +668,10 @@ export class Game {
     if (ev.landed === "bouncy") {
       this.particles.burst(p, 0xff3f7a, 22); this._shake = 0.35; this._toast("BOING!", "#ff3f7a"); this.sound.bounce();
     } else if (ev.landed === "flipper") {
-      // Forward BLAST on top of the big vertical the player already got — rides off
-      // as an accel bonus, held then decaying. SENDS you forward + up.
+      // Forward BLAST on top of the big vertical. Inject straight into the live speed
+      // (uncapped by accelMax) so you genuinely fly FORWARD, not just up like a
+      // trampoline — then it eases back. The accel bonus + hold sustain it briefly.
+      this._speed = Math.min(CONFIG.maxForwardSpeed + CONFIG.accelMax + 6, this._speed + CONFIG.flipperForward);
       this._accelBonus = Math.min(CONFIG.accelMax, this._accelBonus + CONFIG.flipperForward);
       this._accelHold = CONFIG.accelHold;
       this.particles.burst(p, 0xff7a1c, 28); this._shake = 0.5; this._toast("LAUNCH!", "#ff7a1c"); this.sound.bounce();
