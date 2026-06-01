@@ -94,12 +94,11 @@ export const CONFIG = {
   tunnelRadius: 4.5,
 
   // --- Ramps & curved boards ---
-  // Ramps DISABLED again: the swept-collision fix stopped the fall-through but the
-  // sloped-surface collision is still wrong (clipping). The analytic plane doesn't
-  // match the rotated/scaled box geometry. Researcher #2 investigating the proper
-  // Three.js way (likely raycast-against-mesh) before re-enabling.
-  rampChance: [0.0, 0.0],    // tilted boards you roll up/down (and launch off the top)
-  rampSlope: [0.22, 0.44],   // rise/run (tan of the ramp angle)
+  // Ramps RE-ENABLED with the proper fix: collision now raycasts straight down
+  // against the real platform meshes (exact surface for flat/ramp/curved), and
+  // the ramp mesh rotation sign was corrected. Starting gentle.
+  rampChance: [0.0, 0.1],    // tilted boards you roll up/down (and launch off the top)
+  rampSlope: [0.22, 0.42],   // rise/run (tan of the ramp angle)
   rampLaunch: 0.7,           // fraction of climb speed kept as a hop off an up-ramp
   curveChance: [0.0, 0.16],  // boards curved across their width
   curveAmount: 0.055,        // parabola steepness (concave funnels in, convex rolls off)

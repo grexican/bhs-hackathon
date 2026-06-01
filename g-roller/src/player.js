@@ -67,6 +67,12 @@ export class Player {
     scene.add(group);
 
     this.vel = new THREE.Vector3();
+    // Floor detection by raycasting straight down against the platform meshes —
+    // exact surface height for flat, ramp AND curved boards, no analytic model.
+    this._ray = new THREE.Raycaster();
+    this._down = new THREE.Vector3(0, -1, 0);
+    this._rayOrigin = new THREE.Vector3();
+    this._candMeshes = [];
     this.grounded = false;
     this.jumpCount = 0;
     this.lastGroundedY = 0;
@@ -152,7 +158,6 @@ export class Player {
     v.y -= CONFIG.gravity * (ctx.gravityScale || 1) * dt; // low-grav powerup floats you
 
     const prevBottom = p.y - this.radius;
-    const prevX = p.x, prevZ = p.z;     // where we were, for the swept landing test
     const wasGrounded = this.grounded;  // were we on a surface last frame?
     p.x += v.x * dt;
     p.y += v.y * dt;
@@ -166,22 +171,9 @@ export class Player {
     this.onBoost = false; // true while standing on an acceleration plate (read by game)
     if (v.y <= 0) {
       const newBottom = p.y - this.radius;
-      let bestTop = -Infinity, best = null;
-      for (const plat of field.platforms) {
-        if (Math.abs(p.z - plat.pos.z) > plat.hz + 4) continue;
-        if (Math.abs(p.x - plat.pos.x) > plat.hx + this.radius * 0.5) continue;
-        if (Math.abs(p.z - plat.pos.z) > plat.hz + this.radius * 0.5) continue;
-        const top = this._topAt(plat, p.x, p.z);
-        // Swept pass-through test: were our feet above this surface where we WERE
-        // last frame? If so we're descending onto it (or riding it up a ramp),
-        // not punching through from below. Sampling at the PREVIOUS position is
-        // what makes rising ramps work — sampling "here, now" wrongly skips them.
-        const prevTop = this._topAt(plat, prevX, prevZ);
-        const cameFromBelow = prevBottom < prevTop - 0.6;
-        if (cameFromBelow && plat !== prevRide && !wasGrounded) continue;
-        if (newBottom <= top + 0.05 && top > bestTop) { bestTop = top; best = plat; }
-      }
-      if (best) {
+      const floor = this._floorBelow(field, p.x, p.z, prevBottom, newBottom, prevRide, wasGrounded);
+      if (floor) {
+        const best = floor.plat, bestTop = floor.y;
         let fresh = !prevRide;
         if (best.type === "bouncy") {
           // Trampoline: a MASSIVE auto-launch (not chopped — see _controlledJump).
@@ -251,13 +243,41 @@ export class Player {
     return { died, landed, hit, nearMiss, jumped, pos: p };
   }
 
-  // Surface height of a platform under the player: flat, sloped (ramp, varies
-  // with z) or curved (varies with x across the board's width).
-  _topAt(plat, x, z) {
-    let top = plat.topY;
-    if (plat.slopeZ) top += plat.slopeZ * (z - plat.pos.z);
-    if (plat.curve) top += plat.curve * (x - plat.pos.x) * (x - plat.pos.x);
-    return top;
+  // Exact floor under (x,z): raycast straight down against the platform surface
+  // meshes and return the highest one the player's feet have reached. Works for
+  // flat, ramp and curved boards with no analytic model (the previous analytic
+  // version mis-tilted ramps). Preserves pass-through-from-below via prevBottom.
+  _floorBelow(field, x, z, prevBottom, newBottom, prevRide, wasGrounded) {
+    const meshes = this._candMeshes;
+    meshes.length = 0;
+    const Z = this.radius + 4;
+    for (const plat of field.platforms) {
+      if (Math.abs(z - plat.pos.z) > plat.hz + Z) continue;
+      if (Math.abs(x - plat.pos.x) > plat.hx + this.radius * 0.5) continue;
+      const m = plat.surfaceMesh;
+      if (m) { m.updateMatrixWorld(); meshes.push(m); }
+    }
+    if (!meshes.length) return null;
+
+    this._rayOrigin.set(x, prevBottom + 1000, z);
+    this._ray.set(this._rayOrigin, this._down);
+    this._ray.far = Infinity;
+    const hits = this._ray.intersectObjects(meshes, false); // sorted top -> down
+
+    for (const h of hits) {
+      // Ignore undersides (steep ramp / curve back faces).
+      if (h.face) {
+        const ny = h.face.normal.clone().transformDirection(h.object.matrixWorld).y;
+        if (ny <= 0.1) continue;
+      }
+      const top = h.point.y;
+      if (newBottom > top + 0.05) continue; // feet haven't reached this surface yet
+      // Pass-through from below: skip a surface that was above our previous feet,
+      // unless we were riding it or were already grounded (lets ramps hug up).
+      if (prevBottom < top - 0.6 && h.object.userData.platform !== prevRide && !wasGrounded) continue;
+      return { plat: h.object.userData.platform, y: top };
+    }
+    return null;
   }
 
   _roll(dt) {

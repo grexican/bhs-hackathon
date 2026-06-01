@@ -3,18 +3,18 @@
 Ideas we've decided to do later (parked here on purpose so the current pass stays
 focused on the moment-to-moment experience). Pull any of these forward anytime.
 
-## Known bugs
+## Fixed
 
-### Ramp collision STILL broken (disabled again)
-Researcher #1's swept-collision fix (sample `_topAt` at the PREVIOUS position +
-`wasGrounded` exemption) stopped the hard fall-through, but ramps still clip /
-feel wrong in play. Root issue suspected: the analytic sloped-plane in `_topAt`
-(`slopeZ*(z-pos.z)`) doesn't actually match the rotated+SCALED box geometry
-(`visual.scale.set(w,2hy,len)` then `rotation.x = atan(slopeZ)`), so collision and
-visuals diverge. Researcher #2 to find the PROPER Three.js approach (likely a
-downward `THREE.Raycaster` against the platform meshes for an exact surface height,
-or a true OBB). Disabled via `rampChance: [0,0]`. The swept fix is kept (it's a
-correct general improvement and is harmless for flat boards).
+### Ramp collision (FIXED properly — raycast)
+Root cause (researcher #2, proven): a SIGN FLIP. Rotating the box by
+`+atan(slopeZ)` about +X tilts the forward (+z) edge DOWN, but the analytic
+`_topAt` raised it — so the collision plane was tilted the OPPOSITE way from the
+mesh (off by up to ~9 units at the ends → clipping). Plus a cos(θ) center-height
+offset and unrotated bounds. Fix: replaced the analytic surface with a downward
+`THREE.Raycaster` against each platform's `surfaceMesh` (`_floorBelow` in
+player.js) — exact height for flat, ramp AND curved boards, one path. Also negated
+the ramp mesh rotation (`-atan(slopeZ)`) so slopeZ>0 = uphill forward. Re-enabled
+at `rampChance: [0, 0.1]`.
 
 ## Deferred (explicitly)
 

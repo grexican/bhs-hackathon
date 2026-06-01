@@ -148,7 +148,11 @@ export class PlatformField {
       const geo = geoType === "cyl" ? this._geoCyl : geoType === "hex" ? this._geoHex : this._geoBox;
       visual = new THREE.Mesh(geo, mat);
       visual.scale.set(w, hy * 2, len);
-      if (slopeZ) visual.rotation.x = Math.atan(slopeZ); // tilt into a ramp
+      // NEGATIVE atan: a +X rotation tilts the +z (forward) end DOWN, so we
+      // negate it to make slopeZ>0 = uphill in the travel direction (matches the
+      // generator's exit-height convention). Collision uses a raycast against the
+      // real mesh, so the surface is always exactly what you see.
+      if (slopeZ) visual.rotation.x = -Math.atan(slopeZ);
     }
     visual.castShadow = true;
     visual.receiveShadow = true;
@@ -160,6 +164,8 @@ export class PlatformField {
     p._geo = ownGeo;
     p.slopeZ = slopeZ;
     p.curve = curve;
+    visual.userData.platform = p; // raycast maps a hit back to its Platform
+    p.surfaceMesh = visual;       // the one landable mesh (obstacles/tube added later aren't this)
     this.platforms.push(p);
     return p;
   }
