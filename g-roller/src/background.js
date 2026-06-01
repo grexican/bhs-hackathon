@@ -180,10 +180,10 @@ export class Background {
       return plane;
     };
     // left/right, far (dim) then near (brighter)
-    make(360, 230, 230, 0.5).rotation.y = Math.PI / 2;   // far, right
-    make(360, 230, 230, 0.5).rotation.y = -Math.PI / 2;  // far, left
-    make(220, 175, 265, 0.7).rotation.y = Math.PI / 2;   // near, right
-    make(220, 175, 265, 0.7).rotation.y = -Math.PI / 2;  // near, left
+    make(360, 355, 230, 0.5).rotation.y = Math.PI / 2;   // far, right
+    make(360, 355, 230, 0.5).rotation.y = -Math.PI / 2;  // far, left
+    make(220, 295, 265, 0.7).rotation.y = Math.PI / 2;   // near, right
+    make(220, 295, 265, 0.7).rotation.y = -Math.PI / 2;  // near, left
     this._sides = [1, -1, 1, -1];
 
     // --- "WAY up high, no ground" atmosphere (replaces the old floor grid's sense
@@ -328,7 +328,7 @@ export class Background {
 
     this.ranges.forEach((p, i) => {
       const d = p.userData.dist;
-      p.position.set(this._sides[i] * d, 10, playerZ + 60); // lower + taller now, so towers root below the horizon (rise from the ground, not float)
+      p.position.set(this._sides[i] * d, -52, playerZ + 60); // dropped low + tall, so tower bases root deep toward the floor (no distant float); tops stay roughly where they were
       // Parallax with the player PLUS a slow constant drift, so the buildings
       // keep passing by (and new ones scroll in) even while you stand still.
       // The right-hand planes face the opposite way, so flip their scroll sign
