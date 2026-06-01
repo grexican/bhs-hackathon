@@ -618,9 +618,9 @@ export class Game {
     for (const k of ["magnet", "slow", "reverse", "surge"]) fracs[k] = this._effects[k] / this._dur(k);
     this.player.updateVisuals(this._effects, dt, fracs);
 
-    // Ball speed-trail.
-    const tp = this.player.position.clone(); tp.y -= this.player.radius * 0.6;
-    this.particles.trail(tp, this._accelBonus > 1 || this._effects.surge > 0 ? 0x2bff6a : 0xffc24e);
+    // Ball speed-trail — hidden for now (re-enable by uncommenting these two lines).
+    // const tp = this.player.position.clone(); tp.y -= this.player.radius * 0.6;
+    // this.particles.trail(tp, this._accelBonus > 1 || this._effects.surge > 0 ? 0x2bff6a : 0xffc24e);
 
     // Depth grid follows underneath.
     this.grid.position.z = Math.round(this.player.position.z / 5) * 5;
@@ -644,20 +644,23 @@ export class Game {
 
     this._refreshHud();
     this._renderEffects();
-    if (ev.died) {
-      if (this._zen) {
-        // Zen mode never lets you die: catch the fall and POWER-BOUNCE back up so you
-        // land on something and keep rolling. Snap up to just above the lowest floor
-        // still on screen (or stay put if nothing's nearby), then fling upward.
-        const floor = this.field.lowestTopNear(this.player.position.z); // -Infinity if none nearby
-        const catchY = (floor === -Infinity ? this.player.position.y : floor) + this.player.radius + 2;
-        this.player.position.y = Math.max(this.player.position.y, catchY);
+    // Zen mode never dies — ignore the normal death signal. Instead the catch below
+    // lets you actually FALL well past the boards before flinging you back up.
+    if (ev.died && !this._zen) this._die();
+
+    // Zen power-bounce: only once you've fallen a real distance BELOW the lowest
+    // nearby board (zenCatchDepth) and are still descending. No teleport — the bounce
+    // launches you from where you fell, so you watch the drop, then sail back up to
+    // land and keep going. The rising apex sits above the catch line, so it won't
+    // re-trigger until you fall back down.
+    if (this._zen && this.player.vel.y < 0) {
+      const floor = this.field.lowestTopNear(this.player.position.z);
+      const catchLine = (floor === -Infinity ? 0 : floor) - CONFIG.zenCatchDepth;
+      if (this.player.position.y < catchLine) {
         this.player.vel.y = CONFIG.jumpSpeed * CONFIG.zenBounce;
         this.player.vel.x *= 0.5;
         this.particles.burst(this.player.position, 0x9affd6, 18);
         this.sound.bounce();
-      } else {
-        this._die();
       }
     }
   }

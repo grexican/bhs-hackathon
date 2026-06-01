@@ -25,7 +25,7 @@ export const BALL_SKINS = [
   { name: "Racing Stripe", pattern: "stripes", light: "#f5f5f5", dark: "#d11321", accent: "#101010", glassZones: true },
   { name: "Galaxy",       pattern: "galaxy",  light: "#7b4bff", dark: "#04030f", accent: "#ffffff", glassy: true },
   { name: "Carbon",       pattern: "carbon",  light: "#454b54", dark: "#101216", accent: "#8a93a3" },
-  { name: "Hazard",       pattern: "hazard",  light: "#ffe600", dark: "#141414" },
+  { name: "Hazard",       pattern: "hazard",  light: "#fff200", dark: "#141414" },
   { name: "Magma",        pattern: "flames",  light: "#fff4b0", dark: "#1a0402", accent: "#ff7a1a", glassZones: true },
   { name: "Bubblegum",    pattern: "dots",    light: "#ff9ed6", dark: "#ff5fb0", accent: "#ffe3f4", glassZones: true },
 ];
@@ -90,10 +90,21 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
       break;
     }
     case "galaxy": {
-      // Glass-marble galaxy: near-black void, layered nebula clouds and bright
-      // glowing stars. Drawn dark so the SAME canvas doubles as an emissiveMap —
-      // only the bright specks/nebula light up, giving a glow-from-within look.
-      ctx.fillStyle = skin.dark; ctx.fillRect(0, 0, S, S);
+      // Near-solid star-marble: near-black void, layered nebula clouds and bright
+      // glowing stars. The SAME composition is reused three ways:
+      //   color    — the visible dark surface.
+      //   emissive — stars/nebula glow from within.
+      //   alpha    — brightness → opacity, clamped to [0.8, 1]: bright stars/nebula
+      //              are fully opaque, the darkest void is only ~20% see-through.
+      //              (alphaMap reads the green channel, so we draw the brightness as
+      //              grey on a 0.8 floor; void=204/255≈0.8, peaks=255=1.0.)
+      if (alpha) {
+        // Floor = 0.8 opacity everywhere; brightness is ADDED so only the lit bits
+        // climb toward fully opaque. Cap so nothing dips below the 0.8 floor.
+        ctx.fillStyle = "#cccccc"; ctx.fillRect(0, 0, S, S); // 204 ≈ 0.8
+      } else {
+        ctx.fillStyle = skin.dark; ctx.fillRect(0, 0, S, S);
+      }
       const rnd = mulberry32(7);
       // Soft coloured nebula blobs (additive) so depth reads inside the glass.
       const clouds = [
@@ -105,7 +116,9 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
       for (const [col, fx, fy] of clouds) {
         const cx = fx * S, cy = fy * S, rad = S * (0.3 + rnd() * 0.2);
         const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-        rg.addColorStop(0, col); rg.addColorStop(1, "rgba(0,0,0,0)");
+        // Alpha pass: same blobs as grey brightness so nebula lifts opacity (not hue).
+        rg.addColorStop(0, alpha ? "rgba(255,255,255,0.4)" : col);
+        rg.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = rg; ctx.fillRect(0, 0, S, S);
       }
       ctx.globalCompositeOperation = "source-over";
@@ -129,89 +142,150 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
       break;
     }
     case "carbon": {
-      // Carbon-fibre twill: tight 2x2 weave of beveled cells with deep contrast
-      // and a sharp diagonal sheen sweep across the surface.
-      ctx.fillStyle = skin.dark; ctx.fillRect(0, 0, S, S);
+      // Premium carbon-fibre twill: tight 2x2 weave of strongly beveled cells with
+      // deep black valleys and bright edge catches, a faint blue-grey iridescence
+      // baked into the weave, and a sharp specular sheen band raking across it.
+      ctx.fillStyle = "#0a0c10"; ctx.fillRect(0, 0, S, S);
       const cell = 16;
       for (let y = 0; y < S; y += cell) for (let x = 0; x < S; x += cell) {
         // 2x2 twill: shift the diagonal direction every other 2-cell block.
         const block = (Math.floor(x / cell) + Math.floor(y / cell));
         const woven = block % 2 === 0;
         const grad = ctx.createLinearGradient(x, y, x + cell, y + cell);
-        if (woven) { grad.addColorStop(0, skin.light); grad.addColorStop(0.5, skin.dark); grad.addColorStop(1, "#000"); }
-        else { grad.addColorStop(0, "#000"); grad.addColorStop(0.5, skin.dark); grad.addColorStop(1, skin.light); }
+        // Stronger contrast: bright tow highlight → mid grey → near-black valley.
+        if (woven) { grad.addColorStop(0, "#9aa3b2"); grad.addColorStop(0.45, skin.light); grad.addColorStop(1, "#05060a"); }
+        else { grad.addColorStop(0, "#05060a"); grad.addColorStop(0.55, skin.dark); grad.addColorStop(1, "#9aa3b2"); }
         ctx.fillStyle = grad; ctx.fillRect(x, y, cell - 1, cell - 1);
+        // Sharp specular catch on the lit edge of each tow for that woven glint.
+        ctx.fillStyle = "rgba(190,205,230,0.35)";
+        if (woven) ctx.fillRect(x, y, cell - 1, 1.5);
+        else ctx.fillRect(x, y + cell - 2.5, cell - 1, 1.5);
       }
-      // Sharp diagonal sheen highlight.
+      // Faint blue-grey iridescence: a wide diagonal sheen tinted cool, laid in
+      // "lighter" so it lifts the weave toward steel-blue without washing it out.
+      ctx.save();
+      ctx.translate(S / 2, S / 2); ctx.rotate(Math.PI / 5); ctx.translate(-S, -S);
+      const irid = ctx.createLinearGradient(0, 0, 0, S * 2);
+      irid.addColorStop(0.30, "rgba(0,0,0,0)");
+      irid.addColorStop(0.50, "rgba(120,150,200,0.18)");
+      irid.addColorStop(0.70, "rgba(0,0,0,0)");
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = irid; ctx.fillRect(0, 0, S * 2, S * 2);
+      ctx.restore();
+      ctx.globalCompositeOperation = "source-over";
+      // Sharp specular sheen band raking the surface (tight, bright accent line).
       ctx.save();
       ctx.translate(S / 2, S / 2); ctx.rotate(-Math.PI / 4); ctx.translate(-S, -S);
-      const sg = ctx.createLinearGradient(0, S * 0.85, 0, S * 1.15);
+      const sg = ctx.createLinearGradient(0, S * 0.92, 0, S * 1.08);
       sg.addColorStop(0, "rgba(255,255,255,0)");
       sg.addColorStop(0.5, skin.accent);
       sg.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.globalAlpha = 0.4; ctx.fillStyle = sg; ctx.fillRect(0, 0, S * 2, S * 2);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = 0.55; ctx.fillStyle = sg; ctx.fillRect(0, 0, S * 2, S * 2);
       ctx.restore();
       ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
       break;
     }
     case "hazard": {
-      // Diagonal hazard chevrons — bold caution stripes, divides evenly to tile.
-      ctx.fillStyle = skin.light; ctx.fillRect(0, 0, S, S);
+      // Hi-vis hazmat chevrons — bright glowing yellow bands, matte black bands.
+      // Color pass: near-pure bright yellow field, black diagonal bands.
+      // Emissive pass: yellow zones bright (they GLOW), black bands stay dark so the
+      // chevrons read matte while only the hi-vis yellow lights up.
+      const emissive = mode === "emissive";
+      ctx.fillStyle = emissive ? "#fff44d" : skin.light;
+      ctx.fillRect(0, 0, S, S);
       ctx.save();
       ctx.translate(S / 2, S / 2); ctx.rotate(-Math.PI / 4); ctx.translate(-S, -S);
       const w = S * 2, bands = 12, bw = w / bands;
-      ctx.fillStyle = skin.dark;
+      // Black bands: truly black in the emissive map so they don't glow at all.
+      ctx.fillStyle = emissive ? "#000000" : skin.dark;
       for (let i = 0; i < bands; i += 2) ctx.fillRect(i * bw, 0, bw, w);
       ctx.restore();
       break;
     }
     case "flames": {
-      // Magma: hot flame tongues stay SOLID, the rest is see-through glass.
-      // Color pass paints a charred-to-amber gradient and layered tongues; alpha
-      // pass paints the SAME tongue shapes white on a black ground, so only the
-      // flames are opaque and you see straight through the gaps between them.
+      // Magma: an ISOTROPIC molten field — charred crust with glowing lava cracks
+      // scattered across the WHOLE canvas, so it reads as fire all the way around
+      // with NO directional "from one edge" look and NO pole convergence. The hot
+      // lava (cracks + pools) stays SOLID; the charred crust is see-through glass.
+      // Color pass = charred crust + glowing veins; alpha pass = white where the
+      // lava is (solid), black on the crust (glass).
       const rnd = mulberry32(13);
       if (alpha) {
-        // Mask: black field (glass), white flames (solid). Embers stay glassy.
         ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S);
       } else {
-        const g = ctx.createLinearGradient(0, S, 0, 0);
-        g.addColorStop(0, skin.dark);
-        g.addColorStop(0.45, "#8a1602");
-        g.addColorStop(0.75, skin.accent);
-        g.addColorStop(1, "#ffb347");
-        ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
-      }
-      // Helper: draw one tongue as nested layers (outer orange -> inner yellow-white).
-      // In alpha mode every layer is white so the whole tongue silhouette is solid.
-      const tongue = (bx, h, bw, col, topFrac) => {
-        ctx.fillStyle = alpha ? "#fff" : col;
-        ctx.beginPath();
-        ctx.moveTo(bx - bw / 2, S);
-        ctx.quadraticCurveTo(bx - bw * 0.35, S - h * 0.55, bx - bw * 0.08, S - h * topFrac);
-        ctx.quadraticCurveTo(bx, S - h, bx + bw * 0.08, S - h * topFrac);
-        ctx.quadraticCurveTo(bx + bw * 0.35, S - h * 0.55, bx + bw / 2, S);
-        ctx.closePath(); ctx.fill();
-      };
-      const N = 16; // many tongues, evenly spaced => tiles across the seam
-      for (let i = 0; i < N; i++) {
-        const bx = (i / N) * S + (rnd() - 0.5) * 8;
-        const h = S * (0.55 + rnd() * 0.4);
-        const bw = 22 + rnd() * 16;
-        tongue(bx, h, bw, "#ff5a00", 0.92);                 // outer hot orange
-        tongue(bx, h * 0.82, bw * 0.6, "#ffb000", 0.95);    // mid amber
-        tongue(bx, h * 0.6, bw * 0.32, skin.light, 0.98);   // bright yellow-white core
-      }
-      // Embers / sparks floating above the flames (colour pass only — in the mask
-      // they'd punch tiny opaque dots into the glass, so skip them there).
-      if (!alpha) {
-        for (let i = 0; i < 70; i++) {
-          const x = rnd() * S, y = rnd() * S * 0.7, r = rnd() * 1.6 + 0.4;
-          ctx.globalAlpha = 0.5 + rnd() * 0.5;
-          ctx.fillStyle = rnd() > 0.5 ? "#ffd06a" : "#ff8a2a";
-          ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        // Charred basalt crust, very dark and roughly even (no top/bottom bias).
+        ctx.fillStyle = skin.dark; ctx.fillRect(0, 0, S, S);
+        // A few faint warm "deep glow" blobs under the crust for subtle depth.
+        ctx.globalCompositeOperation = "lighter";
+        for (let i = 0; i < 6; i++) {
+          const cx = rnd() * S, cy = rnd() * S, rad = S * (0.16 + rnd() * 0.12);
+          const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+          rg.addColorStop(0, "rgba(120,24,2,0.7)"); rg.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = rg; ctx.fillRect(0, 0, S, S);
         }
-        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "source-over";
+      }
+
+      // Wrap-aware stroke: draw a vein, then repeat it shifted ±S in x and ±S in y
+      // so cracks that run off one edge continue on the opposite edge (clean tile,
+      // no seam, no pole). Used for both the color and alpha passes.
+      const drawVein = (pts, width, paint) => {
+        for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x + ox, pts[0].y + oy);
+          for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x + ox, pts[k].y + oy);
+          paint(width);
+        }
+      };
+
+      // Build a network of meandering lava veins spread evenly over the canvas.
+      const veins = [];
+      const V = 14;
+      for (let i = 0; i < V; i++) {
+        const pts = [{ x: rnd() * S, y: rnd() * S }];
+        const segs = 5 + Math.floor(rnd() * 4);
+        let ang = rnd() * Math.PI * 2;
+        for (let s = 0; s < segs; s++) {
+          ang += (rnd() - 0.5) * 1.4;
+          const len = 14 + rnd() * 22;
+          const last = pts[pts.length - 1];
+          pts.push({ x: last.x + Math.cos(ang) * len, y: last.y + Math.sin(ang) * len });
+        }
+        veins.push({ pts, w: 5 + rnd() * 7 });
+      }
+
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      for (const { pts, w } of veins) {
+        if (alpha) {
+          // Mask: solid white core a touch wider than the visible glow.
+          drawVein(pts, w + 2, (width) => { ctx.strokeStyle = "#fff"; ctx.lineWidth = width; ctx.stroke(); });
+        } else {
+          // Color: layered glow — wide dark-orange halo, amber body, bright core.
+          drawVein(pts, w + 6, (width) => { ctx.strokeStyle = "rgba(180,40,2,0.85)"; ctx.lineWidth = width; ctx.stroke(); });
+          drawVein(pts, w + 1, (width) => { ctx.strokeStyle = skin.accent; ctx.lineWidth = width; ctx.stroke(); });
+          drawVein(pts, w * 0.45, (width) => { ctx.strokeStyle = skin.light; ctx.lineWidth = width; ctx.stroke(); });
+        }
+      }
+
+      // A scatter of glowing molten pools (filled blobs) for hot "pockets",
+      // wrap-repeated like the veins so they never bunch at a seam/pole.
+      const P = 10;
+      for (let i = 0; i < P; i++) {
+        const px = rnd() * S, py = rnd() * S, pr = 6 + rnd() * 10;
+        for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+          const cx = px + ox, cy = py + oy;
+          if (alpha) {
+            ctx.fillStyle = "#fff";
+            ctx.beginPath(); ctx.arc(cx, cy, pr, 0, Math.PI * 2); ctx.fill();
+          } else {
+            const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, pr);
+            rg.addColorStop(0, skin.light); rg.addColorStop(0.5, skin.accent); rg.addColorStop(1, "rgba(180,40,2,0.6)");
+            ctx.fillStyle = rg;
+            ctx.beginPath(); ctx.arc(cx, cy, pr, 0, Math.PI * 2); ctx.fill();
+          }
+        }
       }
       break;
     }
@@ -249,17 +323,50 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
       break;
     }
     default: {
-      // Classic checker grid so you can read the ball's spin under the light.
-      ctx.fillStyle = skin.light; ctx.fillRect(0, 0, S, S);
+      // Classic Gold: a lacquered, beveled gold checker. Each cell is filled with a
+      // top-left→bottom-right gradient (lighter corner catches the light, darker
+      // corner sinks) so the squares read as inset/embossed tiles, not flat paint.
+      // A soft diagonal highlight sweep + crisp dark grout lines finish the sheen.
       const n = 8, t = S / n;
+      // Base: a subtle vertical gold gradient under everything so the whole ball
+      // has depth even before the cells (warm light top, richer gold bottom).
+      const baseG = ctx.createLinearGradient(0, 0, 0, S);
+      baseG.addColorStop(0, "#ffe27a");
+      baseG.addColorStop(0.5, skin.light);
+      baseG.addColorStop(1, "#e8901a");
+      ctx.fillStyle = baseG; ctx.fillRect(0, 0, S, S);
+      // Beveled cells: dark squares get a deep amber gradient, light squares a bright
+      // one — both lit from the top-left corner so each tile looks slightly domed.
       for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-        if ((x + y) % 2 === 0) { ctx.fillStyle = skin.dark; ctx.fillRect(x * t, y * t, t, t); }
+        const dark = (x + y) % 2 === 0;
+        const x0 = x * t, y0 = y * t;
+        const g = ctx.createLinearGradient(x0, y0, x0 + t, y0 + t);
+        if (dark) { g.addColorStop(0, "#ffb733"); g.addColorStop(0.55, skin.dark); g.addColorStop(1, "#b86a08"); }
+        else { g.addColorStop(0, "#fff0b0"); g.addColorStop(0.55, skin.light); g.addColorStop(1, "#e6961c"); }
+        ctx.fillStyle = g; ctx.fillRect(x0, y0, t, t);
+        // Inset bevel: bright top+left edge, shadowed bottom+right edge per cell.
+        ctx.fillStyle = "rgba(255,248,210,0.5)";
+        ctx.fillRect(x0, y0, t, 2); ctx.fillRect(x0, y0, 2, t);
+        ctx.fillStyle = "rgba(80,45,5,0.45)";
+        ctx.fillRect(x0, y0 + t - 2, t, 2); ctx.fillRect(x0 + t - 2, y0, 2, t);
       }
-      ctx.strokeStyle = skin.line; ctx.lineWidth = 3;
+      // Crisp grout lines between cells.
+      ctx.strokeStyle = skin.line; ctx.lineWidth = 2;
       for (let i = 0; i <= n; i++) {
         ctx.beginPath(); ctx.moveTo(i * t, 0); ctx.lineTo(i * t, S); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, i * t); ctx.lineTo(S, i * t); ctx.stroke();
       }
+      // Soft diagonal highlight sweep across the whole face for a lacquered sheen.
+      ctx.save();
+      ctx.translate(S / 2, S / 2); ctx.rotate(-Math.PI / 4); ctx.translate(-S, -S);
+      const sweep = ctx.createLinearGradient(0, S * 0.7, 0, S * 1.25);
+      sweep.addColorStop(0, "rgba(255,255,255,0)");
+      sweep.addColorStop(0.5, "rgba(255,255,255,0.45)");
+      sweep.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = sweep; ctx.fillRect(0, 0, S * 2, S * 2);
+      ctx.restore();
+      ctx.globalCompositeOperation = "source-over";
     }
   }
 
@@ -362,21 +469,24 @@ export class Player {
     mat.envMapIntensity = 1.2;
 
     if (skin.glassy) {
-      // Galaxy marble: real glass (transmission) so light passes through, with the
-      // star canvas as an emissiveMap so the sparkles/nebula glow from within. Back
-      // faces draw too (DoubleSide) so it reads as a solid glass orb, not a shell.
+      // Galaxy: a near-SOLID star-marble, not a glass orb. The brightness-driven
+      // alphaMap (floor 0.8) makes only the DARKEST void slightly see-through (~20%)
+      // while stars/nebula stay fully opaque. The star canvas drives emissiveMap so
+      // the sparkles/nebula still glow from within. Transmission is OFF — the faint
+      // see-through is pure alpha, so it reads as a solid marble with a dark shimmer.
       mat.emissiveMap = ballTexture(skin, "emissive");
+      mat.alphaMap = ballTexture(skin, "alpha");
       mat.emissive.setHex(0xffffff);
       this._skinGlow = 1.2; // base emissive kept up even with no blackout (updateVisuals)
       mat.emissiveIntensity = this._skinGlow;
-      mat.transparent = true;
-      mat.transmission = 0.85;
-      mat.thickness = this.radius * 1.6;
+      mat.transparent = true;   // needed so the alphaMap's dark-void dip shows
+      mat.transmission = 0;     // no glass refraction — it's a near-solid marble now
+      mat.thickness = 0;
       mat.ior = 1.45;
       mat.opacity = 1;
       mat.metalness = 0.0;
-      mat.roughness = 0.08;
-      mat.side = THREE.DoubleSide;
+      mat.roughness = 0.25;
+      mat.side = THREE.FrontSide; // solid marble: only front faces, no glass shell
     } else if (skin.glassZones) {
       // Solid zones opaque, the rest glass: the alphaMap (white=solid, black=glass)
       // drives per-pixel transparency, and transmission turns those clear pixels into
@@ -395,8 +505,9 @@ export class Player {
       mat.roughness = 0.12;
       mat.side = THREE.DoubleSide;
     } else {
-      // Opaque reset — clear EVERY glass prop the branches above set, so the ball
-      // is a normal solid sphere again (FrontSide, no transmission/alpha/glow).
+      // Opaque reset — clear EVERY glass prop the glass branches set, so the ball is
+      // a normal solid sphere again (FrontSide, no transmission/alpha). Start from a
+      // clean slate, then let a couple of opaque skins opt into glow/metal below.
       mat.emissive.setHex(0x000000);
       this._skinGlow = 0;
       mat.emissiveIntensity = 0;
@@ -408,6 +519,21 @@ export class Player {
       mat.metalness = 0.15;
       mat.roughness = 0.4;
       mat.side = THREE.FrontSide;
+
+      if (skin.pattern === "hazard") {
+        // Hi-vis hazmat: the yellow zones GLOW. An emissiveMap (yellow bright, black
+        // chevrons dark) makes only the yellow light up; the chevrons stay matte. A
+        // persistent yellow base glow (via _skinGlow) is held up by updateVisuals.
+        mat.emissiveMap = ballTexture(skin, "emissive");
+        mat.emissive.setHex(0xfff200);
+        this._skinGlow = 0.85; // modest, steady hi-vis glow (kept across frames)
+        mat.emissiveIntensity = this._skinGlow;
+      } else if (skin.pattern === "checker") {
+        // Classic Gold: lean into a lacquered metallic gold look — more metalness,
+        // lower roughness so the highlight sweep reads as polished gold leaf.
+        mat.metalness = 0.85;
+        mat.roughness = 0.28;
+      }
     }
     mat.needsUpdate = true;
     return this._skinIndex;

@@ -34,6 +34,7 @@ export const CONFIG = {
   // Trampoline boards (the pink ones): launch you up like a boosted jump.
   bounceBoost: 1.7,   // launch velocity = jumpSpeed * this (trimmed — jumpSpeed 50 made 2.05 absurd)
   zenBounce: 2.0,     // Zen mode: a would-be-fatal fall instead power-bounces you up at jumpSpeed * this (~200% jump)
+  zenCatchDepth: 32,  // Zen mode: how far BELOW the lowest nearby board you fall before the bounce catches you — high enough that you watch a real fall, not an instant fling
 
   // Flipper plate (orange): a hinged springboard that pivots forward and SENDS you
   // up AND forward — a directed launch. Survive the landing. Reuses the box plate;
