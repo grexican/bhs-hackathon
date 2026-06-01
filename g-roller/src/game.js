@@ -17,6 +17,9 @@ const EFFECT_DURATIONS = {
   morph: "morphDuration", trip: "tripDuration", lowgrav: "lowgravDuration",
   flubber: "flubberDuration", blackout: "blackoutDuration", fog: "fogDuration", rain: "rainDuration",
 };
+// The timed-effect keys (everything that counts down). Used to tally how many
+// effects are ACTIVE right now — drives the rune spawn-rate cooldown in the field.
+const EFFECT_DURATIONS_KEYS = Object.keys(EFFECT_DURATIONS);
 
 // The timed POWERDOWNS (bad effects). Having these active cranks the scoring
 // multiplier — risk/reward for riding them out instead of avoiding them.
@@ -703,6 +706,13 @@ export class Game {
     this._speed += (target - this._speed) * (1 - Math.exp(-dt / tau));
     const speed = this._speed;
     const magnetPos = this._effects.magnet > 0 ? this.player.position : null;
+    // Rune cooldown = active-effect LOAD: tell the field how many powerups/downs are
+    // live right now (timed ones + the boolean shield). The field scales the rune
+    // spawn chance down by this, so runes thin out while you're juggling effects and
+    // ease back as they expire.
+    let active = this._effects.shield ? 1 : 0;
+    for (const k of EFFECT_DURATIONS_KEYS) if (this._effects[k] > 0) active++;
+    this.field.activeEffects = active;
     this.field.update(dt, this.player.position.z, speed, magnetPos);
 
     // Score = distance * multiplier; the multiplier decays if you stop taking risks.
@@ -818,6 +828,18 @@ export class Game {
       this.particles.burst(p, 0x2bff6a, 16); this.sound.boost(); // acceleration plate — speed builds while you ride it
     } else if (ev.landed === "flubber") {
       this.particles.burst(p, 0x6aff6a, 8); this.sound.bounce(); // auto-bounce, every landing
+    } else if (ev.landed === "rune") {
+      // Rune plate: fire its carried powerup/down the FIRST time you land. The board
+      // we just landed on is the one we're now riding (player._ridePlat). _runeSpent
+      // is a one-shot guard so riding/re-landing the same plate never re-triggers it.
+      const plat = this.player._ridePlat;
+      if (plat && plat.runePayload && !plat._runeSpent) {
+        plat._runeSpent = true;
+        const r = plat.runePayload;
+        this._applyPowerup({ type: r.type, good: r.good, pos: ev.pos.clone() });
+      } else {
+        this.particles.burst(p, 0xbfc6d8, 7); this.sound.land();
+      }
     } else {
       this.particles.burst(p, 0xbfc6d8, 7); this.sound.land();
     }

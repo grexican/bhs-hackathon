@@ -294,6 +294,33 @@ const PAINTERS = {
     ctx.shadowBlur = 0;
     neonFrame(ctx, s, "#39ff7a", 6, 2);
   },
+
+  // Rune plate — a glowing ring-and-spokes sigil on the dark panel, the way a
+  // magic floor-rune looks. Painted in near-WHITE so the board's per-rune
+  // emissive (cyan = good, amber = bad) tints the whole glow; the glyph of the
+  // effect is dropped on top as a separate sprite by the platform builder.
+  rune(ctx, s) {
+    panelBase(ctx, s);
+    const cx = s / 2, cy = s / 2;
+    ctx.strokeStyle = "#eef4ff";
+    ctx.shadowColor = "#eef4ff"; ctx.shadowBlur = 26;
+    // Two concentric rings.
+    for (const r of [s * 0.4, s * 0.27]) {
+      ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    }
+    // Radiating spokes between the rings — the "engraved sigil" look.
+    ctx.lineWidth = 4;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * s * 0.27, cy + Math.sin(a) * s * 0.27);
+      ctx.lineTo(cx + Math.cos(a) * s * 0.4, cy + Math.sin(a) * s * 0.4);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    neonFrame(ctx, s, "#eef4ff", 6, 2);
+  },
 };
 
 // How many grid cells each ground texture is divided into — the alpha lattice

@@ -142,6 +142,12 @@ export const CONFIG = {
 
   // Powerups / powerdowns
   powerupChance: 0.3,     // chance a path platform spawns a pickup (bumped — the wide sprawl has room for more)
+  // Rune plates: a board TYPE you trigger by LANDING on (not a dodgeable floater).
+  // The chance a board is a rune RAMPS UP with distance [near, far] so deep runs
+  // force harder routing. Gated down by how many effects you already have active
+  // (see runeLoadFactor) so they ease off while you're juggling powerups.
+  runeChance: [0.06, 0.34],
+  runeLoadFactor: 0.4,    // each currently-active effect cuts the rune chance by this much (1 - n*factor); ~2 effects = a trickle, 3+ = almost none until they expire
   magnetDuration: 15,
   magnetRadius: 32,       // gems within this distance get sucked in
   magnetPull: 22,         // how hard the magnet yanks gems (higher = they catch up)

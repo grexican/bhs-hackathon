@@ -32,6 +32,13 @@ export const POWERUP_DEFS = {
 const GOOD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => POWERUP_DEFS[k].good);
 const BAD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => !POWERUP_DEFS[k].good);
 
+// Fairness guardrail: the harshest powerdowns never sit on the GUARANTEED-path
+// runes (you can't always jump-dodge a plate on the only route). Branch runes
+// may still carry them. No effect is instant-fatal, so unavoidable runes stay
+// survivable regardless.
+const RUNE_PATH_EXCLUDE = new Set(["blackout", "splat"]);
+const EMPTY_SET = new Set();
+
 // Pick a pickup type from a list, weighted by its spawn frequency.
 function weightedPick(keys) {
   let total = 0;
@@ -93,6 +100,7 @@ export class PlatformField {
     this._difficulty = 0;  // hazard ramp (slow)
     this._spreadD = 0;     // spread ramp (fast)
     this.itemMultiplier = 1; // cheat code bumps this to spawn extra gems/powerups
+    this.activeEffects = 0;  // count of currently-active powerups/downs (pushed in from game.js each frame) — runes spawn less while this is high
     this.difficultyMult = 1; // Easy/Medium/Hard scales the floor of the hazard ramps
     this.fixedDifficulty = null; // when set (zen mode), PINS the hazard ramp here instead of escalating with distance
     // Cheat-mode test tool: which powerup types are allowed to spawn. Default = all.
@@ -150,17 +158,21 @@ export class PlatformField {
     return t;
   }
 
-  _addBoard({ x, y, z, w, len, hy, geoType, type, texName, slopeZ = 0, curve = 0, leanX = 0 }) {
+  _addBoard({ x, y, z, w, len, hy, geoType, type, texName, slopeZ = 0, curve = 0, leanX = 0, runePayload = null }) {
     const group = new THREE.Group();
     group.position.set(x, y, z);
+
+    // Rune plates light themselves CYAN (good) or AMBER (bad) — same colour code as
+    // the floating pickups — so you can read what you're about to land on from afar.
+    const runeEmissive = runePayload ? (runePayload.good ? 0x2fd9c0 : 0xffae3b) : 0x000000;
 
     const tex = this._texFor(texName, w, len);
     const mat = new THREE.MeshStandardMaterial({
       map: tex,
       roughness: type === "bouncy" ? 0.4 : 0.85,
       metalness: 0.05,
-      emissive: type === "bouncy" ? 0xff1f5a : type === "boost" ? 0x1fbf4c : type === "flipper" ? 0xff7a1c : 0x000000,
-      emissiveIntensity: type === "bouncy" ? 0.5 : type === "boost" ? 0.32 : type === "flipper" ? 0.55 : 0,
+      emissive: type === "rune" ? runeEmissive : type === "bouncy" ? 0xff1f5a : type === "boost" ? 0x1fbf4c : type === "flipper" ? 0xff7a1c : 0x000000,
+      emissiveIntensity: type === "rune" ? 0.6 : type === "bouncy" ? 0.5 : type === "boost" ? 0.32 : type === "flipper" ? 0.55 : 0,
     });
 
     // GLASS ground tiles: the standard "normal" boards go semi-transparent so the
@@ -228,6 +240,18 @@ export class PlatformField {
     p.leanX = leanX;
     visual.userData.platform = p; // raycast maps a hit back to its Platform
     p.surfaceMesh = visual;       // the one landable mesh (obstacles/tube added later aren't this)
+
+    // Rune plate: hang the effect's glyph above the surface and remember the payload
+    // + a one-shot "spent" flag. game.js fires the effect on the FIRST landing, then
+    // sets _runeSpent so riding/re-landing the same plate never re-triggers it.
+    if (runePayload) {
+      p.runePayload = runePayload;
+      p._runeSpent = false;
+      const glyph = this._iconSprite(POWERUP_DEFS[runePayload.type].icon);
+      glyph.position.set(0, hy + 1.4, 0); // sit just above the (short) plate
+      group.add(glyph);
+    }
+
     this.platforms.push(p);
     return p;
   }
@@ -441,6 +465,31 @@ export class PlatformField {
     return pool.length ? weightedPick(pool) : null;
   }
 
+  // Pick the effect a rune plate carries. Mirrors _pickPowerupType (honours the
+  // cheat spawn-pool filter + the same weighted pick), but the GOOD/bad split is
+  // decided by the caller (so it uses the SAME goodPowerupChance lean as floaters —
+  // no bias toward good). `onPath` runes drop the harshest powerdowns (blackout/
+  // splat) since you can't always dodge a plate on the guaranteed route; branch
+  // runes allow them. Returns {type, good} or null if nothing's enabled.
+  _pickRuneType(good, onPath) {
+    const banned = onPath ? RUNE_PATH_EXCLUDE : EMPTY_SET;
+    const inPool = (list) => list.filter((k) => this.enabledPowerups.has(k) && !banned.has(k));
+    let g = good;
+    let first = inPool(g ? GOOD_POWERUPS : BAD_POWERUPS);
+    if (!first.length) { g = !g; first = inPool(g ? GOOD_POWERUPS : BAD_POWERUPS); } // fall back to the other pool
+    return first.length ? { type: weightedPick(first), good: g } : null;
+  }
+
+  // The effective rune spawn chance: the distance ramp, eased DOWN by how many
+  // effects are already active (cooldown = active LOAD, not a timer). At 0 active
+  // it's the full ramped chance; ~2 active is a trickle; 3+ is basically none until
+  // they wear off. activeEffects is pushed in each frame from game.js.
+  _runeChance(d) {
+    const base = ramp(CONFIG.runeChance, d);
+    const load = Math.max(0, 1 - (this.activeEffects || 0) * CONFIG.runeLoadFactor);
+    return base * load;
+  }
+
   _addPowerup(x, top, z, d = 0) {
     const type = this._pickPowerupType(d);
     if (!type) return; // every type disabled in the cheat test menu → nothing spawns
@@ -613,12 +662,24 @@ export class PlatformField {
     }
 
     let type = "normal";
+    let runePayload = null;
     if (!safe) {
-      if (chance(CONFIG.flipperChance)) type = "flipper"; // rare hinged launch pad
-      else if (chance(0.1)) type = "boost";
+      // Runes come first: a rune plate is a board you trigger by LANDING on. Its
+      // chance ramps with distance AND eases down while you already have effects
+      // active (gated in _runeChance). onPath=true → keep blackout/splat off it.
+      // difficultyMult 0 = zen / no-hazards: no runes (they're effect-triggers).
+      if (this.difficultyMult > 0 && chance(this._runeChance(dd))) {
+        runePayload = this._pickRuneType(chance(ramp(CONFIG.goodPowerupChance, dd)), true);
+        if (runePayload) type = "rune";
+      }
+      if (type === "normal") {
+        if (chance(CONFIG.flipperChance)) type = "flipper"; // rare hinged launch pad
+        else if (chance(0.1)) type = "boost";
+      }
     }
-    const texName = type === "boost" ? "boost" : type === "flipper" ? "rubber" : this._groundTex();
+    const texName = type === "boost" ? "boost" : type === "flipper" ? "rubber" : type === "rune" ? "rune" : this._groundTex();
     if (type === "flipper") len = rand(9, 14); // small launch panels — a full-length flipper looks wrong
+    if (type === "rune") len = rand(9, 14);    // short plate so a jump can clear a bad one
 
     // Angle (slope) and curve (bow) are independent display PROPERTIES, not their
     // own plate types: any board — flat, boost, round, and a mover below — can tilt
@@ -626,7 +687,7 @@ export class PlatformField {
     // (before placement) so a longer ramp doesn't throw off the gap that follows it.
     // (Tunnels are a separate structure and stay flat for now.)
     let slopeZ = 0, curve = 0, leanX = 0;
-    if (!safe && type !== "flipper") { // flippers stay flat — the hinge animation owns rotation.x
+    if (!safe && type !== "flipper" && type !== "rune") { // flippers + runes stay flat (no slope/curve/lean) so the rune reads clearly and a jump can clear a bad one
       if (chance(ramp(CONFIG.rampChance, sd))) {
         slopeZ = (chance(0.5) ? 1 : -1) * rand(CONFIG.rampSlope[0], CONFIG.rampSlope[1]);
         if (!round) len *= ramp(CONFIG.rampLenBoost, sd); // box ramps run longer; keep round tiles small
@@ -655,14 +716,14 @@ export class PlatformField {
 
     // Acceleration plates are always flat boxes (forward arrows); ramps use a
     // thin box too so their near edge meets the incoming height cleanly.
-    const geoType = type === "boost" || type === "flipper" ? "box" : g.geoType;
-    const hy = type === "boost" || type === "flipper" || slopeZ ? 0.5 : g.hy;
-    const p = this._addBoard({ x, y: yCenter, z, w, len, hy, geoType, type, texName, slopeZ, curve, leanX });
+    const geoType = type === "boost" || type === "flipper" || type === "rune" ? "box" : g.geoType;
+    const hy = type === "boost" || type === "flipper" || type === "rune" || slopeZ ? 0.5 : g.hy;
+    const p = this._addBoard({ x, y: yCenter, z, w, len, hy, geoType, type, texName, slopeZ, curve, leanX, runePayload });
     const exitY = slopeZ ? yCenter + slopeZ * (len / 2) : yCenter;
     this._cursor = { x, y: exitY, z: z + len / 2 };
     this._clearOverlapping(p); // static pieces never sit inside each other
 
-    if (!safe) {
+    if (!safe && type !== "rune") { // runes stay a clean, still, readable plate — no movers/obstacles on them
       // Movement is a property too — a board can slide/lift while tilted or bowed.
       if (chance(this._hazRamp(CONFIG.movingChance, hd))) this._makeMover(p, false);
       // Obstacles stay off ramps/curves: a spike mid-climb you can't avoid is unfair.
@@ -677,9 +738,10 @@ export class PlatformField {
       }
     }
     // Item multiplier (1 normally, more with the cheat code) spawns extra
-    // gems/powerups, spread sideways so they don't pile up.
+    // gems/powerups, spread sideways so they don't pile up. A rune IS the powerup
+    // (landing on it fires the effect), so it never also gets a floating pickup/gem.
     const py = p.pos.y;
-    for (let k = 0; k < this.itemMultiplier; k++) {
+    if (type !== "rune") for (let k = 0; k < this.itemMultiplier; k++) {
       const ox = (k - (this.itemMultiplier - 1) / 2) * 3;
       if (chance(0.4)) this._addGem(x + ox, py + p.hy, z);
       // difficultyMult 0 = zen / no-hazards: skip powerups entirely (gems are harmless candy).
@@ -707,6 +769,19 @@ export class PlatformField {
       let len = rand(8, ramp(CONFIG.padLenHi, hd));
       if (round) len = Math.min(len, rand(8, 14));
       if (this._overlaps(x, y, z, w / 2, g.hy, len / 2)) continue;
+
+      // Branch runes: navigation choices off the main path involve runes too. Rolled
+      // FIRST so it wins over bouncy; onPath=false → harsh powerdowns (blackout/splat)
+      // are allowed here since you CHOSE this branch (the path stays survivable).
+      let runePayload = null;
+      if (this.difficultyMult > 0 && chance(this._runeChance(hd))) {
+        runePayload = this._pickRuneType(chance(ramp(CONFIG.goodPowerupChance, hd)), false);
+      }
+      if (runePayload) {
+        const rlen = rand(9, 14); // short plate so a jump clears a bad one
+        this._addBoard({ x, y, z, w, len: rlen, hy: 0.5, geoType: "box", type: "rune", texName: "rune", runePayload });
+        continue; // a rune IS the powerup — no bouncy swap, no floating items on it
+      }
 
       const bouncy = chance(0.16);
       const p = this._addBoard({
