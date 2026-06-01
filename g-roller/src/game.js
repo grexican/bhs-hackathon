@@ -368,7 +368,7 @@ export class Game {
 
   _buildSettings() {
     const $ = (id) => document.getElementById(id);
-    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty"), skin: $("set-skin"), zen: $("set-zen"), powerups: $("set-powerups") };
+    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty"), skin: $("set-skin"), zen: $("set-zen"), endrun: $("set-endrun"), powerups: $("set-powerups") };
 
     // Build the cheat-only per-powerup spawn-pool chips (one toggle per type).
     const grid = $("set-powerups-grid");
@@ -395,6 +395,7 @@ export class Game {
     this._settings.difficulty.addEventListener("click", () => this._cycleDifficulty());
     this._settings.skin.addEventListener("click", () => this._cycleSkin());
     this._settings.zen.addEventListener("click", () => this._toggleZen());
+    this._settings.endrun.addEventListener("click", () => { this._quitRun(); open(false); }); // mobile way out of a run / zen
     this._syncSettings();
   }
 
@@ -750,7 +751,7 @@ export class Game {
     const map = {
       shield: ["🛡️ SHIELD", "#35e0ff"], magnet: ["🧲 MAGNET", "#b06bff"], slow: ["🐢 SLOW-MO", "#4dff8a"],
       doublejump: ["⏫ DOUBLE JUMP", "#7cff5a"], flight: ["🕊️ FLIGHT — hold jump!", "#ffe14d"],
-      lowgrav: ["🌙 LOW GRAVITY", "#9affd6"],
+      lowgrav: ["🌕 LOW GRAVITY", "#9affd6"],
       reverse: ["🔄 REVERSED!", "#ff9f1c"], surge: ["⚡ SURGE!", "#ff3b3b"],
       morph: ["🌀 MORPH!", "#ff4bd6"], splat: ["💦 SPLAT!", "#8a5a2b"], trip: ["🌈 TRIPPING!", "#a94bff"],
       flubber: ["🫧 FLUBBER! — steer in the air", "#6aff6a"],

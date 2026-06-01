@@ -10,7 +10,7 @@ const ONE = new THREE.Vector3(1, 1, 1);
 // ones (morph wobble, trip rainbow, lowgrav float, flubber bounce, blackout dark,
 // fog) are dropped here — they still show as countdown chips in the HUD.
 const ORBIT_KEYS = ["magnet", "slow", "reverse", "surge"];
-const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡", morph: "🌀", trip: "🌈", lowgrav: "🌙", flubber: "🫧", blackout: "🌑", fog: "🌫️" };
+const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡", morph: "🌀", trip: "🌈", lowgrav: "🌕", flubber: "🫧", blackout: "🌑", fog: "🌫️" };
 const ORBIT_RING_SEG = 48; // segments in a glyph's depletion ring
 
 // Selectable ball skins (chosen in the ⚙️ panel). Each entry names a procedural

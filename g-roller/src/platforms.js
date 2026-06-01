@@ -17,7 +17,7 @@ export const POWERUP_DEFS = {
   slow:       { color: 0x2fd9c0, shape: "ico",   icon: "🐢", good: true,  weight: 5 },
   magnet:     { color: 0x4a78ff, shape: "ring",  icon: "🧲", good: true,  weight: 4 },
   doublejump: { color: 0xc6ff3a, shape: "knot",  icon: "⏫", good: true,  weight: 3 },
-  lowgrav:    { color: 0x9affd6, shape: "octa",  icon: "🌙", good: true,  weight: 2.5 },
+  lowgrav:    { color: 0x9affd6, shape: "octa",  icon: "🌕", good: true,  weight: 2.5 },
   flight:     { color: 0xffd24a, shape: "octa",  icon: "🕊️", good: true,  weight: 1.3 },
   reverse:    { color: 0xff9f1c, shape: "box",   icon: "🔄", good: false, weight: 5 },
   surge:      { color: 0xff3b3b, shape: "cone",  icon: "⚡", good: false, weight: 3 },

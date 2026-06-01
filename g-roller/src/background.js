@@ -105,6 +105,21 @@ function farLightsTexture() {
   return new THREE.CanvasTexture(c);
 }
 
+// A near-black radial disc that fades to transparent at the rim. Laid UNDER the
+// additive city-lights plane as an occluder, so the specks read on black instead of
+// on the purple void showing through the see-through additive plane.
+function darkPoolTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const ctx = c.getContext("2d");
+  const g = ctx.createRadialGradient(128, 128, 20, 128, 128, 128);
+  g.addColorStop(0, "rgba(3,3,5,1)");
+  g.addColorStop(0.7, "rgba(2,2,4,0.85)");
+  g.addColorStop(1, "rgba(1,1,2,0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(c);
+}
+
 export class Background {
   constructor(scene) {
     this.group = new THREE.Group();
@@ -184,7 +199,19 @@ export class Background {
     );
     this.farLights.rotation.x = -Math.PI / 2; // lay it flat, facing up at us
     this.farLightsY = -260; // way down in the void
+    this.farLights.renderOrder = -1; // drawn after the dark occluder so specks add on top
     this.group.add(this.farLights);
+
+    // 1b) Dark occluder just below the lights: a near-black disc (NORMAL blend) that
+    //     blocks the purple void from showing through the additive lights plane, so
+    //     the floor reads as black with glowing specks rather than a purple slab.
+    this.farDark = new THREE.Mesh(
+      new THREE.PlaneGeometry(2900, 2900),
+      new THREE.MeshBasicMaterial({ map: darkPoolTexture(), transparent: true, opacity: 0.9, depthWrite: false, fog: false })
+    );
+    this.farDark.rotation.x = -Math.PI / 2;
+    this.farDark.renderOrder = -2; // behind the lights
+    this.group.add(this.farDark);
 
     // 2) Two horizontal mist decks between us and the lights — slow-drifting cloud
     //    layers far below. Lower deck moves slower (height parallax): the closer/
@@ -235,7 +262,8 @@ export class Background {
     // too busy / distracting (additive blending glows on the dark scene = headache).
     // Hide them — kept, not deleted — so only the calm city-lights floor shows below
     // us. Re-enable later by flipping these visible flags back to true.
-    this.motes.visible = false;
+    // Mist decks stay hidden (too busy with the jump cam-tilt). Motes kept but very
+    // faint (opacity set in update) — just a hint of rising specks.
     for (const m of this.mistDecks) m.visible = false;
   }
 
@@ -267,6 +295,9 @@ export class Background {
     this.farLights.position.set(0, this.farLightsY, playerZ);
     this.farLights.rotation.z = t * 0.004;
     this.farLights.material.opacity = 0.32 * f;
+    // Dark occluder rides just below the lights so the void doesn't show through.
+    this.farDark.position.set(0, this.farLightsY - 1, playerZ);
+    this.farDark.material.opacity = 0.9 * f;
 
     // Mist decks slow-drift (texture pans) and breathe. Each deck pans at its own
     // speed for height parallax; positioned under the track and fading with dim.
@@ -290,7 +321,7 @@ export class Background {
       arr[i * 3 + 2] = playerZ + d.z;
     }
     this._motePos.needsUpdate = true;
-    this._moteMat.opacity = 0.55 * f;
+    this._moteMat.opacity = 0.2 * f; // faint — just a hint of rising specks
 
     this.ranges.forEach((p, i) => {
       const d = p.userData.dist;
