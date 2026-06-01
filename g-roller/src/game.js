@@ -593,11 +593,16 @@ export class Game {
         this._rainDropNext = 0.05 + Math.random() * 0.16; // next drop 50–210ms out — irregular
         const d = document.createElement("div");
         d.className = "raindrop";
-        const w = 16 + Math.random() * 40;
+        const sr = Math.random();
+        const w = 18 + sr * sr * 152;             // ~18–170px: biased small, occasional HUGE (≈3x the old max)
+        const dur = 1.4 + Math.random() * 4.0;    // 1.4–5.4s: some crawl slowly down the glass
+        const round = Math.min(1, (dur - 1.4) / 4.0); // slower drops are rounder
+        const hMul = 2.05 - round * 0.95;         // fast = elongated streak, slow = near-round bead
         d.style.width = `${w.toFixed(0)}px`;
-        d.style.height = `${(w * (1.3 + Math.random() * 0.7)).toFixed(0)}px`;
+        d.style.height = `${(w * hMul).toFixed(0)}px`;
         d.style.left = `${(Math.random() * 100).toFixed(1)}%`;
-        d.style.setProperty("--dur", `${(1.0 + Math.random() * 1.8).toFixed(2)}s`);
+        d.style.borderRadius = round > 0.5 ? "50%" : "48% 48% 54% 54% / 58% 58% 44% 44%";
+        d.style.setProperty("--dur", `${dur.toFixed(2)}s`);
         d.addEventListener("animationend", () => d.remove());
         this._rainLensEl.appendChild(d);
       }
