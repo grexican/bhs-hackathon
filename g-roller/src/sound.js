@@ -10,8 +10,11 @@
 // amount so all five feel clearly different.
 
 // Five soundtracks to cycle through. Each entry is a tempo + per-voice settings +
-// a chord progression (one entry per bar). Each bar holds a bass root, a 4-note
-// arpeggio, and a pad chord (held under the whole bar for the warm bed).
+// a chord VOCABULARY (`prog`, one entry per named chord) + an `arrangement` that
+// strings those chords into a multi-section SONG (intro → A → B → break → drop …)
+// so the music evolves over dozens of bars before repeating, instead of looping
+// 4 bars forever. Each chord holds a bass root, a 4-note arpeggio, and a pad chord
+// (held under the whole bar for the warm bed).
 //
 // Per-track knobs (all optional, sensible defaults applied in code):
 //   tempo     — BPM
@@ -22,80 +25,199 @@
 //   detune    — cents of chorus spread on the lead (wider = dreamier)
 //   space     — delay-send amount 0..1 (more = more surreal / cavernous)
 //   swing     — 0..1, delays offbeat 16ths for a looser, smoother groove
-//   drums     — "full" | "soft" | "brush" | "none"
+//   drums     — "full" | "soft" | "brush" | "none"  (the track's MAX drum feel)
 //   arpRate   — 8 plays the arp every 8th note (slow/dreamy), 16 every 16th (busy)
 //   gain      — per-track music level trim
+//
+// SONG STRUCTURE — each track has:
+//   prog        — { name: chordObj } dictionary of the chords the song draws from.
+//   arrangement — ordered list of sections. The whole arrangement plays once, then
+//                 repeats. A section is:
+//      { name, chords:[...names], layers:{bass,arp,pad,drums}, lift }
+//        chords  — chord names, one per bar; the section is chords.length bars long.
+//        layers  — which voices play this section (drop drums in a breakdown, etc).
+//                  Omitted layer = on. `drums:false` mutes the kit; the onBeat hook
+//                  still fires regardless so Audiosurf stays locked to the grid.
+//        lift    — small intensity bump 0..1 (slightly louder/brighter — used for
+//                  "drop" sections). Defaults to 0.
+// Fills, arp runs and dynamic swells are added in code, keyed off the song bar so
+// even repeated sections never feel identical bar-to-bar.
 const TRACKS = [
   // 1) Dreamy, slow, major-key. Clean sine bass, lots of space, brushed drums.
+  //    Song: airy intro (pad only) → verse A → lifted chorus B → quiet bridge →
+  //    chorus reprise. ~36 bars before it loops.
   {
     name: "Velvet Horizon", tempo: 84,
     bassWave: "sine", arpWave: "triangle", padWave: "triangle",
     gritty: false, bassCut: 320, arpCut: 1600, detune: 9, space: 0.5,
     swing: 0.25, drums: "brush", arpRate: 8, gain: 1.0,
-    prog: [
-      { bass: 65.41, pad: [130.81, 164.81, 196.0], arp: [261.63, 329.63, 392.0, 329.63] }, // C
-      { bass: 87.31, pad: [174.61, 220.0, 261.63], arp: [349.23, 440.0, 523.25, 440.0] },   // F
-      { bass: 73.42, pad: [146.83, 174.61, 220.0], arp: [293.66, 349.23, 440.0, 349.23] },  // Dm
-      { bass: 98.0, pad: [196.0, 246.94, 293.66], arp: [392.0, 493.88, 587.33, 493.88] },   // G
+    prog: {
+      C:  { bass: 65.41, pad: [130.81, 164.81, 196.0], arp: [261.63, 329.63, 392.0, 329.63] },
+      F:  { bass: 87.31, pad: [174.61, 220.0, 261.63], arp: [349.23, 440.0, 523.25, 440.0] },
+      Dm: { bass: 73.42, pad: [146.83, 174.61, 220.0], arp: [293.66, 349.23, 440.0, 349.23] },
+      G:  { bass: 98.0,  pad: [196.0, 246.94, 293.66], arp: [392.0, 493.88, 587.33, 493.88] },
+      Am: { bass: 110.0, pad: [220.0, 261.63, 329.63], arp: [440.0, 523.25, 659.25, 523.25] },
+      Em: { bass: 82.41, pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] },
+    },
+    arrangement: [
+      { name: "intro",  chords: ["C", "Am"],            layers: { bass: false, arp: false, drums: false } },
+      { name: "introB", chords: ["F", "G"],             layers: { drums: false } },
+      { name: "verse",  chords: ["C", "Am", "Dm", "G"] },
+      { name: "verse",  chords: ["C", "Am", "F", "G"] },
+      { name: "chorus", chords: ["F", "G", "C", "Am"],  lift: 0.35 },
+      { name: "chorus", chords: ["F", "G", "Em", "Am"], lift: 0.35 },
+      { name: "bridge", chords: ["Dm", "Am", "Em", "G"], layers: { drums: false } },
+      { name: "chorus", chords: ["F", "G", "C", "G"],   lift: 0.4 },
     ],
   },
 
   // 2) Late-night cruise. Warm triangle bass, gentle swing, soft drums, minor 7ths.
+  //    Song: smooth verse → pre-chorus → lifted hook → drum-drop bridge → hook. ~36 bars.
   {
     name: "Midnight Cruise", tempo: 96,
     bassWave: "triangle", arpWave: "sine", padWave: "triangle",
     gritty: false, bassCut: 380, arpCut: 1900, detune: 7, space: 0.4,
     swing: 0.3, drums: "soft", arpRate: 8, gain: 1.0,
-    prog: [
-      { bass: 110.0, pad: [220.0, 261.63, 329.63], arp: [220.0, 261.63, 329.63, 392.0] },  // Am7
-      { bass: 73.42, pad: [146.83, 174.61, 220.0], arp: [293.66, 349.23, 440.0, 349.23] }, // Dm
-      { bass: 98.0, pad: [196.0, 246.94, 293.66], arp: [392.0, 440.0, 493.88, 440.0] },    // G
-      { bass: 130.81, pad: [261.63, 329.63, 392.0], arp: [523.25, 392.0, 329.63, 392.0] }, // C
+    prog: {
+      Am7: { bass: 110.0,  pad: [220.0, 261.63, 329.63], arp: [220.0, 261.63, 329.63, 392.0] },
+      Dm:  { bass: 73.42,  pad: [146.83, 174.61, 220.0], arp: [293.66, 349.23, 440.0, 349.23] },
+      G:   { bass: 98.0,   pad: [196.0, 246.94, 293.66], arp: [392.0, 440.0, 493.88, 440.0] },
+      C:   { bass: 130.81, pad: [261.63, 329.63, 392.0], arp: [523.25, 392.0, 329.63, 392.0] },
+      Fmaj7: { bass: 87.31, pad: [174.61, 220.0, 277.18], arp: [349.23, 440.0, 554.37, 440.0] },
+      Em7: { bass: 82.41,  pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] },
+    },
+    arrangement: [
+      { name: "intro", chords: ["Am7", "Fmaj7"],          layers: { arp: false, drums: false } },
+      { name: "verse", chords: ["Am7", "Dm", "G", "C"] },
+      { name: "verse", chords: ["Am7", "Dm", "Fmaj7", "G"] },
+      { name: "pre",   chords: ["Dm", "Em7", "Fmaj7", "G"] },
+      { name: "hook",  chords: ["C", "G", "Am7", "Fmaj7"], lift: 0.35 },
+      { name: "hook",  chords: ["C", "G", "Dm", "G"],      lift: 0.35 },
+      { name: "bridge", chords: ["Fmaj7", "Em7", "Dm", "Am7"], layers: { drums: false } },
+      { name: "hook",  chords: ["C", "G", "Am7", "G"],     lift: 0.4 },
     ],
   },
 
   // 3) Surreal ambient drift. No drums, very wide detune, max space, floating arp.
+  //    Song: layers fade IN one at a time, swell to a fuller middle, then thin back
+  //    out — a slow tide rather than a beat. ~40 bars.
   {
     name: "Lucid Drift", tempo: 80,
     bassWave: "sine", arpWave: "sine", padWave: "sine",
     gritty: false, bassCut: 260, arpCut: 1300, detune: 13, space: 0.62,
     swing: 0, drums: "none", arpRate: 8, gain: 1.05,
-    prog: [
-      { bass: 82.41, pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] },  // Em
-      { bass: 110.0, pad: [220.0, 277.18, 329.63], arp: [440.0, 554.37, 659.25, 554.37] }, // A
-      { bass: 92.50, pad: [185.0, 220.0, 277.18], arp: [369.99, 440.0, 554.37, 440.0] },   // F#m
-      { bass: 123.47, pad: [246.94, 293.66, 369.99], arp: [493.88, 587.33, 739.99, 587.33] }, // B
+    prog: {
+      Em:  { bass: 82.41,  pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] },
+      A:   { bass: 110.0,  pad: [220.0, 277.18, 329.63], arp: [440.0, 554.37, 659.25, 554.37] },
+      "F#m": { bass: 92.50, pad: [185.0, 220.0, 277.18], arp: [369.99, 440.0, 554.37, 440.0] },
+      B:   { bass: 123.47, pad: [246.94, 293.66, 369.99], arp: [493.88, 587.33, 739.99, 587.33] },
+      Cmaj7: { bass: 65.41, pad: [196.0, 246.94, 329.63], arp: [392.0, 493.88, 659.25, 493.88] },
+      G:   { bass: 98.0,   pad: [196.0, 246.94, 293.66], arp: [392.0, 493.88, 587.33, 493.88] },
+    },
+    arrangement: [
+      { name: "wash",  chords: ["Em", "Cmaj7"],            layers: { bass: false, arp: false } },
+      { name: "drift", chords: ["Em", "A", "F#m", "B"],    layers: { arp: false } },
+      { name: "drift", chords: ["Em", "G", "A", "B"] },
+      { name: "rise",  chords: ["Cmaj7", "G", "A", "B"],   lift: 0.3 },
+      { name: "rise",  chords: ["Em", "A", "Cmaj7", "B"],  lift: 0.3 },
+      { name: "ebb",   chords: ["F#m", "Em", "A", "G"],    layers: { arp: false } },
+      { name: "ebb",   chords: ["Em", "Cmaj7"],            layers: { bass: false, arp: false } },
     ],
   },
 
   // 4) Energetic but smooth. Filtered-saw lead, soft grit on bass, full drums, brighter.
+  //    Song: 2-bar kick intro → main A → variation A2 → breakdown (drums drop) →
+  //    DROP (full + lift) → outro. Steady kick throughout the drum sections. ~38 bars.
   {
     name: "Neon Highway", tempo: 124,
     bassWave: "sawtooth", arpWave: "sawtooth", padWave: "triangle",
     gritty: true, bassCut: 520, arpCut: 2400, detune: 8, space: 0.28,
     swing: 0.12, drums: "full", arpRate: 16, gain: 0.95,
-    prog: [
-      { bass: 110.0, pad: [220.0, 261.63, 329.63], arp: [220.0, 261.63, 329.63, 440.0] }, // Am
-      { bass: 87.31, pad: [174.61, 220.0, 261.63], arp: [174.61, 220.0, 261.63, 349.23] },// F
-      { bass: 98.0, pad: [196.0, 246.94, 293.66], arp: [196.0, 246.94, 293.66, 392.0] },  // G
-      { bass: 130.81, pad: [261.63, 329.63, 392.0], arp: [261.63, 329.63, 392.0, 329.63] },// C
+    prog: {
+      Am: { bass: 110.0,  pad: [220.0, 261.63, 329.63], arp: [220.0, 261.63, 329.63, 440.0] },
+      F:  { bass: 87.31,  pad: [174.61, 220.0, 261.63], arp: [174.61, 220.0, 261.63, 349.23] },
+      G:  { bass: 98.0,   pad: [196.0, 246.94, 293.66], arp: [196.0, 246.94, 293.66, 392.0] },
+      C:  { bass: 130.81, pad: [261.63, 329.63, 392.0], arp: [261.63, 329.63, 392.0, 329.63] },
+      Dm: { bass: 73.42,  pad: [146.83, 174.61, 220.0], arp: [146.83, 174.61, 220.0, 293.66] },
+      Em: { bass: 82.41,  pad: [164.81, 196.0, 246.94], arp: [164.81, 196.0, 246.94, 329.63] },
+    },
+    arrangement: [
+      { name: "intro", chords: ["Am", "Am"],         layers: { arp: false, pad: false } },
+      { name: "A",     chords: ["Am", "F", "G", "C"] },
+      { name: "A",     chords: ["Am", "F", "Dm", "G"] },
+      { name: "A2",    chords: ["Am", "Em", "F", "G"] },
+      { name: "break", chords: ["F", "C", "Dm", "G"], layers: { drums: false } },
+      { name: "drop",  chords: ["Am", "F", "G", "C"], lift: 0.5 },
+      { name: "drop",  chords: ["Am", "F", "G", "G"], lift: 0.5 },
+      { name: "outro", chords: ["Am", "G", "F", "Em"] },
     ],
   },
 
   // 5) The one hyper track. Driving but warmed-up: softer drums, capped lead brightness.
+  //    Song: 2-bar kick intro → driving A → A2 → tension break → big DROP → DROP2 →
+  //    outro. Index 4: Audiosurf forces this one, so the kick stays rock-steady. ~38 bars.
   {
     name: "Pulse Runner", tempo: 134,
     bassWave: "sawtooth", arpWave: "triangle", padWave: "sawtooth",
     gritty: true, bassCut: 560, arpCut: 2600, detune: 10, space: 0.22,
     swing: 0.08, drums: "full", arpRate: 16, gain: 0.92,
-    prog: [
-      { bass: 82.41, pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] }, // Em
-      { bass: 130.81, pad: [261.63, 329.63, 392.0], arp: [523.25, 392.0, 329.63, 392.0] },// C
-      { bass: 98.0, pad: [196.0, 246.94, 293.66], arp: [392.0, 493.88, 587.33, 493.88] }, // G
-      { bass: 73.42, pad: [146.83, 220.0, 293.66], arp: [293.66, 440.0, 587.33, 440.0] }, // D
+    prog: {
+      Em: { bass: 82.41,  pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] },
+      C:  { bass: 130.81, pad: [261.63, 329.63, 392.0], arp: [523.25, 392.0, 329.63, 392.0] },
+      G:  { bass: 98.0,   pad: [196.0, 246.94, 293.66], arp: [392.0, 493.88, 587.33, 493.88] },
+      D:  { bass: 73.42,  pad: [146.83, 220.0, 293.66], arp: [293.66, 440.0, 587.33, 440.0] },
+      Am: { bass: 110.0,  pad: [220.0, 261.63, 329.63], arp: [440.0, 523.25, 659.25, 523.25] },
+      Bm: { bass: 123.47, pad: [246.94, 293.66, 369.99], arp: [493.88, 587.33, 739.99, 587.33] },
+    },
+    arrangement: [
+      { name: "intro", chords: ["Em", "Em"],          layers: { arp: false, pad: false } },
+      { name: "A",     chords: ["Em", "C", "G", "D"] },
+      { name: "A",     chords: ["Em", "C", "Am", "D"] },
+      { name: "A2",    chords: ["Em", "G", "C", "D"] },
+      { name: "break", chords: ["Am", "Bm", "C", "D"], layers: { drums: false } },
+      { name: "drop",  chords: ["Em", "C", "G", "D"],  lift: 0.5 },
+      { name: "drop",  chords: ["Em", "C", "Am", "D"], lift: 0.55 },
+      { name: "outro", chords: ["Em", "D", "C", "Bm"] },
     ],
   },
 ];
+
+// Total bars in a track's arrangement (one full song before it repeats).
+function _songBars(track) {
+  let n = 0;
+  for (const sec of track.arrangement) n += sec.chords.length;
+  return n;
+}
+
+// Resolve a global song bar to its section + the chord playing that bar, plus how
+// far we are into the section (for fills/swells) and which voices are active.
+function _locate(track, songBar) {
+  const total = _songBars(track);
+  let b = ((songBar % total) + total) % total;
+  for (const sec of track.arrangement) {
+    if (b < sec.chords.length) {
+      const layers = sec.layers || {};
+      return {
+        section: sec,
+        chord: track.prog[sec.chords[b]],
+        barInSection: b,
+        secLen: sec.chords.length,
+        lift: sec.lift || 0,
+        bass: layers.bass !== false,
+        arp: layers.arp !== false,
+        pad: layers.pad !== false,
+        drums: layers.drums !== false,
+      };
+    }
+    b -= sec.chords.length;
+  }
+  // Fallback (shouldn't happen): first chord, everything on.
+  const first = track.arrangement[0];
+  return {
+    section: first, chord: track.prog[first.chords[0]], barInSection: 0,
+    secLen: first.chords.length, lift: 0, bass: true, arp: true, pad: true, drums: true,
+  };
+}
 
 export class Sound {
   constructor() {
@@ -255,49 +377,82 @@ export class Sound {
 
   _scheduleStep(step, t) {
     const track = TRACKS[this._trackIndex];
-    const prog = track.prog;
-    const bar = Math.floor(step / 16) % prog.length;
+    const songBar = Math.floor(step / 16); // absolute bar counter (the arranger wraps it)
     const s = step % 16;
-    const chord = prog[bar];
+    const loc = _locate(track, songBar);   // section + chord + active layers for this bar
+    const chord = loc.chord;
 
     // Beat hook: fire on every kick (quarter note, s % 4 === 0) so the game can
     // sync visuals to the audible beat. `time` is the AudioContext time the kick
     // will SOUND — the game converts that to a lead delay so a pulse lands ON the
     // beat, not early. Only set when a beat-reactive mode (Audiosurf) is on, so
-    // normal play pays no cost.
+    // normal play pays no cost. Fires on the grid regardless of which layers play,
+    // so a drum-dropped breakdown can't knock Audiosurf out of sync.
     if (s % 4 === 0 && this.onBeat) this.onBeat({ time: t, sec16: this._sec16 });
 
     // Swing: push odd (offbeat) 16ths a little later for a looser, smoother feel.
     const swing = track.swing || 0;
     const swung = s % 2 === 1 ? t + this._sec16 * swing * 0.5 : t;
 
+    // Intensity = base lift of the section + a gentle 4-bar swell so even a held
+    // section breathes louder→softer instead of sitting flat.
+    const phraseBar = loc.barInSection;
+    const swell = 0.12 * Math.sin((songBar % 4) / 4 * Math.PI); // 0..0.12 across 4 bars
+    const lift = loc.lift + swell;
+
+    // Last bar of a 4+ bar section = a "fill" bar: a busier drum turnaround and an
+    // arp run that signals the change coming. Cheap, keyed off the bar so it's
+    // deterministic (no per-frame work).
+    const isFillBar = loc.secLen >= 4 && phraseBar === loc.secLen - 1;
+
     // Pad chord: lay the whole chord down once at the top of each bar so a warm
     // bed hums under everything. This is the biggest "vibey" win.
-    if (s === 0) this._pad(t, chord.pad, track);
+    if (s === 0 && loc.pad) this._pad(t, chord.pad, track, lift);
 
-    if (s % 2 === 0) this._bass(t, chord.bass, track); // 8th-note bass pulse
+    // 8th-note bass pulse. On a fill bar's back half, double up to 16ths for a
+    // little driving run into the next section.
+    if (loc.bass) {
+      // Normal: every 8th. Fill bar's last beat (s 12-15): every 16th for a driving run.
+      const bassHit = (s % 2 === 0) || (isFillBar && s >= 12);
+      if (bassHit) this._bass(t, chord.bass, track, lift);
+    }
 
     // Arp: dreamy tracks pluck every 8th note (arpRate 8); busier ones every 16th.
-    const arpEvery = track.arpRate === 16 ? 1 : 2;
-    if (s % arpEvery === 0) this._arp(swung, chord.arp[(s % 16) % chord.arp.length], track);
+    if (loc.arp) {
+      const arpEvery = track.arpRate === 16 ? 1 : 2;
+      // On a fill bar, run the arp at double rate for a fast lead flourish.
+      const every = isFillBar ? Math.max(1, arpEvery / 2) : arpEvery;
+      if (s % every === 0) {
+        const seq = chord.arp;
+        // Variation: every other phrase the lead climbs through the chord instead
+        // of following the canned shape, so repeats don't sound identical.
+        const vary = (songBar % 8) >= 4;
+        let note = seq[s % seq.length];
+        if (vary) note = seq[(Math.floor(s / 2) + phraseBar) % seq.length];
+        if (isFillBar && s >= 12) note = note * 2; // octave-up tail on the run
+        this._arp(swung, note, track, lift);
+      }
+    }
 
-    this._drums(s, swung, track);
+    if (loc.drums) this._drums(s, swung, track, lift, isFillBar);
   }
 
   // --- Music voices ---------------------------------------------------------
 
   // Soft sustained chord pad — the warm bed under each bar. Detuned pairs per
   // note give a slow chorus shimmer; a low-passed sine/triangle keeps it gentle.
-  _pad(t, freqs, track) {
+  _pad(t, freqs, track, lift = 0) {
     const barLen = this._sec16 * 16;
     const dur = barLen * 0.98;
     const lp = this.ctx.createBiquadFilter();
-    lp.type = "lowpass"; lp.frequency.value = 900; lp.Q.value = 0.4; // very soft top
+    // lifted sections open the pad's top end a touch so a chorus/drop feels brighter
+    lp.type = "lowpass"; lp.frequency.value = 900 + lift * 700; lp.Q.value = 0.4;
     const g = this.ctx.createGain();
+    const peak = 0.05 * (1 + lift); // louder in lifted sections
     // long, smooth swell in and out so chords blur into each other
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(0.05, t + barLen * 0.25);
-    g.gain.setValueAtTime(0.05, t + dur * 0.6);
+    g.gain.linearRampToValueAtTime(peak, t + barLen * 0.25);
+    g.gain.setValueAtTime(peak, t + dur * 0.6);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     lp.connect(g); g.connect(this.musicGain);
     if (this.spaceIn) g.connect(this.spaceIn); // pads carry the space
@@ -312,10 +467,10 @@ export class Sound {
     }
   }
 
-  _bass(t, freq, track) {
+  _bass(t, freq, track, lift = 0) {
     const dur = this._sec16 * 1.7;
     const g = this.ctx.createGain();
-    this._env(g, t, 0.42 * (track.gain || 1), 0.008, dur); // slightly softer + slower attack
+    this._env(g, t, 0.42 * (track.gain || 1) * (1 + lift * 0.5), 0.008, dur); // louder when lifted
     const lp = this.ctx.createBiquadFilter();
     lp.type = "lowpass"; lp.frequency.value = track.bassCut || 420; lp.Q.value = 2; // darker, calmer Q
 
@@ -341,12 +496,13 @@ export class Sound {
 
   // The lead/arp pluck. A couple of detuned voices + a slow lowpass make it
   // shimmery instead of fizzy; a chunk of it is sent to the space bus.
-  _arp(t, freq, track) {
+  _arp(t, freq, track, lift = 0) {
     const dur = this._sec16 * (track.arpRate === 16 ? 1.0 : 1.8); // longer notes on dreamy tracks
     const lp = this.ctx.createBiquadFilter();
-    lp.type = "lowpass"; lp.frequency.value = track.arpCut || 1800; lp.Q.value = 1;
+    // lifted sections brighten the lead so a chorus/drop cuts through a bit more
+    lp.type = "lowpass"; lp.frequency.value = (track.arpCut || 1800) * (1 + lift * 0.4); lp.Q.value = 1;
     const g = this.ctx.createGain();
-    this._env(g, t, 0.1 * (track.gain || 1), 0.006, dur); // gentle attack, no click
+    this._env(g, t, 0.1 * (track.gain || 1) * (1 + lift * 0.6), 0.006, dur); // gentle attack, no click
     lp.connect(g); g.connect(this.musicGain);
 
     // send to the atmosphere bus for surreal echoes
@@ -369,26 +525,38 @@ export class Sound {
 
   // Drum router: each track picks a feel. "none" = pure ambient, "brush"/"soft"
   // = quiet & dark for mellow tracks, "full" = present for the energetic ones.
-  _drums(s, t, track) {
+  _drums(s, t, track, lift = 0, isFillBar = false) {
     const kind = track.drums || "soft";
     if (kind === "none") return;
+    const L = 1 + lift; // lifted sections hit a touch harder
 
     if (kind === "brush") {
       // Soft brushed groove: rounded kick, brushed backbeat, no hats.
-      if (s % 4 === 0) this._kick(t, 0.55);
+      if (s % 4 === 0) this._kick(t, 0.55 * L);
       if (s === 4 || s === 12) this._brush(t);
+      // Gentle brushed fill across the last bar's final beat.
+      if (isFillBar && s >= 12 && s % 2 === 0) this._brush(t);
       return;
     }
     if (kind === "soft") {
-      if (s % 4 === 0) this._kick(t, 0.65);
-      if (s === 4 || s === 12) this._snare(t, 0.22);
+      if (s % 4 === 0) this._kick(t, 0.65 * L);
+      if (s === 4 || s === 12) this._snare(t, 0.22 * L);
       if (s % 4 === 2) this._hat(t, 0.07); // sparser, quieter hats
+      // Soft snare fill on the last beat of a fill bar.
+      if (isFillBar && s >= 12 && s % 2 === 0) this._snare(t, 0.18);
       return;
     }
-    // "full" — energetic but still tamed vs. the old harsh version
-    if (s % 4 === 0) this._kick(t, 0.8);
-    if (s === 4 || s === 12) this._snare(t, 0.3);
+    // "full" — energetic but still tamed vs. the old harsh version. The kick MUST
+    // stay on every quarter (s % 4 === 0) — Audiosurf's onBeat hook is locked to it.
+    if (s % 4 === 0) this._kick(t, 0.8 * L);
+    if (s === 4 || s === 12) this._snare(t, 0.3 * L);
     if (s % 2 === 1) this._hat(t, 0.1);
+    // Snare-roll fill across the whole last bar of a phrase (every 16th in the back
+    // half), building into the next section — kick is untouched so the grid holds.
+    if (isFillBar) {
+      if (s >= 8 && s % 2 === 1) this._snare(t, 0.14 + (s - 8) * 0.015);
+      if (s >= 12) this._hat(t, 0.12);
+    }
   }
 
   _kick(t, peak = 0.8) {
