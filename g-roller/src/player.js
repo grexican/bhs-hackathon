@@ -21,13 +21,13 @@ const ORBIT_RING_SEG = 48; // segments in a glyph's depletion ring
 // the SOLID coloured zones (flames, stripe, dots) stay opaque and everything else
 // is see-through glass — driven by an alpha mask the texture function also draws.
 export const BALL_SKINS = [
-  { name: "Classic Gold", pattern: "checker", light: "#ffce3a", dark: "#ff9f1c", line: "rgba(40,28,8,0.55)" },
+  { name: "Classic Gold", pattern: "checker", light: "#ffd24a", dark: "#f2a922", line: "rgba(70,48,12,0.45)" },
   { name: "Racing Stripe", pattern: "stripes", light: "#f5f5f5", dark: "#d11321", accent: "#101010", glassZones: true },
   { name: "Galaxy",       pattern: "galaxy",  light: "#7b4bff", dark: "#04030f", accent: "#ffffff", glassy: true },
   { name: "Carbon",       pattern: "carbon",  light: "#454b54", dark: "#101216", accent: "#8a93a3" },
   { name: "Hazard",       pattern: "hazard",  light: "#fff200", dark: "#141414" },
-  { name: "Magma",        pattern: "flames",  light: "#fff4b0", dark: "#1a0402", accent: "#ff7a1a", glassZones: true },
-  { name: "Bubblegum",    pattern: "dots",    light: "#ff9ed6", dark: "#ff5fb0", accent: "#ffe3f4", glassZones: true },
+  { name: "Magma",        pattern: "flames",  light: "#fff3a0", dark: "#140201", accent: "#ff7314", glassZones: true },
+  { name: "Bubblegum",    pattern: "dots",    light: "#ffb0e8", dark: "#ff4fd0", accent: "#ffd6fb", glassZones: true },
 ];
 
 // Tiny deterministic PRNG so "random" speckles (stars, carbon flecks) look the
@@ -209,11 +209,27 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
       // scattered across the WHOLE canvas, so it reads as fire all the way around
       // with NO directional "from one edge" look and NO pole convergence. The hot
       // lava (cracks + pools) stays SOLID; the charred crust is see-through glass.
-      // Color pass = charred crust + glowing veins; alpha pass = white where the
-      // lava is (solid), black on the crust (glass).
+      // Three passes:
+      //   color    — charred crust + shocking deep-red→orange→white-hot veins/pools.
+      //   alpha    — white where the lava is (solid), black on the crust (glass).
+      //   emissive — lava veins/pools bright hot-orange/yellow on PURE BLACK, so the
+      //              molten zones genuinely emit light (bloom) and the crust stays dark.
+      const emissive = mode === "emissive";
       const rnd = mulberry32(13);
       if (alpha) {
         ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S);
+      } else if (emissive) {
+        // Emissive map: everything that isn't lava emits nothing → pure black crust.
+        ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S);
+        // Faint deep-glow embers under the crust so cooling lava still smoulders.
+        ctx.globalCompositeOperation = "lighter";
+        for (let i = 0; i < 6; i++) {
+          const cx = rnd() * S, cy = rnd() * S, rad = S * (0.16 + rnd() * 0.12);
+          const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+          rg.addColorStop(0, "rgba(150,40,2,0.6)"); rg.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = rg; ctx.fillRect(0, 0, S, S);
+        }
+        ctx.globalCompositeOperation = "source-over";
       } else {
         // Charred basalt crust, very dark and roughly even (no top/bottom bias).
         ctx.fillStyle = skin.dark; ctx.fillRect(0, 0, S, S);
@@ -222,7 +238,7 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
         for (let i = 0; i < 6; i++) {
           const cx = rnd() * S, cy = rnd() * S, rad = S * (0.16 + rnd() * 0.12);
           const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-          rg.addColorStop(0, "rgba(120,24,2,0.7)"); rg.addColorStop(1, "rgba(0,0,0,0)");
+          rg.addColorStop(0, "rgba(150,32,2,0.8)"); rg.addColorStop(1, "rgba(0,0,0,0)");
           ctx.fillStyle = rg; ctx.fillRect(0, 0, S, S);
         }
         ctx.globalCompositeOperation = "source-over";
@@ -261,11 +277,19 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
         if (alpha) {
           // Mask: solid white core a touch wider than the visible glow.
           drawVein(pts, w + 2, (width) => { ctx.strokeStyle = "#fff"; ctx.lineWidth = width; ctx.stroke(); });
+        } else if (emissive) {
+          // Emissive: same layered ramp but on black — deep-orange halo, bright orange
+          // body, near-white-hot yellow core. This is the light the lava throws off.
+          drawVein(pts, w + 6, (width) => { ctx.strokeStyle = "#c41e00"; ctx.lineWidth = width; ctx.stroke(); });
+          drawVein(pts, w + 1, (width) => { ctx.strokeStyle = "#ff7a14"; ctx.lineWidth = width; ctx.stroke(); });
+          drawVein(pts, w * 0.45, (width) => { ctx.strokeStyle = "#fff0a0"; ctx.lineWidth = width; ctx.stroke(); });
         } else {
-          // Color: layered glow — wide dark-orange halo, amber body, bright core.
-          drawVein(pts, w + 6, (width) => { ctx.strokeStyle = "rgba(180,40,2,0.85)"; ctx.lineWidth = width; ctx.stroke(); });
+          // Color: shocking molten ramp — deep-red halo, blazing orange body, a
+          // near-white-hot yellow core for searing contrast against the black crust.
+          drawVein(pts, w + 6, (width) => { ctx.strokeStyle = "rgba(200,24,0,0.92)"; ctx.lineWidth = width; ctx.stroke(); });
+          drawVein(pts, w + 2, (width) => { ctx.strokeStyle = "#ff4a08"; ctx.lineWidth = width; ctx.stroke(); });
           drawVein(pts, w + 1, (width) => { ctx.strokeStyle = skin.accent; ctx.lineWidth = width; ctx.stroke(); });
-          drawVein(pts, w * 0.45, (width) => { ctx.strokeStyle = skin.light; ctx.lineWidth = width; ctx.stroke(); });
+          drawVein(pts, w * 0.4, (width) => { ctx.strokeStyle = skin.light; ctx.lineWidth = width; ctx.stroke(); });
         }
       }
 
@@ -279,9 +303,16 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
           if (alpha) {
             ctx.fillStyle = "#fff";
             ctx.beginPath(); ctx.arc(cx, cy, pr, 0, Math.PI * 2); ctx.fill();
-          } else {
+          } else if (emissive) {
+            // White-hot pool centers fading through orange to deep-red on black.
             const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, pr);
-            rg.addColorStop(0, skin.light); rg.addColorStop(0.5, skin.accent); rg.addColorStop(1, "rgba(180,40,2,0.6)");
+            rg.addColorStop(0, "#fff4b0"); rg.addColorStop(0.45, "#ff7a14"); rg.addColorStop(1, "rgba(120,16,0,0.5)");
+            ctx.fillStyle = rg;
+            ctx.beginPath(); ctx.arc(cx, cy, pr, 0, Math.PI * 2); ctx.fill();
+          } else {
+            // White-hot core → blazing orange → deep-red rim for incandescent pools.
+            const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, pr);
+            rg.addColorStop(0, "#fffce0"); rg.addColorStop(0.35, skin.light); rg.addColorStop(0.7, skin.accent); rg.addColorStop(1, "rgba(200,24,0,0.7)");
             ctx.fillStyle = rg;
             ctx.beginPath(); ctx.arc(cx, cy, pr, 0, Math.PI * 2); ctx.fill();
           }
@@ -313,7 +344,7 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
         }
         // Candy body with a radial shade for roundness.
         const rg = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.2, cx, cy, r);
-        rg.addColorStop(0, skin.accent); rg.addColorStop(1, "#d63a8f");
+        rg.addColorStop(0, skin.accent); rg.addColorStop(1, "#ff2ccf"); // neon magenta-pink edge — makes the beads pop
         ctx.fillStyle = rg;
         ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
         // Soft specular highlight dot.
@@ -331,23 +362,24 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
       // Base: a subtle vertical gold gradient under everything so the whole ball
       // has depth even before the cells (warm light top, richer gold bottom).
       const baseG = ctx.createLinearGradient(0, 0, 0, S);
-      baseG.addColorStop(0, "#ffe27a");
+      baseG.addColorStop(0, "#ffe9a0");
       baseG.addColorStop(0.5, skin.light);
-      baseG.addColorStop(1, "#e8901a");
+      baseG.addColorStop(1, "#f0a82a");
       ctx.fillStyle = baseG; ctx.fillRect(0, 0, S, S);
-      // Beveled cells: dark squares get a deep amber gradient, light squares a bright
-      // one — both lit from the top-left corner so each tile looks slightly domed.
+      // Beveled cells: dark squares get a rich-but-bright warm-gold gradient, light
+      // squares a near-white gold — both lit from the top-left so tiles look domed.
+      // Shadows stay WARM GOLD (no muddy brown) so the whole ball reads lustrous.
       for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
         const dark = (x + y) % 2 === 0;
         const x0 = x * t, y0 = y * t;
         const g = ctx.createLinearGradient(x0, y0, x0 + t, y0 + t);
-        if (dark) { g.addColorStop(0, "#ffb733"); g.addColorStop(0.55, skin.dark); g.addColorStop(1, "#b86a08"); }
-        else { g.addColorStop(0, "#fff0b0"); g.addColorStop(0.55, skin.light); g.addColorStop(1, "#e6961c"); }
+        if (dark) { g.addColorStop(0, "#ffd24a"); g.addColorStop(0.55, skin.dark); g.addColorStop(1, "#d68f1c"); }
+        else { g.addColorStop(0, "#fff6cc"); g.addColorStop(0.55, skin.light); g.addColorStop(1, "#f0ab2c"); }
         ctx.fillStyle = g; ctx.fillRect(x0, y0, t, t);
         // Inset bevel: bright top+left edge, shadowed bottom+right edge per cell.
         ctx.fillStyle = "rgba(255,248,210,0.5)";
         ctx.fillRect(x0, y0, t, 2); ctx.fillRect(x0, y0, 2, t);
-        ctx.fillStyle = "rgba(80,45,5,0.45)";
+        ctx.fillStyle = "rgba(120,72,12,0.38)";
         ctx.fillRect(x0, y0 + t - 2, t, 2); ctx.fillRect(x0 + t - 2, y0, 2, t);
       }
       // Crisp grout lines between cells.
@@ -490,12 +522,9 @@ export class Player {
     } else if (skin.glassZones) {
       // Solid zones opaque, the rest glass: the alphaMap (white=solid, black=glass)
       // drives per-pixel transparency, and transmission turns those clear pixels into
-      // refracting glass rather than a flat hole. No emissive base — these aren't lit
-      // from within (blackout still adds its cool ember on top in updateVisuals).
+      // refracting glass rather than a flat hole. Most of these aren't lit from within
+      // (blackout still adds its cool ember on top in updateVisuals) — but Magma is.
       mat.alphaMap = ballTexture(skin, "alpha");
-      mat.emissive.setHex(0x000000);
-      this._skinGlow = 0;
-      mat.emissiveIntensity = 0;
       mat.transparent = true;
       mat.transmission = 0.9;
       mat.thickness = this.radius * 1.4;
@@ -504,6 +533,23 @@ export class Player {
       mat.metalness = 0.05;
       mat.roughness = 0.12;
       mat.side = THREE.DoubleSide;
+
+      if (skin.pattern === "flames") {
+        // Magma GLOWS like molten lava — same mechanism as Hazard: an emissiveMap
+        // lights only the lava veins/pools (hot orange-yellow) while the charred
+        // crust stays black, a warm-orange `emissive` tints that emission, and a
+        // steady high `_skinGlow` is held up every frame by updateVisuals so the
+        // lava actually emits light and blooms. The glassZones alphaMap is untouched.
+        mat.emissiveMap = ballTexture(skin, "emissive");
+        mat.emissive.setHex(0xff5a14);
+        this._skinGlow = 0.95;
+        mat.emissiveIntensity = this._skinGlow;
+      } else {
+        // Racing/Bubblegum: no inner light (emissiveMap was already nulled above).
+        mat.emissive.setHex(0x000000);
+        this._skinGlow = 0;
+        mat.emissiveIntensity = 0;
+      }
     } else {
       // Opaque reset — clear EVERY glass prop the glass branches set, so the ball is
       // a normal solid sphere again (FrontSide, no transmission/alpha). Start from a
@@ -529,10 +575,16 @@ export class Player {
         this._skinGlow = 0.85; // modest, steady hi-vis glow (kept across frames)
         mat.emissiveIntensity = this._skinGlow;
       } else if (skin.pattern === "checker") {
-        // Classic Gold: lean into a lacquered metallic gold look — more metalness,
-        // lower roughness so the highlight sweep reads as polished gold leaf.
-        mat.metalness = 0.85;
-        mat.roughness = 0.28;
+        // Classic Gold: a metallic surface with NO env map renders dark/muddy ("shit
+        // brown"), so keep metalness MODEST and lean on the bright baked-in gold art
+        // instead. A faint warm `emissive` (held steady via a small `_skinGlow` so
+        // updateVisuals doesn't recolour it cool) gives lustre under the dark scene
+        // without an environment map. Lower roughness keeps the lacquered sheen.
+        mat.metalness = 0.4;
+        mat.roughness = 0.25;
+        mat.emissive.setHex(0x4a3206);
+        this._skinGlow = 0.18;
+        mat.emissiveIntensity = this._skinGlow;
       }
     }
     mat.needsUpdate = true;

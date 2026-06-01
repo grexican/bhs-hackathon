@@ -206,11 +206,13 @@ export class Game {
     s.left = -60; s.right = 60; s.top = 60; s.bottom = -60; s.near = 1; s.far = 220;
     this.scene.add(this.sun, this.sun.target);
 
-    // Faint depth grid under the void.
+    // Faint depth grid under the void. Hidden for now — we want the surreal
+    // "floating way up high, no ground" feel instead (the background carries depth).
     this.grid = new THREE.GridHelper(400, 80, 0x3550aa, 0x223066);
     this.grid.position.y = -55;
     this.grid.material.transparent = true;
     this.grid.material.opacity = 0.35;
+    this.grid.visible = false;
     this.scene.add(this.grid);
   }
 
@@ -256,7 +258,7 @@ export class Game {
 
   _effectiveSpeed() {
     let s = this.baseSpeed * this._diffSpeedMult; // Hard runs faster, Easy slower (gaps scale to live speed, so still reachable)
-    s += this._accelBonus; // built up by riding acceleration plates
+    if (!this._zen) s += this._accelBonus; // boost-plate accel — off in zen so it stays calm (no getting faster & faster)
     if (this._effects.surge > 0) s += CONFIG.surgeAmount;
     s += this.input.throttle * CONFIG.manualSpeed; // Up/Down arrows or thumbstick Y
     if (this._effects.slow > 0) s *= CONFIG.slowFactor;
@@ -320,7 +322,16 @@ export class Game {
   // Push the effective hazard mult into the field. Zen mode forces it to 0, which
   // makes _hazRamp return 0 — so no obstacles, movers, sharp turns, lean or powerups.
   _applyDifficultyMult() {
-    this.field.difficultyMult = this._zen ? 0 : CONFIG.difficultyLevels[this._diffLevel].mult;
+    if (this._zen) {
+      // Zen sits at a steady MEDIUM (not empty, not escalating): use Medium's mult and
+      // PIN the hazard ramp to a fixed point so it never ramps up with distance.
+      const med = CONFIG.difficultyLevels.find((l) => l.name === "Medium") ?? CONFIG.difficultyLevels[CONFIG.defaultDifficulty];
+      this.field.difficultyMult = med.mult;
+      this.field.fixedDifficulty = CONFIG.zenDifficulty;
+    } else {
+      this.field.difficultyMult = CONFIG.difficultyLevels[this._diffLevel].mult;
+      this.field.fixedDifficulty = null; // normal: hazards ramp with distance
+    }
   }
 
   _cycleDifficulty() {
@@ -337,6 +348,7 @@ export class Game {
   _toggleZen() {
     this._zen = !this._zen;
     this._applyDifficultyMult();
+    document.body.classList.toggle("is-zen", this._zen); // CSS hides the HUD counters — clean, just-zen'ing
     this._toast(this._zen ? "🧘 ZEN: On" : "🧘 ZEN: Off", "#9affd6");
     this._syncSettings();
   }
@@ -433,6 +445,7 @@ export class Game {
     const zen = get("gr_zen");
     if (zen !== null) this._zen = zen === "1";
     this._applyDifficultyMult(); // apply restored (or default) level — forced to 0 in zen
+    document.body.classList.toggle("is-zen", this._zen); // hide HUD counters if restored into zen
     this._diffSpeedMult = CONFIG.difficultyLevels[this._diffLevel].speedMult ?? 1;
     const skin = get("gr_skin");
     this._skinIndex = this.player.setSkin(skin !== null ? Number(skin) : 0); // apply saved (or default) skin
@@ -495,11 +508,14 @@ export class Game {
   }
 
   _tickPlaying(dt) {
-    // Difficulty ramp (capped so it stays playable).
-    this._speedTimer += dt;
-    if (this._speedTimer >= CONFIG.speedRampEvery) {
-      this._speedTimer = 0;
-      this.baseSpeed = Math.min(CONFIG.maxForwardSpeed, this.baseSpeed + CONFIG.speedRampAmount);
+    // Difficulty ramp (capped so it stays playable). Frozen in zen — a calm, steady
+    // pace, no getting-faster-and-faster.
+    if (!this._zen) {
+      this._speedTimer += dt;
+      if (this._speedTimer >= CONFIG.speedRampEvery) {
+        this._speedTimer = 0;
+        this.baseSpeed = Math.min(CONFIG.maxForwardSpeed, this.baseSpeed + CONFIG.speedRampAmount);
+      }
     }
     if (this._invuln > 0) this._invuln -= dt;
     for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip", "lowgrav", "flubber", "blackout", "fog", "rain"])

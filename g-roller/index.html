@@ -160,6 +160,10 @@
         box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
       }
 
+      /* Zen mode: hide all the counters (score, distance, speed, jumps, gems, best) —
+         clean AF, just roll. The ⚙️ button stays so you can toggle back out. */
+      body.is-zen .hud__panel { display: none; }
+
       /* Score panel, top-left, on a soft glass card */
       .hud__panel {
         position: absolute; top: 18px; left: 18px;

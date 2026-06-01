@@ -94,6 +94,7 @@ export class PlatformField {
     this._spreadD = 0;     // spread ramp (fast)
     this.itemMultiplier = 1; // cheat code bumps this to spawn extra gems/powerups
     this.difficultyMult = 1; // Easy/Medium/Hard scales the floor of the hazard ramps
+    this.fixedDifficulty = null; // when set (zen mode), PINS the hazard ramp here instead of escalating with distance
     // Cheat-mode test tool: which powerup types are allowed to spawn. Default = all.
     // Disable all but one and (with cheat's 5x items) it spawns constantly to test.
     this.enabledPowerups = new Set(Object.keys(POWERUP_DEFS));
@@ -715,7 +716,7 @@ export class PlatformField {
 
   update(dt, playerZ, forwardSpeed, magnetPos = null) {
     this._time += dt;
-    this._difficulty = smoothstep(playerZ / CONFIG.difficultyDistance);
+    this._difficulty = this.fixedDifficulty != null ? this.fixedDifficulty : smoothstep(playerZ / CONFIG.difficultyDistance);
     this._spreadD = smoothstep(playerZ / CONFIG.spreadDistance);
     this._biomeTextures = BIOMES[biomeAt(playerZ)].textures; // platforms re-skin per biome
 
