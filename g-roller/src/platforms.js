@@ -261,6 +261,11 @@ export class PlatformField {
   // "overhead" = a bar you must roll UNDER (don't jump!); "pillars" = a slalom you
   // thread between. Always leaves a way past.
   _addObstacle(p, kind) {
+    // Decide up front whether this hazard PATROLS. Barriers span the width (no room
+    // to slide sideways) so they patrol FORE/AFT; spikes are narrow so they slide
+    // side-to-side (sometimes fore/aft). The clamp below keeps a passable gap.
+    const moves = (kind === "barrier" || kind === "spikes") &&
+      chance(this._hazRamp(CONFIG.obstacleMoveChance, this._difficulty));
     let lx, ly, lz, hx, hy, hz, mesh;
     if (kind === "barrier") {
       hx = p.hx * 0.82; hy = 0.7; hz = 0.4;
@@ -319,6 +324,20 @@ export class PlatformField {
       p.mesh.add(mesh);
     }
     p.obstacles.push({ hx, hy, hz, lx, ly, lz, kind, mesh });
+    if (moves) {
+      const o = p.obstacles[p.obstacles.length - 1];
+      // Barriers patrol fore/aft (z) — they're too wide to slide sideways. Spikes are
+      // narrow, so they slide left/right, sometimes fore/aft.
+      const axis = kind === "barrier" ? "z" : (chance(0.5) ? "x" : "z");
+      const room = (axis === "x" ? p.hx - o.hx : p.hz - o.hz) - 0.5; // stay on the board
+      const amp = Math.min(ramp(CONFIG.obstacleMoveAmp, this._difficulty), Math.max(0, room));
+      if (amp > 0.6) {
+        o.move = {
+          axis, amp, speed: rand(0.8, 1.8), phase: rand(0, Math.PI * 2),
+          baseLx: o.lx, baseLz: o.lz, baseMeshX: o.mesh.position.x, baseMeshZ: o.mesh.position.z,
+        };
+      }
+    }
   }
 
   _makeMover(p, big) {
@@ -735,6 +754,19 @@ export class PlatformField {
       m.position.y = p.hz * Math.sin(a);                    // pin the far edge as the hinge
       m.position.z = p.hz * (1 - Math.cos(a));
       if (p._flipT === 0) { m.rotation.x = 0; m.position.set(0, 0, 0); } // settle flat
+    }
+
+    // Patrolling obstacles: slide barriers/spikes along their platform. Move BOTH the
+    // mesh AND the collision box (o.lx/lz) by the same offset from their bases, so the
+    // hitbox tracks the visual — collision reads plat.pos + o.lx/lz every frame.
+    for (const p of this.platforms) {
+      for (const o of p.obstacles) {
+        if (!o.move) continue;
+        const mv = o.move;
+        const off = Math.sin(this._time * mv.speed + mv.phase) * mv.amp;
+        if (mv.axis === "x") { o.lx = mv.baseLx + off; o.mesh.position.x = mv.baseMeshX + off; }
+        else { o.lz = mv.baseLz + off; o.mesh.position.z = mv.baseMeshZ + off; }
+      }
     }
 
     for (const g of this.gems) {

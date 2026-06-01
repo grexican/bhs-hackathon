@@ -96,6 +96,8 @@ export const CONFIG = {
   movingChance: [0.2, 0.7],       // moving boards are a big part of the mix (calmer early floor)
   moveAmp: [4, 12],
   sharpTurnChance: [0.08, 0.38],
+  obstacleMoveChance: [0.0, 0.55], // chance a barrier/spike PATROLS (slides on its platform); ramps with difficulty
+  obstacleMoveAmp: [2, 6.5],       // patrol half-range in units; grows with difficulty (clamped to fit the board, keeping a gap)
 
   // Difficulty levels (cycled in the ⚙️ panel, shown in the HUD). `mult` scales the
   // WHOLE hazard ramp — floor AND ceiling — so the tiers stay distinct even deep in

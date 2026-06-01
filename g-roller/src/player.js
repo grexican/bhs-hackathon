@@ -14,13 +14,12 @@ const ORBIT_EMOJI = { magnet: "🧲", slow: "🐢", reverse: "🔄", surge: "⚡
 // Every entry MUST keep a `name` (the menu reads it). Index 0 stays classic gold.
 export const BALL_SKINS = [
   { name: "Classic Gold", pattern: "checker", light: "#ffce3a", dark: "#ff9f1c", line: "rgba(40,28,8,0.55)" },
-  { name: "Racing Stripe", pattern: "stripes", light: "#f5f5f5", dark: "#e01e2c", accent: "#1a1a1a" },
-  { name: "Galaxy",       pattern: "galaxy",  light: "#7b4bff", dark: "#0a0820", accent: "#ffffff" },
-  { name: "Soccer",       pattern: "soccer",  light: "#fcfcfc", dark: "#141414", line: "rgba(0,0,0,0.85)" },
-  { name: "Carbon",       pattern: "carbon",  light: "#3a3f47", dark: "#15171b", accent: "#5a6270" },
-  { name: "Hazard",       pattern: "hazard",  light: "#ffd400", dark: "#141414" },
-  { name: "Magma",        pattern: "flames",  light: "#ffe66b", dark: "#7a0a0a", accent: "#ff7a1a" },
-  { name: "Bubblegum",    pattern: "dots",    light: "#ff8fd0", dark: "#ffd6ee", accent: "#d63a8f" },
+  { name: "Racing Stripe", pattern: "stripes", light: "#f5f5f5", dark: "#d11321", accent: "#101010" },
+  { name: "Galaxy",       pattern: "galaxy",  light: "#7b4bff", dark: "#04030f", accent: "#ffffff", glassy: true },
+  { name: "Carbon",       pattern: "carbon",  light: "#454b54", dark: "#101216", accent: "#8a93a3" },
+  { name: "Hazard",       pattern: "hazard",  light: "#ffe600", dark: "#141414" },
+  { name: "Magma",        pattern: "flames",  light: "#fff4b0", dark: "#1a0402", accent: "#ff7a1a" },
+  { name: "Bubblegum",    pattern: "dots",    light: "#ff9ed6", dark: "#ff5fb0", accent: "#ffe3f4" },
 ];
 
 // Tiny deterministic PRNG so "random" speckles (stars, carbon flecks) look the
@@ -46,74 +45,88 @@ function ballTexture(skin = BALL_SKINS[0]) {
 
   switch (skin.pattern) {
     case "stripes": {
-      // Diagonal racing stripes: a few bold bands plus thin pinstripes between.
+      // Racing livery: crisp white field, two bold red center stripes flanked by
+      // sharp black pinstripes, plus a thin checkered band — clearly NOT fire.
       ctx.fillStyle = skin.light; ctx.fillRect(0, 0, S, S);
-      ctx.save();
-      ctx.translate(S / 2, S / 2); ctx.rotate(Math.PI / 4); ctx.translate(-S, -S);
-      const w = S * 2, bands = 8, bw = w / bands;
-      for (let i = 0; i < bands; i++) {
-        ctx.fillStyle = i % 2 === 0 ? skin.dark : skin.light;
-        ctx.fillRect(i * bw, 0, bw, w);
-        ctx.fillStyle = skin.accent; // pinstripe edge
-        ctx.fillRect(i * bw, 0, bw * 0.12, w);
+      // Two vertical red bands (tile cleanly: centered + wrapped at the seam halves).
+      const stripeW = S * 0.16, gap = S * 0.06;
+      const centers = [S * 0.5, 0]; // one mid-band, one straddling the wrap seam
+      for (const cx of centers) {
+        // Red core stripe.
+        ctx.fillStyle = skin.dark;
+        ctx.fillRect(cx - stripeW / 2, 0, stripeW, S);
+        // Black sharp pinstripes hugging each edge of the red.
+        ctx.fillStyle = skin.accent;
+        ctx.fillRect(cx - stripeW / 2 - gap, 0, gap * 0.5, S);
+        ctx.fillRect(cx + stripeW / 2 + gap * 0.5, 0, gap * 0.5, S);
       }
-      ctx.restore();
+      // A thin checkered accent band across the equator (race-flag flavour).
+      const cb = 12, by = S * 0.5 - cb / 2;
+      for (let x = 0; x < S; x += cb) {
+        ctx.fillStyle = (x / cb) % 2 === 0 ? skin.accent : skin.light;
+        ctx.fillRect(x, by, cb, cb);
+      }
       break;
     }
     case "galaxy": {
-      // Deep-space gradient with a sweep of speckled stars and a faint nebula band.
-      const g = ctx.createLinearGradient(0, 0, S, S);
-      g.addColorStop(0, skin.dark); g.addColorStop(0.5, skin.light); g.addColorStop(1, skin.dark);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
-      ctx.fillStyle = "rgba(255,120,200,0.18)"; // nebula wash
-      ctx.beginPath(); ctx.ellipse(S * 0.6, S * 0.4, S * 0.55, S * 0.22, 0.6, 0, Math.PI * 2); ctx.fill();
+      // Glass-marble galaxy: near-black void, layered nebula clouds and bright
+      // glowing stars. Drawn dark so the SAME canvas doubles as an emissiveMap —
+      // only the bright specks/nebula light up, giving a glow-from-within look.
+      ctx.fillStyle = skin.dark; ctx.fillRect(0, 0, S, S);
       const rnd = mulberry32(7);
-      for (let i = 0; i < 220; i++) {
-        const x = rnd() * S, y = rnd() * S, r = rnd() * 1.6 + 0.3;
-        ctx.globalAlpha = 0.4 + rnd() * 0.6;
+      // Soft coloured nebula blobs (additive) so depth reads inside the glass.
+      const clouds = [
+        ["rgba(123,75,255,0.55)", 0.6, 0.4],
+        ["rgba(255,90,200,0.40)", 0.35, 0.65],
+        ["rgba(60,160,255,0.35)", 0.78, 0.72],
+      ];
+      ctx.globalCompositeOperation = "lighter";
+      for (const [col, fx, fy] of clouds) {
+        const cx = fx * S, cy = fy * S, rad = S * (0.3 + rnd() * 0.2);
+        const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+        rg.addColorStop(0, col); rg.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = rg; ctx.fillRect(0, 0, S, S);
+      }
+      ctx.globalCompositeOperation = "source-over";
+      // Stars: small bright cores with a faint halo so they glow.
+      for (let i = 0; i < 260; i++) {
+        const x = rnd() * S, y = rnd() * S, r = rnd() * 1.7 + 0.4;
+        const hot = rnd() > 0.85; // a few big "lens-flare" stars
+        const rr = hot ? r + 2 : r;
+        const halo = ctx.createRadialGradient(x, y, 0, x, y, rr * 3);
+        halo.addColorStop(0, "rgba(255,255,255,0.9)");
+        halo.addColorStop(0.4, "rgba(180,200,255,0.4)");
+        halo.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(x, y, rr * 3, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = skin.accent;
-        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      break;
-    }
-    case "soccer": {
-      // Classic soccer ball: white field with black pentagons on a hex-ish grid.
-      ctx.fillStyle = skin.light; ctx.fillRect(0, 0, S, S);
-      const drawPenta = (cx, cy, rad) => {
-        ctx.fillStyle = skin.dark;
-        ctx.beginPath();
-        for (let k = 0; k < 5; k++) {
-          const a = -Math.PI / 2 + (k / 5) * Math.PI * 2;
-          const px = cx + Math.cos(a) * rad, py = cy + Math.sin(a) * rad;
-          k === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-        }
-        ctx.closePath(); ctx.fill();
-      };
-      const rad = 26, step = S / 4;
-      for (let gy = 0; gy <= 4; gy++) for (let gx = 0; gx <= 4; gx++) {
-        const ox = (gy % 2) * step / 2; // stagger rows for a woven look
-        drawPenta(gx * step + ox, gy * step, rad);
-      }
-      ctx.strokeStyle = skin.line; ctx.lineWidth = 3; // seam stitching
-      for (let i = 0; i <= 4; i++) {
-        ctx.beginPath(); ctx.moveTo(0, i * step); ctx.lineTo(S, i * step + step / 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
       }
       break;
     }
     case "carbon": {
-      // Carbon-fibre weave: a tight 2x2 twill of beveled tiles with a sheen.
+      // Carbon-fibre twill: tight 2x2 weave of beveled cells with deep contrast
+      // and a sharp diagonal sheen sweep across the surface.
       ctx.fillStyle = skin.dark; ctx.fillRect(0, 0, S, S);
       const cell = 16;
       for (let y = 0; y < S; y += cell) for (let x = 0; x < S; x += cell) {
-        const woven = ((x / cell) + (y / cell)) % 2 === 0;
+        // 2x2 twill: shift the diagonal direction every other 2-cell block.
+        const block = (Math.floor(x / cell) + Math.floor(y / cell));
+        const woven = block % 2 === 0;
         const grad = ctx.createLinearGradient(x, y, x + cell, y + cell);
-        if (woven) { grad.addColorStop(0, skin.light); grad.addColorStop(1, skin.dark); }
-        else { grad.addColorStop(0, skin.dark); grad.addColorStop(1, skin.light); }
+        if (woven) { grad.addColorStop(0, skin.light); grad.addColorStop(0.5, skin.dark); grad.addColorStop(1, "#000"); }
+        else { grad.addColorStop(0, "#000"); grad.addColorStop(0.5, skin.dark); grad.addColorStop(1, skin.light); }
         ctx.fillStyle = grad; ctx.fillRect(x, y, cell - 1, cell - 1);
       }
-      ctx.fillStyle = skin.accent; ctx.globalAlpha = 0.25; // faint highlight sweep
-      ctx.fillRect(0, 0, S, S * 0.18);
+      // Sharp diagonal sheen highlight.
+      ctx.save();
+      ctx.translate(S / 2, S / 2); ctx.rotate(-Math.PI / 4); ctx.translate(-S, -S);
+      const sg = ctx.createLinearGradient(0, S * 0.85, 0, S * 1.15);
+      sg.addColorStop(0, "rgba(255,255,255,0)");
+      sg.addColorStop(0.5, skin.accent);
+      sg.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.globalAlpha = 0.4; ctx.fillStyle = sg; ctx.fillRect(0, 0, S * 2, S * 2);
+      ctx.restore();
       ctx.globalAlpha = 1;
       break;
     }
@@ -129,31 +142,64 @@ function ballTexture(skin = BALL_SKINS[0]) {
       break;
     }
     case "flames": {
-      // Magma: hot vertical gradient with licking flame tongues rising up.
+      // Magma: dark charred base, hot orange mid, bright yellow-white core, with
+      // many tall layered flame tongues plus glowing embers/sparks rising up.
       const g = ctx.createLinearGradient(0, S, 0, 0);
-      g.addColorStop(0, skin.dark); g.addColorStop(0.55, skin.accent); g.addColorStop(1, skin.light);
+      g.addColorStop(0, skin.dark);
+      g.addColorStop(0.45, "#8a1602");
+      g.addColorStop(0.75, skin.accent);
+      g.addColorStop(1, "#ffb347");
       ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
       const rnd = mulberry32(13);
-      ctx.fillStyle = skin.accent;
-      for (let i = 0; i < 9; i++) {
-        const bx = (i / 9) * S + rnd() * 12; // evenly spaced base => tiles across seam
-        const h = S * (0.4 + rnd() * 0.45), bw = 26 + rnd() * 18;
+      // Helper: draw one tongue as nested layers (outer orange -> inner yellow-white).
+      const tongue = (bx, h, bw, col, topFrac) => {
+        ctx.fillStyle = col;
         ctx.beginPath();
         ctx.moveTo(bx - bw / 2, S);
-        ctx.quadraticCurveTo(bx - bw * 0.2, S - h * 0.6, bx, S - h);
-        ctx.quadraticCurveTo(bx + bw * 0.2, S - h * 0.6, bx + bw / 2, S);
+        ctx.quadraticCurveTo(bx - bw * 0.35, S - h * 0.55, bx - bw * 0.08, S - h * topFrac);
+        ctx.quadraticCurveTo(bx, S - h, bx + bw * 0.08, S - h * topFrac);
+        ctx.quadraticCurveTo(bx + bw * 0.35, S - h * 0.55, bx + bw / 2, S);
         ctx.closePath(); ctx.fill();
+      };
+      const N = 16; // many tongues, evenly spaced => tiles across the seam
+      for (let i = 0; i < N; i++) {
+        const bx = (i / N) * S + (rnd() - 0.5) * 8;
+        const h = S * (0.55 + rnd() * 0.4);
+        const bw = 22 + rnd() * 16;
+        tongue(bx, h, bw, "#ff5a00", 0.92);                 // outer hot orange
+        tongue(bx, h * 0.82, bw * 0.6, "#ffb000", 0.95);    // mid amber
+        tongue(bx, h * 0.6, bw * 0.32, skin.light, 0.98);   // bright yellow-white core
       }
+      // Embers / sparks floating above the flames.
+      for (let i = 0; i < 70; i++) {
+        const x = rnd() * S, y = rnd() * S * 0.7, r = rnd() * 1.6 + 0.4;
+        ctx.globalAlpha = 0.5 + rnd() * 0.5;
+        ctx.fillStyle = rnd() > 0.5 ? "#ffd06a" : "#ff8a2a";
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
       break;
     }
     case "dots": {
-      // Polka dots on a soft field — staggered rows so it reads while spinning.
-      ctx.fillStyle = skin.dark; ctx.fillRect(0, 0, S, S);
-      const step = 32, r = 9;
+      // Glossy bubblegum: candy-pink field with varied-size dots and soft white
+      // specular highlights so each dot reads like a shiny candy bead.
+      const bg = ctx.createLinearGradient(0, 0, 0, S);
+      bg.addColorStop(0, skin.light); bg.addColorStop(1, skin.dark);
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, S, S);
+      const rnd = mulberry32(21);
+      const step = 32;
       for (let gy = 0; gy * step <= S; gy++) for (let gx = 0; gx * step <= S; gx++) {
         const ox = (gy % 2) * step / 2;
-        ctx.fillStyle = (gx + gy) % 2 === 0 ? skin.accent : skin.light;
-        ctx.beginPath(); ctx.arc(gx * step + ox, gy * step, r, 0, Math.PI * 2); ctx.fill();
+        const cx = gx * step + ox, cy = gy * step;
+        const r = 7 + rnd() * 6; // varied dot sizes
+        // Candy body with a radial shade for roundness.
+        const rg = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.2, cx, cy, r);
+        rg.addColorStop(0, skin.accent); rg.addColorStop(1, "#d63a8f");
+        ctx.fillStyle = rg;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+        // Soft specular highlight dot.
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.beginPath(); ctx.arc(cx - r * 0.35, cy - r * 0.35, r * 0.28, 0, Math.PI * 2); ctx.fill();
       }
       break;
     }
@@ -230,16 +276,41 @@ export class Player {
     this.airJumps = 0;
     this._t = 0;
     this._skinIndex = 0;
+    this._skinGlow = 0; // base emissive for glowing skins (galaxy marble); 0 otherwise
   }
 
-  // Swap the ball's checker skin to BALL_SKINS[index] (wraps). Disposes the old
-  // canvas texture so we don't leak one per change. Returns the applied index.
+  // Swap the ball's skin to BALL_SKINS[index] (wraps). Disposes the old canvas
+  // texture(s) so we don't leak one per change. Galaxy gets a glassy marble look
+  // (glowing star map as both map + emissiveMap, wet sheen); every other skin
+  // RESETS the material back to plain opaque standard. Returns the applied index.
   setSkin(index) {
     const n = BALL_SKINS.length;
     this._skinIndex = ((index % n) + n) % n;
+    const skin = BALL_SKINS[this._skinIndex];
     const mat = this._ball.material;
+
     if (mat.map) mat.map.dispose();
-    mat.map = ballTexture(BALL_SKINS[this._skinIndex]);
+    if (mat.emissiveMap) mat.emissiveMap.dispose();
+    mat.map = ballTexture(skin);
+
+    if (skin.glassy) {
+      // Marble look: the dark star canvas doubles as an emissiveMap so only the
+      // stars/nebula glow from within, plus a wet, near-mirror sheen on the glass.
+      mat.emissiveMap = ballTexture(skin);
+      mat.emissive.setHex(0xffffff);
+      this._skinGlow = 1.1; // base emissive kept up even when no blackout (see updateVisuals)
+      mat.emissiveIntensity = this._skinGlow;
+      mat.metalness = 0.1;
+      mat.roughness = 0.12;
+    } else {
+      // Reset to the normal opaque standard material for every non-glassy skin.
+      mat.emissiveMap = null;
+      mat.emissive.setHex(0x000000);
+      this._skinGlow = 0;
+      mat.emissiveIntensity = 0;
+      mat.metalness = 0.15;
+      mat.roughness = 0.4;
+    }
     mat.needsUpdate = true;
     return this._skinIndex;
   }
@@ -503,10 +574,13 @@ export class Player {
     }
 
     // Blackout powerdown: the world goes dark, so give the ball a faint cool ember
-    // — *barely* visible, kept dim enough to stay under the bloom threshold.
+    // — *barely* visible, kept dim enough to stay under the bloom threshold. The
+    // galaxy marble keeps its own glowing star emissive (white + emissiveMap), so
+    // don't recolour it — just add the blackout ember on top of its base glow.
     const bm = this._ball.material;
-    const ballGlow = e.blackout > 0 ? 0.4 : 0;
-    bm.emissive.setHex(0x5a78a8);
+    const base = this._skinGlow || 0;
+    const ballGlow = base + (e.blackout > 0 ? 0.4 : 0);
+    if (!base) bm.emissive.setHex(0x5a78a8); // only the non-glowing skins tint cool
     bm.emissiveIntensity += (ballGlow - bm.emissiveIntensity) * Math.min(1, dt * 4);
 
     this._updateOrbit(e, t, blink);
@@ -528,20 +602,71 @@ export class Player {
     });
   }
 
+  // Angelic layered wings for the flight powerup. Each side is ONE mesh (so the
+  // update loop can flap it via rotation.z and fade it via .material.opacity),
+  // built from overlapping feather planes that share that one material. The mesh
+  // pivots at its root (inner edge, near the ball) so the flap reads as a real
+  // wingbeat. Right side is the master; the left is a scale.x=-1 mirror of it.
   _makeWings() {
     const g = new THREE.Group();
-    const shape = new THREE.Shape();
-    shape.moveTo(0, 0); shape.lineTo(2.3, 0.6); shape.lineTo(1.9, -0.5); shape.lineTo(0.2, -0.3); shape.lineTo(0, 0);
-    const geo = new THREE.ShapeGeometry(shape);
+
+    // One soft, glowing material shared across every feather of a side, so a
+    // single opacity write in updateVisuals fades the whole wing at once.
     const mat = new THREE.MeshStandardMaterial({
-      color: 0xffe89a, emissive: 0xffb000, emissiveIntensity: 0.4,
-      transparent: true, opacity: 0.85, side: THREE.DoubleSide, roughness: 0.4,
+      color: 0xfff4d2, emissive: 0xffc24d, emissiveIntensity: 0.55,
+      transparent: true, opacity: 0.85, side: THREE.DoubleSide,
+      roughness: 0.35, metalness: 0.0, depthWrite: false,
     });
-    const r = new THREE.Mesh(geo, mat);
-    r.position.set(this.radius * 0.5, this.radius * 0.4, 0);
-    const l = new THREE.Mesh(geo, mat.clone());
-    l.position.set(-this.radius * 0.5, this.radius * 0.4, 0);
-    l.scale.x = -1;
+
+    // Build a single teardrop feather as a smooth Shape: a rounded root that
+    // tapers to a soft point, mirrored top/bottom for a leaf silhouette.
+    const feather = () => {
+      const s = new THREE.Shape();
+      s.moveTo(0, 0);
+      s.bezierCurveTo(0.35, 0.14, 0.78, 0.16, 1.0, 0.05);
+      s.bezierCurveTo(0.78, -0.04, 0.4, -0.07, 0, 0);
+      return new THREE.ShapeGeometry(s);
+    };
+    const featherGeo = feather();
+
+    // Three layered rows of feathers sweeping back and up — long primaries on
+    // top, shorter coverts tucked beneath — to give the wing depth and a swept,
+    // angelic fan rather than a flat blade.
+    const rows = [
+      { count: 6, baseLen: 2.2, spread: 0.34, lift: 0.55, z: 0.00, fade: 0.6 },
+      { count: 5, baseLen: 1.7, spread: 0.40, lift: 0.30, z: 0.06, fade: 0.75 },
+      { count: 4, baseLen: 1.2, spread: 0.46, lift: 0.08, z: 0.12, fade: 1.0 },
+    ];
+
+    // The master mesh carries the material; extra feathers are added as plain
+    // meshes parented to it so they inherit its transform, flap, and opacity.
+    const root = new THREE.Mesh(featherGeo, mat);
+    for (const row of rows) {
+      for (let i = 0; i < row.count; i++) {
+        const f = new THREE.Mesh(featherGeo, mat);
+        const t = i / (row.count - 1); // 0 at the front, 1 at the swept tip
+        // Sweep the fan back and arc it upward toward the tip.
+        const ang = row.spread + t * 0.9;
+        f.position.set(0.15 + t * 0.55, row.lift + t * 0.5, row.z);
+        f.rotation.z = ang;
+        const len = row.baseLen * (1 - t * 0.35);
+        f.scale.set(len, 0.55 + t * 0.25, 1);
+        root.add(f);
+      }
+    }
+
+    const r = root;
+    r.position.set(this.radius * 0.45, this.radius * 0.35, 0);
+    r.rotation.z = -0.15;
+    const l = r.clone();
+    l.position.set(-this.radius * 0.45, this.radius * 0.35, 0);
+    l.scale.x = -1; // mirror onto the left side
+    l.rotation.z = 0.15;
+    // clone() shares the material by reference; give the left its own so the two
+    // sides can be faded independently (the update loop writes each separately).
+    l.material = mat.clone();
+    l.traverse((o) => { if (o.isMesh) o.material = l.material; });
+
     g.add(r, l);
     g.userData = { r, l };
     g.visible = false;
