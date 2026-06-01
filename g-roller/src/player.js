@@ -331,11 +331,11 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
         bg.addColorStop(0, skin.light); bg.addColorStop(1, skin.dark);
         ctx.fillStyle = bg; ctx.fillRect(0, 0, S, S);
       }
-      const step = 32;
+      const step = 28; // denser packing — bolder neon-bead look
       for (let gy = 0; gy * step <= S; gy++) for (let gx = 0; gx * step <= S; gx++) {
         const ox = (gy % 2) * step / 2;
         const cx = gx * step + ox, cy = gy * step;
-        const r = 7 + rnd() * 6; // varied dot sizes
+        const r = 9 + rnd() * 7; // bigger, varied beads
         if (alpha) {
           // Mask: a slightly fatter white disc so the bead's edge isn't cut off.
           ctx.fillStyle = "#fff";

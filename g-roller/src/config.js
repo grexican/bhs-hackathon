@@ -43,7 +43,7 @@ export const CONFIG = {
   flipperVertical: 1.75,  // launch v.y = jumpSpeed * this — dramatic (above the trampoline; energy also goes forward)
   flipperForward: 52,     // forward speed BLAST on launch — injected straight into live speed (uncapped by accelMax) so you really fly forward, then eases back
   flipperFlipTime: 0.4,   // seconds the hinge-kick animation lasts
-  flipperChance: 0.05,    // chance a non-safe main-path board is a flipper (rare — it's a big event)
+  flipperChance: 0.08,    // chance a non-safe main-path board is a flipper (not gated by zen/difficulty — just rare)
 
   // Manual throttle (Up/Down arrows or the thumbstick Y axis): a slight, eased
   // speed nudge. Kept small so the path stays reachable (gaps have 50% headroom).

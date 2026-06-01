@@ -109,6 +109,7 @@ export class Game {
       if (e.code === "KeyG") this._toggleReduced();
       if (e.code === "KeyK") this._cycleSkin();
       if (e.code === "KeyL") this._cycleDifficulty();
+      if (e.code === "Escape") this._quitRun(); // end the run → title (the way out of zen)
       if (e.code === "KeyZ") this._toggleZen();
       // Cheat-only desktop testing: instantly fire a powerdown on yourself.
       // R rain · F fog · B blackout · T trip · O slow-mo.
@@ -793,6 +794,18 @@ export class Game {
   _clearSplats() {
     const layer = document.getElementById("splats");
     if (layer) layer.innerHTML = "";
+  }
+
+  // Voluntarily end the run (Esc) — the only way out of zen mode, where you can't
+  // die. Clean exit to the title overlay (no death FX/score-save); a jump restarts.
+  _quitRun() {
+    if (this.state !== "playing") return;
+    this.state = "dead"; // reuses the "press jump to start again" gate
+    this._restartLock = 0.3; // no accidental instant restart
+    this.canvas.classList.remove("is-tripping", "is-tripping--gentle");
+    this._hud.subtitle.textContent = "Roll the gauntlet of floating blocks";
+    this._hud.hint.textContent = this._isTouch ? "Tap JUMP to roll" : "Press JUMP to roll";
+    this._hud.overlay.classList.remove("is-hidden");
   }
 
   _die() {

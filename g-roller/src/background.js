@@ -89,15 +89,17 @@ function farLightsTexture() {
   base.addColorStop(1, "rgba(2,2,6,0)");
   ctx.fillStyle = base; ctx.fillRect(0, 0, 512, 512);
   // tiny lit specks, denser toward the centre, like a distant illuminated city
-  for (let i = 0; i < 700; i++) {
+  for (let i = 0; i < 460; i++) {
     const ang = Math.random() * Math.PI * 2;
     const r = Math.pow(Math.random(), 0.6) * 240; // bias inward
     const x = 256 + Math.cos(ang) * r;
     const y = 256 + Math.sin(ang) * r;
     const fade = 1 - r / 256;
-    const warm = Math.random() < 0.5;
-    const hue = warm ? 35 + Math.random() * 20 : 190 + Math.random() * 50;
-    ctx.fillStyle = `hsla(${hue}, 90%, 70%, ${0.15 + Math.random() * 0.35 * fade})`;
+    // Mostly warm amber lights with some cyan — NO purple/blue (read as "too purple"),
+    // and dimmer/less saturated so it's a faint pool, not a glow.
+    const warm = Math.random() < 0.62;
+    const hue = warm ? 35 + Math.random() * 20 : 186 + Math.random() * 26;
+    ctx.fillStyle = `hsla(${hue}, 60%, 56%, ${0.09 + Math.random() * 0.2 * fade})`;
     ctx.fillRect(x, y, 1.5, 1.5);
   }
   return new THREE.CanvasTexture(c);
@@ -259,11 +261,12 @@ export class Background {
       c.position.set(c.userData.offset.x, c.userData.offset.y, playerZ + c.userData.offset.z);
     }
 
-    // Distant city-lights floor far below: huge, lazily rotating, very weak parallax
-    // (0.6 of playerZ) so it lags way behind the track — that lag is the altitude cue.
-    this.farLights.position.set(0, this.farLightsY, playerZ * 0.6 + 200);
+    // Distant city-lights floor far below: huge, lazily rotating. TRACKS the player in
+    // z (the old 0.6 lag made it fall behind and vanish after ~3000m). Kept dim so it's
+    // a faint pool of lights in the black, not a bright purple slab.
+    this.farLights.position.set(0, this.farLightsY, playerZ);
     this.farLights.rotation.z = t * 0.004;
-    this.farLights.material.opacity = 0.6 * f;
+    this.farLights.material.opacity = 0.32 * f;
 
     // Mist decks slow-drift (texture pans) and breathe. Each deck pans at its own
     // speed for height parallax; positioned under the track and fading with dim.
