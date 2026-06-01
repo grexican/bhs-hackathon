@@ -9,21 +9,24 @@ function skylineTexture(hue) {
   c.width = 512; c.height = 256;
   const ctx = c.getContext("2d");
   ctx.clearRect(0, 0, 512, 256);
-  ctx.fillStyle = `hsl(${hue}, 45%, 16%)`;
+  // Near-black tower bodies (NOT hue-tinted) so the cycling material colour barely
+  // touches them — only the bright WHITE windows take the tint and glow the cycle
+  // colour. That keeps the colour ON the skyline (lit windows) instead of washing
+  // the whole scene a flat purple.
+  const body = "#0b0b13";
+  ctx.fillStyle = body;
   // A jagged silhouette of towers/peaks along the bottom.
   let x = 0;
   while (x < 512) {
     const w = 18 + Math.random() * 46;
     const h = 40 + Math.random() * 170;
     ctx.fillRect(x, 256 - h, w, h);
-    // a few lit windows for the city feel
-    if (Math.random() < 0.6) {
-      ctx.fillStyle = `hsla(${hue + 30}, 80%, 65%, 0.5)`;
-      for (let i = 0; i < 6; i++) {
-        if (Math.random() < 0.4) ctx.fillRect(x + 4 + (i % 3) * (w / 3), 256 - h + 8 + Math.floor(i / 3) * 14, 5, 7);
-      }
-      ctx.fillStyle = `hsl(${hue}, 45%, 16%)`;
+    // Bright white windows — these are what the cycling colour lights up.
+    ctx.fillStyle = "rgba(255,252,255,0.92)";
+    for (let i = 0; i < 8; i++) {
+      if (Math.random() < 0.5) ctx.fillRect(x + 4 + (i % 3) * (w / 3), 256 - h + 8 + Math.floor(i / 3) * 14, 5, 7);
     }
+    ctx.fillStyle = body;
     x += w + 4;
   }
   const tex = new THREE.CanvasTexture(c);
@@ -148,7 +151,7 @@ export class Background {
     // Drifting nebula sprites.
     this.clouds = [];
     const cloudMat = new THREE.SpriteMaterial({
-      map: cloudTexture(), transparent: true, depthWrite: false,
+      map: cloudTexture(), transparent: true, depthWrite: false, opacity: 0.35,
       blending: THREE.AdditiveBlending, fog: false,
     });
     this._cloudMat = cloudMat;
@@ -177,10 +180,10 @@ export class Background {
       return plane;
     };
     // left/right, far (dim) then near (brighter)
-    make(360, 150, 230, 0.5).rotation.y = Math.PI / 2;   // far, right
-    make(360, 150, 230, 0.5).rotation.y = -Math.PI / 2;  // far, left
-    make(220, 110, 265, 0.7).rotation.y = Math.PI / 2;   // near, right
-    make(220, 110, 265, 0.7).rotation.y = -Math.PI / 2;  // near, left
+    make(360, 230, 230, 0.5).rotation.y = Math.PI / 2;   // far, right
+    make(360, 230, 230, 0.5).rotation.y = -Math.PI / 2;  // far, left
+    make(220, 175, 265, 0.7).rotation.y = Math.PI / 2;   // near, right
+    make(220, 175, 265, 0.7).rotation.y = -Math.PI / 2;  // near, left
     this._sides = [1, -1, 1, -1];
 
     // --- "WAY up high, no ground" atmosphere (replaces the old floor grid's sense
@@ -284,7 +287,7 @@ export class Background {
     this.moon.rotation.y += 0.0006;
 
     // Nebula drifts and slowly cycles colour with the skyline.
-    this._cloudMat.color.setHSL((t * 0.01) % 1, 0.6, 0.6);
+    this._cloudMat.color.setHSL((t * 0.01) % 1, 0.5, 0.42); // dimmer so the sky glow doesn't wash everything
     for (const c of this.clouds) {
       c.position.set(c.userData.offset.x, c.userData.offset.y, playerZ + c.userData.offset.z);
     }
@@ -325,7 +328,7 @@ export class Background {
 
     this.ranges.forEach((p, i) => {
       const d = p.userData.dist;
-      p.position.set(this._sides[i] * d, 30, playerZ + 60);
+      p.position.set(this._sides[i] * d, 10, playerZ + 60); // lower + taller now, so towers root below the horizon (rise from the ground, not float)
       // Parallax with the player PLUS a slow constant drift, so the buildings
       // keep passing by (and new ones scroll in) even while you stand still.
       // The right-hand planes face the opposite way, so flip their scroll sign
