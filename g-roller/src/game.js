@@ -207,6 +207,7 @@ export class Game {
     this._darkLevel = 0; // lights back to full for a fresh run
     this.hemi.intensity = this._hemiBase;
     this.sun.intensity = this._sunBase;
+    this.background.dim = 0;
     this.field.blackout = false;
     this.canvas.classList.remove("is-tripping");
     this.scene.fog.color.setHex(BIOMES[0].fog);
@@ -414,6 +415,7 @@ export class Game {
     const m = 1 - this._darkLevel * (1 - CONFIG.blackoutDim);
     this.hemi.intensity = this._hemiBase * m;
     this.sun.intensity = this._sunBase * m;
+    this.background.dim = this._darkLevel; // fade the skyline/moon down too
     this.field.blackout = this._effects.blackout > 0;
 
     // Ease the actual speed toward the target. Easing INTO a slow-mo is extra

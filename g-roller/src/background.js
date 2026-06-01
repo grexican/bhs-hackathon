@@ -58,8 +58,12 @@ export class Background {
       new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.18, fog: false })
     );
     this.moon.add(halo);
+    this.moon.material.transparent = true; // so the blackout powerdown can fade it
+    this._halo = halo;
     this.moonOffset = new THREE.Vector3(70, 70, 240);
     this.group.add(this.moon);
+
+    this.dim = 0; // 0 = normal sky, 1 = blacked out (driven by the blackout powerdown)
 
     this._t = 0;       // colour-cycle time (always advances)
     this._driftT = 0;  // building-scroll time (only advances while playing)
@@ -109,6 +113,13 @@ export class Background {
     const t = this._t;
     const dT = this._driftT;
 
+    // Blackout powerdown fades the whole sky down too (not just the platforms), so
+    // it's a real blackout instead of dark ground under a bright skyline.
+    const f = 1 - this.dim * 0.85;
+    this.moon.material.opacity = f;
+    this._halo.material.opacity = 0.18 * f;
+    this._cloudMat.opacity = f;
+
     this.moon.position.set(this.moonOffset.x, this.moonOffset.y, playerZ + this.moonOffset.z);
     this.moon.rotation.y += 0.0006;
 
@@ -131,7 +142,7 @@ export class Background {
       // fading in and out, slightly out of phase for depth.
       const hue = (p.userData.hue + t * 0.013 + i * 0.13) % 1;
       p.material.color.setHSL(hue, 0.55, 0.6);
-      p.material.opacity = p.userData.baseOpacity * (0.78 + 0.22 * Math.sin(t * 0.22 + i));
+      p.material.opacity = p.userData.baseOpacity * (0.78 + 0.22 * Math.sin(t * 0.22 + i)) * f;
     });
   }
 }
