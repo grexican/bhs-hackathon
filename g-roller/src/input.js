@@ -32,11 +32,18 @@ export class Input {
       case "KeyD": this._right = down; break;
       case "ArrowUp": this._up = down; e.preventDefault(); break;   // speed up
       case "ArrowDown": this._down = down; e.preventDefault(); break; // slow down
+      // Jump has several bindings so you can find one that doesn't GHOST with the
+      // arrow keys (Space + arrow cluster collides on many keyboards). Numpad keys
+      // sit on a separate matrix, so they're the most reliable right-hand option.
       case "Space":
       case "KeyW":
+      case "Enter":
+      case "NumpadEnter":
+      case "Numpad0":
+      case "Slash":
         if (down && !this.jumpHeld) { this.jumpPresses++; this.startPresses++; }
         this.jumpHeld = down;
-        e.preventDefault(); // stop Space from scrolling the page
+        e.preventDefault(); // stop Space/Slash/Enter from scrolling or triggering browser actions
         break;
       default: return;
     }
