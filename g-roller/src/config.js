@@ -202,13 +202,34 @@ export const CONFIG = {
   starterWidth: 18,
 };
 
-// Themed zones the run passes through. Each retints the fog + sun and restricts
-// the platform texture set, so the world visibly changes as you go deeper.
+// Themed zones the run passes through. Each retints the fog + sun, restricts the
+// platform texture set, AND drives the backdrop mood: a signature window-glow tint
+// + a hue the skyline cycle CENTERS on (so each zone reads as its own colour
+// family while still gently shifting), plus moon + nebula tints. All in the same
+// "neon dusk" system from DESIGN.md — distinct moods, one cohesive world.
+//   skylineHue  — 0..1 hue the per-window glow biases toward (skyline stays in this family)
+//   skylineSpread — how far around skylineHue the gentle cycle is allowed to wander
+//   skyline     — bright window-glow colour (the accent the towers light up)
+//   moon        — moon body tint
+//   nebula      — nebula/cloud tint
+//   bloom       — extra bloom strength while in this zone (a signature flare level)
 export const BIOMES = [
-  { name: "Neon City",    until: 600,      fog: 0x141a33, sun: 0xfff2d6, textures: ["concrete", "brick", "tile"] },
-  { name: "Sunset Dunes", until: 1300,     fog: 0x3a1d2a, sun: 0xffb066, textures: ["wood", "brick", "pebble"] },
-  { name: "Ice Caverns",  until: 2200,     fog: 0x123244, sun: 0xcfeaff, textures: ["marble", "tile", "concrete"] },
-  { name: "The Void",     until: Infinity, fog: 0x0a0614, sun: 0xb06bff, textures: ["pebble", "marble", "concrete"] },
+  // Neon City — cool blue dusk, teal + magenta window glow (the baseline city).
+  { name: "Neon City", until: 600, fog: 0x141a33, sun: 0xfff2d6,
+    textures: ["concrete", "brick", "tile"],
+    skylineHue: 0.83, skylineSpread: 0.14, skyline: 0xff4bd6, moon: 0xbfe3ff, nebula: 0x6a7bff, bloom: 0.0 },
+  // Sunset Dunes — warm rose-amber haze, golden windows, an amber moon.
+  { name: "Sunset Dunes", until: 1300, fog: 0x3a1d2a, sun: 0xffb066,
+    textures: ["wood", "brick", "pebble"],
+    skylineHue: 0.06, skylineSpread: 0.06, skyline: 0xffb04a, moon: 0xffcf9a, nebula: 0xff6a8a, bloom: 0.08 },
+  // Ice Caverns — cold cyan + white, frozen window light, a pale-blue moon.
+  { name: "Ice Caverns", until: 2200, fog: 0x123244, sun: 0xcfeaff,
+    textures: ["marble", "tile", "concrete"],
+    skylineHue: 0.52, skylineSpread: 0.08, skyline: 0x9af0ff, moon: 0xeaffff, nebula: 0x6ad6ff, bloom: 0.12 },
+  // The Void — deep violet + blue, eerie violet glow, dim flare.
+  { name: "The Void", until: Infinity, fog: 0x0a0614, sun: 0xb06bff,
+    textures: ["pebble", "marble", "concrete"],
+    skylineHue: 0.72, skylineSpread: 0.1, skyline: 0xa05bff, moon: 0xcaa6ff, nebula: 0x7a3bff, bloom: 0.18 },
 ];
 
 export function biomeAt(z) {

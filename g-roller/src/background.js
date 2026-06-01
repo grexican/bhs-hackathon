@@ -154,6 +154,16 @@ export class Background {
     this._t = 0; // colour-cycle time (always advances)
     this._driftT = 0; // building-scroll time (only advances while playing)
 
+    // --- Per-biome mood. setBiome(...) parks TARGET tints here; update() eases the
+    // live colours toward them every frame so crossing a zone is a smooth ~2s mood
+    // shift, not a snap. The skyline hue cycle CENTERS on _hueTarget (±_spreadTarget)
+    // so each zone reads as one colour family while still gently breathing.
+    this._hue = 0.72; this._hueTarget = 0.72;          // skyline hue centre
+    this._spread = 0.12; this._spreadTarget = 0.12;    // how far the cycle wanders
+    this._moonTint = new THREE.Color(0xffe9b0); this._moonTarget = new THREE.Color(0xffe9b0);
+    this._haloTint = new THREE.Color(0xffd27a); this._haloTarget = new THREE.Color(0xffd27a);
+    this._nebTint = new THREE.Color(0x9678ff); this._nebTarget = new THREE.Color(0x9678ff);
+
     // Drifting nebula sprites.
     this.clouds = [];
     const cloudMat = new THREE.SpriteMaterial({
@@ -325,11 +335,37 @@ export class Background {
     for (const m of this.mistDecks) m.visible = false;
   }
 
+  // Drive the backdrop mood from the active biome. The game calls this once on a
+  // zone change with that biome's palette; update() then EASES toward these targets
+  // (no snap). All tints are stored as THREE.Color targets / scalar hue targets.
+  setBiome({ skylineHue, skylineSpread, moon, nebula }) {
+    if (skylineHue != null) this._hueTarget = skylineHue;
+    if (skylineSpread != null) this._spreadTarget = skylineSpread;
+    if (moon != null) {
+      this._moonTarget.setHex(moon);
+      // Halo = a softer, slightly warmer echo of the moon tint.
+      this._haloTarget.copy(this._moonTarget).multiplyScalar(0.92).offsetHSL(0.0, 0.05, -0.04);
+    }
+    if (nebula != null) this._nebTarget.setHex(nebula);
+  }
+
   update(playerZ, dt = 0, playing = false) {
     this._t += dt;
     if (playing) this._driftT += dt; // city only moves while you're actually rolling
     const t = this._t;
     const dT = this._driftT;
+
+    // Ease the biome mood toward its targets (~2s settle). Frame-rate independent.
+    const k = dt > 0 ? 1 - Math.exp(-dt / 0.9) : 0;
+    // Hue is on a wheel — ease along the SHORTEST way around so blue→amber etc.
+    // takes the near path instead of spinning all the way round.
+    let dHue = this._hueTarget - this._hue;
+    if (dHue > 0.5) dHue -= 1; else if (dHue < -0.5) dHue += 1;
+    this._hue = (this._hue + dHue * k + 1) % 1;
+    this._spread += (this._spreadTarget - this._spread) * k;
+    this._moonTint.lerp(this._moonTarget, k);
+    this._haloTint.lerp(this._haloTarget, k);
+    this._nebTint.lerp(this._nebTarget, k);
 
     // Blackout powerdown fades the whole sky down too (not just the platforms), so
     // it's a real blackout instead of dark ground under a bright skyline.
@@ -340,9 +376,13 @@ export class Background {
 
     this.moon.position.set(this.moonOffset.x, this.moonOffset.y, playerZ + this.moonOffset.z);
     this.moon.rotation.y += 0.0006;
+    // Moon body + halo carry the biome's moon tint (eased above).
+    this.moon.material.color.copy(this._moonTint);
+    this._halo.material.color.copy(this._haloTint);
 
-    // Nebula drifts and slowly cycles colour with the skyline.
-    this._cloudMat.color.setHSL((t * 0.01) % 1, 0.5, 0.42); // dimmer so the sky glow doesn't wash everything
+    // Nebula drifts and gently breathes around the biome's nebula tint, instead of
+    // free-cycling through the whole hue wheel — so it stays in the zone's family.
+    this._cloudMat.color.copy(this._nebTint).offsetHSL(Math.sin(t * 0.05) * 0.03, 0, 0);
     for (const c of this.clouds) {
       c.position.set(c.userData.offset.x, c.userData.offset.y, playerZ + c.userData.offset.z);
     }
@@ -390,10 +430,12 @@ export class Background {
       // to keep the two sides consistent; the leading sign sets the direction.
       const flip = this._sides[i] === 1 ? -1 : 1;
       p.userData.tex.offset.x = flip * (playerZ * p.userData.parallax * 0.28 + dT * 0.004);
-      // Super-slow chill rainbow: each layer eases through the hue wheel, gently
-      // fading in and out, slightly out of phase for depth.
-      const hue = (p.userData.hue + t * 0.013 + i * 0.13) % 1;
-      p.material.color.setHSL(hue, 0.55, 0.6);
+      // Window glow stays in the BIOME's hue family: it gently breathes around the
+      // eased biome hue centre (±spread), each layer slightly out of phase for depth,
+      // instead of rainbowing through every colour. So the backdrop reads as the
+      // active zone's colour, still alive and shifting but never fighting it.
+      const hue = (this._hue + Math.sin(t * 0.13 + i * 1.7) * this._spread + 1) % 1;
+      p.material.color.setHSL(hue, 0.62, 0.6);
       p.material.opacity = p.userData.baseOpacity * (0.78 + 0.22 * Math.sin(t * 0.22 + i)) * f;
     });
   }

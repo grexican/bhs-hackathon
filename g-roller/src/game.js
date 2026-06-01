@@ -48,6 +48,8 @@ export class Game {
     this._comboTimer = 0;
     this._freeze = 0;      // hit-stop timer
     this._biome = 0;
+    this._biomeBloom = 0;   // eased extra bloom for the active biome's signature flare level
+    this._biomeFlash = 0;   // brief bloom punch on a zone change, decays to 0
     this._reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     this._lean = 0; // smoothed steer for a soft camera lean
     this._throttleSmooth = 0; // smoothed Up/Down throttle for the speed camera response
@@ -243,6 +245,10 @@ export class Game {
     this.canvas.classList.remove("is-tripping");
     this.scene.fog.color.setHex(BIOMES[0].fog);
     this.sun.color.setHex(BIOMES[0].sun);
+    // Park the backdrop on the starting biome's mood (no flash for the fresh start).
+    this._biomeBloom = BIOMES[0].bloom || 0;
+    this._biomeFlash = 0;
+    this.background.setBiome(BIOMES[0]);
     this.field.reset();
     this.player.reset();
     this._followCamera(true);
@@ -574,7 +580,9 @@ export class Game {
     this._fogLensEl.style.opacity = this._fogLevel;
     const blur = (this._fogLevel * 3.5).toFixed(2);
     this._fogLensEl.style.backdropFilter = this._fogLensEl.style.webkitBackdropFilter = `blur(${blur}px)`;
-    this.bloom.strength = this._bloomBase + this._fogLevel * 0.7;
+    // Bloom = base + fog crank + the active biome's signature flare + a brief
+    // entry-flash punch when you cross into a new zone.
+    this.bloom.strength = this._bloomBase + this._fogLevel * 0.7 + this._biomeBloom + this._biomeFlash;
 
     // Rain powerdown: heavy windshield rain. Fade the lens overlay in/out with the
     // effect + ramp a blur (wet, blurred vision — cousin of fog). The streaks and
@@ -631,7 +639,7 @@ export class Game {
     if (this._comboTimer >= CONFIG.comboDecay && this.multiplier > 1) {
       this.multiplier -= 1; this._comboTimer = 0;
     }
-    this._updateBiome(this.player.position.z);
+    this._updateBiome(this.player.position.z, dt);
 
     const ctx = {
       forwardSpeed: speed,
@@ -770,16 +778,26 @@ export class Game {
     this.sound.combo(this.multiplier);
   }
 
-  // Crossfade fog + sun and swap the texture palette as you enter a new biome.
-  _updateBiome(z) {
+  // Cross into a new biome: retint fog + sun AND drive the whole backdrop mood
+  // (skyline window-glow, moon, nebula) to the zone's palette. Everything eases, so
+  // a boundary is a smooth ~2s mood shift — plus a brief bloom flash to mark it.
+  _updateBiome(z, dt = 0) {
     const i = biomeAt(z);
     if (i !== this._biome) {
       this._biome = i;
-      this._toast(`Entering ${BIOMES[i].name}`, "#9fe0ff");
+      const b = BIOMES[i];
+      this._toast(`Entering ${b.name}`, "#9fe0ff");
+      this.background.setBiome(b);   // backdrop tints ease toward this zone
+      this._biomeFlash = 0.5;        // momentary bloom punch on entry
     }
     const b = BIOMES[i];
-    this.scene.fog.color.lerp(new THREE.Color(b.fog), 0.02);
-    this.sun.color.lerp(new THREE.Color(b.sun), 0.02);
+    // Stronger lerp than before so the fog/sun shift is actually FELT (a ~2s mood
+    // change, matched to the backdrop ease) rather than a barely-there drift.
+    this.scene.fog.color.lerp(new THREE.Color(b.fog), 0.04);
+    this.sun.color.lerp(new THREE.Color(b.sun), 0.04);
+    // Ease the biome's signature bloom level; decay the entry flash.
+    this._biomeBloom += ((b.bloom || 0) - this._biomeBloom) * (dt > 0 ? 1 - Math.exp(-dt / 0.9) : 0);
+    if (this._biomeFlash > 0) this._biomeFlash = Math.max(0, this._biomeFlash - dt * 1.2);
   }
 
   _applyPowerup(u) {
