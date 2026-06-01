@@ -627,9 +627,12 @@ export class Game {
     const darkTarget = this._effects.blackout > 0 ? 1 : 0;
     this._darkLevel += (darkTarget - this._darkLevel) * (1 - Math.exp(-dt / 0.45));
     const m = 1 - this._darkLevel * (1 - CONFIG.blackoutDim);
-    this.hemi.intensity = this._hemiBase * m;
-    this.sun.intensity = this._sunBase * m;
+    // Audiosurf: flash the scene lights brighter on each beat — the "ground" pump.
+    const beatLight = this._audiosurf ? this._beatPulse * CONFIG.audiosurfLightKick : 0;
+    this.hemi.intensity = this._hemiBase * (m + beatLight);
+    this.sun.intensity = this._sunBase * (m + beatLight);
     this.background.dim = this._darkLevel; // fade the skyline/moon down too
+    this.background.beat = this._audiosurf ? this._beatPulse : 0; // skyline windows flash on the beat
     this.field.blackout = this._effects.blackout > 0;
     this.field.setEmissiveScale(m); // dim the self-lit plates (boost green / bouncy red) in step with the lights — otherwise they ignore the blackout
     // Night-driving darkness: a dark film right on the lens. The scene stays faintly
@@ -669,7 +672,10 @@ export class Game {
     this._rainLevel += (rainTarget - this._rainLevel) * (1 - Math.exp(-dt / 0.5));
     if (!this._rainLensEl) this._rainLensEl = document.getElementById("rain-lens");
     this._rainLensEl.style.opacity = this._rainLevel;
-    this._rainLensEl.style.backdropFilter = this._rainLensEl.style.webkitBackdropFilter = `blur(${(this._rainLevel * 2.6).toFixed(2)}px)`;
+    // Stronger blur + a slight warp so heavy rain genuinely DISTORTS the view (a real
+    // "bad" powerdown), not just a faint wash. (Per-drop lensing is on .raindrop in CSS.)
+    this._rainLensEl.style.backdropFilter = this._rainLensEl.style.webkitBackdropFilter =
+      `blur(${(this._rainLevel * 5).toFixed(2)}px) contrast(${(1 + this._rainLevel * 0.12).toFixed(3)})`;
     // Spawn fat drops at RANDOM positions/sizes/timing while it rains — each is a div
     // that slides down + fades then self-removes (no synced loop = real randomness).
     if (this._rainLevel > 0.25) {

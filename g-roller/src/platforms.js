@@ -761,14 +761,18 @@ export class PlatformField {
     const ry = ramp(CONFIG.cloudRadiusY, sd);
     for (let i = 0; i < n; i++) {
       const x = clamp(cx + rand(-rx, rx), -CONFIG.bandX[1] - 10, CONFIG.bandX[1] + 10);
-      const y = clamp(cy + rand(-ry, ry), -32, 58);
+      let y = clamp(cy + rand(-ry, ry), -32, 58);
       const z = cz + rand(-CONFIG.cloudZSpread * 0.55, CONFIG.cloudZSpread);
       const g = this._randGeo();
       const round = g.geoType !== "box";
       const w = rand(ramp(CONFIG.padWidthLo, hd) * 0.7, ramp(CONFIG.padWidthHi, hd));
       let len = rand(8, ramp(CONFIG.padLenHi, hd));
       if (round) len = Math.min(len, rand(8, 14));
-      if (this._overlaps(x, y, z, w / 2, g.hy, len / 2)) continue;
+      // NUDGE the candidate UP out of any static overlap (movers are exempt — they're
+      // allowed to slide over things) instead of dropping it or letting it intersect.
+      let tries = 0;
+      while (this._overlaps(x, y, z, w / 2, g.hy, len / 2) && tries < 7) { y += g.hy * 2 + 2.5; tries++; }
+      if (this._overlaps(x, y, z, w / 2, g.hy, len / 2)) continue; // couldn't clear it → skip
 
       // Branch runes: navigation choices off the main path involve runes too. Rolled
       // FIRST so it wins over bouncy; onPath=false → harsh powerdowns (blackout/splat)

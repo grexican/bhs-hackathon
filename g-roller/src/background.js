@@ -435,8 +435,9 @@ export class Background {
       // instead of rainbowing through every colour. So the backdrop reads as the
       // active zone's colour, still alive and shifting but never fighting it.
       const hue = (this._hue + Math.sin(t * 0.13 + i * 1.7) * this._spread + 1) % 1;
-      p.material.color.setHSL(hue, 0.62, 0.6);
-      p.material.opacity = p.userData.baseOpacity * (0.78 + 0.22 * Math.sin(t * 0.22 + i)) * f;
+      const beat = this.beat || 0; // audiosurf: windows flash brighter on each beat
+      p.material.color.setHSL(hue, 0.62, Math.min(0.95, 0.6 + beat * 0.32));
+      p.material.opacity = p.userData.baseOpacity * (0.78 + 0.22 * Math.sin(t * 0.22 + i)) * (1 + beat * 0.6) * f;
     });
   }
 }

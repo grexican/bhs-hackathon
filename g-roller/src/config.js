@@ -212,8 +212,10 @@ export const CONFIG = {
   // with full drums — the other three are ambient and wouldn't feel synced. We
   // force #5 (the driving one) when the mode turns on.
   audiosurfTrack: 4,        // index into TRACKS — "Pulse Runner" (the most beat-forward)
-  audiosurfBloomKick: 0.55, // bloom strength added on each beat (folds into the bloom line)
-  audiosurfFovKick: 4,      // degrees of FOV punch on each beat (quick widen, eases back)
+  audiosurfBloomKick: 0.7,  // bloom/sun flash added on each beat (a touch stronger now)
+  audiosurfFovKick: 1.0,    // degrees of FOV punch on each beat — kept SMALL (camera movement was distracting)
+  audiosurfLightKick: 0.4,  // fraction the scene lights brighten on each beat — the GROUND flash pump
+  audiosurfSkyKick: 0.8,    // how much the skyline windows flash brighter on each beat
   audiosurfDecay: 7,        // how fast the pulse decays per second (higher = punchier/snappier)
   audiosurfReducedScale: 0.4, // soften the whole pulse this much when reduced-motion is on
 };
