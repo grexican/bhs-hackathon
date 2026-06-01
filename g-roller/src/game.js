@@ -110,6 +110,25 @@ export class Game {
       }
     });
 
+    // Cheat entry for MOBILE (no arrow keys): secretly tap the title 10 times on the
+    // start / game-over screen (also a click on desktop). No cursor, no toast, no
+    // hint — you have to know it's there. The count resets if you pause too long.
+    const title = document.getElementById("overlay-title");
+    if (title) {
+      title.style.pointerEvents = "auto"; // the HUD is click-through by default; taps must register
+      this._titleTaps = 0;
+      title.addEventListener("click", () => {
+        if (this.state === "playing") return; // only on the start / game-over overlay
+        this._titleTaps++;
+        clearTimeout(this._titleTapTimer);
+        this._titleTapTimer = setTimeout(() => { this._titleTaps = 0; }, 1500);
+        if (this._titleTaps >= 10) {
+          this._titleTaps = 0; clearTimeout(this._titleTapTimer);
+          this._toggleCheat();
+        }
+      });
+    }
+
     window.addEventListener("resize", () => this._onResize());
     this._clock = new THREE.Clock();
     this._loop = this._loop.bind(this);
@@ -515,7 +534,7 @@ export class Game {
       b.style.background = `radial-gradient(circle at 40% 35%, ${colors[i % colors.length]} 0%, ${colors[i % colors.length]} 55%, transparent 72%)`;
       b.style.setProperty("--rot", `${Math.random() * 360}deg`);
       layer.appendChild(b);
-      setTimeout(() => b.remove(), 4200);
+      setTimeout(() => b.remove(), 17000); // gunk clings to the screen a long time now (~17s)
     }
   }
 

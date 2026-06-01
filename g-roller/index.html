@@ -51,7 +51,7 @@
         position: absolute; transform: translate(-50%, -50%) rotate(var(--rot)) scale(0.2);
         border-radius: 46% 54% 43% 57% / 52% 44% 56% 48%;
         opacity: 0; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5));
-        animation: splat-in 0.18s ease-out forwards, splat-drip 4.2s ease-in 0.18s forwards;
+        animation: splat-in 0.18s ease-out forwards, splat-drip 17s ease-in 0.18s forwards;
       }
       @keyframes splat-in {
         from { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rot)) scale(0.2); }
@@ -265,7 +265,7 @@
       <div class="toast" id="toast"></div>
 
       <div class="hud__center" id="overlay">
-        <div class="hud__title">G&#8209;ROLLER</div>
+        <div class="hud__title" id="overlay-title">G&#8209;ROLLER</div>
         <div class="hud__subtitle" id="overlay-subtitle">Roll the gauntlet of floating blocks</div>
         <div class="hud__hint" id="overlay-hint">Press SPACE to roll</div>
         <div class="hud__controls hud__controls--keys">

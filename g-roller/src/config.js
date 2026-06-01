@@ -103,32 +103,32 @@ export const CONFIG = {
   // against the real platform meshes (exact surface for flat/ramp/curved), and
   // the ramp mesh rotation sign was corrected. Starting gentle.
   rampChance: [0.22, 0.32],  // tilted boards you roll up/down (and launch off the top) — common from the start
-  rampLenBoost: [1.7, 1.15], // ramps run longer than a normal pad (esp. early) — relaxed climbs, not panic jumps
+  rampLenBoost: [1.5, 1.0], // ramps run longer than a normal pad (esp. early) — relaxed climbs, not panic jumps
   rampSlope: [0.22, 0.42],   // rise/run (tan of the ramp angle)
   rampLaunch: 0.7,           // fraction of climb speed kept as a hop off an up-ramp
-  curveChance: [0.0, 0.16],  // boards curved across their width
-  curveAmount: 0.055,        // parabola steepness (concave funnels in, convex rolls off)
-  curveForce: 17,            // how hard a curved board pushes you sideways
+  curveChance: [0.05, 0.25],  // boards curved across their width
+  curveAmount: 0.01,        // parabola steepness (concave funnels in, convex rolls off)
+  curveForce: 25,            // how hard a curved board pushes you sideways
 
   // Powerups / powerdowns
   powerupChance: 0.3,     // chance a path platform spawns a pickup (bumped — the wide sprawl has room for more)
-  magnetDuration: 12,
+  magnetDuration: 15,
   magnetRadius: 32,       // gems within this distance get sucked in
   magnetPull: 22,         // how hard the magnet yanks gems (higher = they catch up)
-  slowDuration: 9,
+  slowDuration: 10,
   slowFactor: 0.72,       // forward speed multiplier while slowed (gentler than before)
   slowEase: 2.4,          // seconds to ease INTO the slow (so it's not sudden)
-  reverseDuration: 8,
+  reverseDuration: 10,
   surgeDuration: 7,
   surgeAmount: 16,        // extra forward speed while surged (a powerdown)
   invulnTime: 1.2,        // brief mercy window after a shielded hit
   doubleJumpDuration: 16, // grants one mid-air jump
   flightDuration: 12,     // hold jump to soar
   flightLift: 19,         // upward speed while flying
-  morphDuration: 11,      // ball deforms and steering goes wobbly
-  morphWobble: 9,         // strength of the steering wobble while morphed (cranked — hard to control)
-  tripDuration: 13,       // psychedelic powerdown: colors go wild, hard to see
-  lowgravDuration: 18,    // floaty moon-gravity — jumps and bounces go huge
+  morphDuration: 20,      // ball deforms and steering goes wobbly
+  morphWobble: 12,         // strength of the steering wobble while morphed (cranked — hard to control)
+  tripDuration: 20,       // psychedelic powerdown: colors go wild (more of a vibe than a real handicap)
+  lowgravDuration: 20,    // floaty moon-gravity — jumps and bounces go huge
   lowgravScale: 0.45,     // gravity multiplier while low-grav is active
   flubberDuration: 20,    // powerdown: every landing auto-bounces you (steer in the air!)
   flubberBounce: 1.3,     // bounce velocity = jumpSpeed * this (a bit higher than a jump)
