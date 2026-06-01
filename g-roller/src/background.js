@@ -171,7 +171,7 @@ export class Background {
     const make = (dist, height, hue, opacity) => {
       const tex = skylineTexture(hue);
       const mat = new THREE.MeshBasicMaterial({
-        map: tex, transparent: true, opacity, fog: false, side: THREE.DoubleSide, depthWrite: false,
+        map: tex, transparent: true, opacity, fog: true, side: THREE.DoubleSide, depthWrite: false,
       });
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(1200, height), mat);
       plane.userData = { dist, tex, parallax: 1 / dist, baseOpacity: opacity, hue: hue / 360 };
@@ -183,10 +183,10 @@ export class Background {
     // Wider apart (more open / vast), and each side TOED IN toward +z (the distance)
     // so the walls converge into a vanishing-point funnel that "closes in" far away.
     const toe = 0.13; // ~7.5° inward lean of the far end
-    make(470, 355, 230, 0.5).rotation.y = Math.PI / 2 - toe;   // far, right
-    make(470, 355, 230, 0.5).rotation.y = -Math.PI / 2 + toe;  // far, left
-    make(310, 295, 265, 0.7).rotation.y = Math.PI / 2 - toe;   // near, right
-    make(310, 295, 265, 0.7).rotation.y = -Math.PI / 2 + toe;  // near, left
+    make(540, 355, 230, 0.5).rotation.y = Math.PI / 2 - toe;   // far, right
+    make(540, 355, 230, 0.5).rotation.y = -Math.PI / 2 + toe;  // far, left
+    make(380, 295, 265, 0.7).rotation.y = Math.PI / 2 - toe;   // near, right
+    make(380, 295, 265, 0.7).rotation.y = -Math.PI / 2 + toe;  // near, left
     this._sides = [1, -1, 1, -1];
 
     // --- "WAY up high, no ground" atmosphere (replaces the old floor grid's sense

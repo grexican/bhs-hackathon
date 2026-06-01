@@ -66,7 +66,7 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
       // sharp black pinstripes, plus a thin checkered band — clearly NOT fire.
       // In alpha mode the SOLID livery (stripes + pinstripes + checker band) is
       // white (opaque) and the white "field" is left black (transparent glass).
-      if (alpha) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S); }
+      if (alpha) { ctx.fillStyle = "#5a5a5a"; ctx.fillRect(0, 0, S, S); } // ~0.35 body so it stays visible over bright tiles
       else { ctx.fillStyle = skin.light; ctx.fillRect(0, 0, S, S); }
       // Two vertical red bands (tile cleanly: centered + wrapped at the seam halves).
       const stripeW = S * 0.16, gap = S * 0.06;
@@ -217,7 +217,7 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
       const emissive = mode === "emissive";
       const rnd = mulberry32(13);
       if (alpha) {
-        ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S);
+        ctx.fillStyle = "#3a3a3a"; ctx.fillRect(0, 0, S, S); // charred crust keeps a small body (~0.23) so magma isn't see-through over tiles
       } else if (emissive) {
         // Emissive map: everything that isn't lava emits nothing → pure black crust.
         ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S);
@@ -325,7 +325,9 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
       // is see-through glass. Color pass paints a pink field + shiny beads; alpha
       // pass paints those same dots white on black so only the beads are opaque.
       const rnd = mulberry32(21);
-      if (alpha) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S); }
+      // Field alpha ~0.4 (grey, not black) so the ball keeps a visible pink BODY over
+      // bright tiles instead of going fully see-through and vanishing into the board.
+      if (alpha) { ctx.fillStyle = "#666"; ctx.fillRect(0, 0, S, S); }
       else {
         const bg = ctx.createLinearGradient(0, 0, 0, S);
         bg.addColorStop(0, skin.light); bg.addColorStop(1, skin.dark);
@@ -526,7 +528,7 @@ export class Player {
       // (blackout still adds its cool ember on top in updateVisuals) — but Magma is.
       mat.alphaMap = ballTexture(skin, "alpha");
       mat.transparent = true;
-      mat.transmission = 0.9;
+      mat.transmission = 0.5; // less see-through, so glass-zone balls stay visible over bright tiles (not just glowing over the void)
       mat.thickness = this.radius * 1.4;
       mat.ior = 1.45;
       mat.opacity = 1;
