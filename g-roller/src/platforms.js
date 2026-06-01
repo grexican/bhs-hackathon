@@ -372,6 +372,7 @@ export class PlatformField {
     const type = this._pickPowerupType(d);
     if (!type) return; // every type disabled in the cheat test menu → nothing spawns
     const def = POWERUP_DEFS[type];
+    const good = def.good; // the picked type's own good/bad flag — used by the HUD + collect FX. Was a stray undefined ref since the _pickPowerupType refactor, which silently threw before the powerup could be tracked.
 
     // Everything spawns GROUNDED on the platform now (no floating pickups) — right
     // in the roll lane at ball-center height. You collect or dodge by where you
@@ -715,11 +716,10 @@ export class PlatformField {
     return min === Infinity ? -Infinity : min;
   }
 
-  // Pickups sit grounded now, but jumpSpeed 50 + pogo keep you airborne almost the
-  // whole time, way above any tight collection radius — that's the "passing right
-  // through them" bug. So collect on LANE proximity (x/z) within a TALL vertical
-  // column (covers a full jump arc): if you pass over a grounded pickup, you get it,
-  // whether you're rolling or 30 units up mid-hop. `height` is the tunable knob.
+  // Grounded pickups collect on TOUCH: a modest volume around the ball, not a tall
+  // column. `lane` is the x/z reach, `height` the vertical reach. Kept short on
+  // purpose so a real jump lifts you clear of a powerdown (you dodge by jumping or
+  // steering) while rolling over — or a small hop — still grabs it.
   _reach(pos, playerPos, lane, height) {
     const dx = pos.x - playerPos.x, dz = pos.z - playerPos.z;
     return dx * dx + dz * dz < lane * lane && Math.abs(pos.y - playerPos.y) < height;
@@ -729,7 +729,7 @@ export class PlatformField {
     const grabbed = [];
     for (const g of this.gems) {
       if (g.collected) continue;
-      if (this._reach(g.mesh.position, playerPos, radius + 2, radius + 34)) {
+      if (this._reach(g.mesh.position, playerPos, radius + 2, radius + 2)) {
         g.collected = true; g.mesh.visible = false; grabbed.push(g.mesh.position.clone());
       }
     }
@@ -740,7 +740,7 @@ export class PlatformField {
     const grabbed = [];
     for (const u of this.powerups) {
       if (u.collected) continue;
-      if (this._reach(u.mesh.position, playerPos, radius + 2.2, radius + 34)) {
+      if (this._reach(u.mesh.position, playerPos, radius + 2, radius + 2)) {
         u.collected = true; u.mesh.visible = false;
         grabbed.push({ type: u.type, good: u.good, pos: u.mesh.position.clone() });
       }
