@@ -1017,7 +1017,10 @@ export class Game {
     // Ease the biome's signature bloom level; decay the entry flash + FOV kick.
     this._biomeBloom += ((b.bloom || 0) - this._biomeBloom) * (dt > 0 ? 1 - Math.exp(-dt / 0.9) : 0);
     if (this._biomeFlash > 0) this._biomeFlash = Math.max(0, this._biomeFlash - dt * 1.8); // snappier punch than before
-    if (this._fovKick > 0) this._fovKick = Math.max(0, this._fovKick - dt * 18);           // ~0.4s back to normal
+    if (this._fovKick !== 0) { // ease the kick back to 0 from EITHER side (some zones narrow, most widen)
+      const dec = dt * 18;
+      this._fovKick = this._fovKick > 0 ? Math.max(0, this._fovKick - dec) : Math.min(0, this._fovKick + dec);
+    }
   }
 
   // The gateway "moment" when you cross into a new zone. Four beats fire together so
@@ -1056,7 +1059,7 @@ export class Game {
     // 3) Scene punch: a strong-but-brief bloom flare + a quick FOV widen that eases
     //    back. Reduced-motion players keep a gentler flare and skip the camera move.
     this._biomeFlash = this._reducedMotion ? 0.35 : 0.8;
-    if (!this._reducedMotion) this._fovKick = 7;
+    if (!this._reducedMotion) this._fovKick = b.fovKick ?? 7; // per-zone camera gesture (Void narrows; default widens)
 
     // 4) The audio half — an airy whoosh (no chime; it clashed with the music).
     this.sound.portal();

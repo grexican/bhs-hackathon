@@ -433,13 +433,13 @@ export const BIOMES = [
     skylineSat: 0.9,
     skyline: 0xffb04a,
     moon: 0xffcf9a,
-    nebula: 0xff6a8a,
+    nebula: 0xff9a5a, // coral-amber (was rose-pink) — keeps the whole sky in the warm family
     bloom: 0.08,
     accent: 0xff8a2a,
     tagline: "into the warm horizon",
     skylineStyle: "mesas",
     skylineVar: { heightScale: 0.85 },
-    skin: { pattern: "planks", neon: 0xff8a2a, neon2: 0xffd24a, panel: 0x231006 },
+    skin: { pattern: "planks", neon: 0xffa838, neon2: 0xffd24a, panel: 0x231006 }, // gold, nudged off the orange flipper pad
     boardMat: { roughness: 0.92, metalness: 0.02, emissive: 0x2a1000, emissiveIntensity: 0.14 },
     genBias: { tunnel: 0.5, ramp: 1.8, curve: 0.8, yaw: 1.4 },
   },
@@ -455,7 +455,7 @@ export const BIOMES = [
     moon: 0xeaffff,
     nebula: 0x6ad6ff,
     bloom: 0.12,
-    accent: 0xbdf2ff,
+    accent: 0x7fe6ff, // a touch more saturated than the pale skyline so the entry flash POPS
     tagline: "the frozen deep",
     skylineStyle: "spires",
     skylineVar: { heightScale: 1.15 },
@@ -477,9 +477,10 @@ export const BIOMES = [
     bloom: 0.2,
     accent: 0xb060ff,
     tagline: "beyond the edge",
+    fovKick: -5, // the camera NARROWS on entry (claustrophobic squeeze) instead of the usual widen
     skylineStyle: "monoliths",
     skylineVar: { density: 0.75, heightScale: 1.15 }, // sparse, tall slabs
-    skin: { pattern: "pebbles", neon: 0xb060ff, neon2: 0xff5fd0, panel: 0x0a0614 }, // scattered glowing void-rubble
+    skin: { pattern: "pebbles", neon: 0xb060ff, neon2: 0x7a3bff, panel: 0x0a0614 }, // glowing void-rubble; rim is deep violet (was hot pink — too close to the bouncy pads + off-theme)
     boardMat: { roughness: 0.5, metalness: 0.2, emissive: 0x3a1f7a, emissiveIntensity: 0.42 },
     genBias: { tunnel: 1.4, ramp: 0.7, curve: 1.2, yaw: 1.6 },
   },
@@ -522,7 +523,11 @@ export const BIOMES = [
     tagline: "the velvet hour",
     skylineStyle: "mesas",
     skylineVar: { heightScale: 1.05 },
-    skin: { pattern: "brick", neon: 0xff4fa0, neon2: 0xffa0d6, panel: 0x1c0816 },
+    // Ground neon pushed to a true MAGENTA (+ a warm peach accent) so the deck never
+    // shares the rose-PINK of the bouncy pads (0xff5f9e) — readability fix. The sky/fog
+    // stay rose, so the zone still reads "velvet". Magenta (~hue .87) also sits clear of
+    // the Void's violet (~.76), keeping the two distinct.
+    skin: { pattern: "brick", neon: 0xe24fd0, neon2: 0xffb070, panel: 0x1c0816 },
     boardMat: { roughness: 0.4, metalness: 0.18, emissive: 0x2e0a22, emissiveIntensity: 0.2 },
     genBias: { tunnel: 0.8, ramp: 1.3, curve: 1.4, yaw: 1.0 },
   },
