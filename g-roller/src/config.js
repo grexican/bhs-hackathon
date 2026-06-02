@@ -378,7 +378,11 @@ export const CONFIG = {
 // an announced arrival. Each zone drives every surface at once (ground skin, side
 // buildings, sky, run-shape) so it feels like a different world, not a re-tint.
 //   fog / sun     — scene fog colour + key-light tint (the overall wash)
-//   skylineHue/Spread/skyline — the side-building window-glow colour + how it cycles
+//   skylineHue/Spread/Sat/skyline — the side-building window-glow colour + how it cycles.
+//                 Spread WIDE + Sat moderate = a lively multi-hue city (Neon City home);
+//                 Spread TIGHT + Sat high = one HARD locked colour (Cobalt reads cobalt).
+//   skylineVar    — {density, heightScale, gapScale} so even two same-STYLE skylines
+//                 (e.g. two "towers" zones) get visibly different walls.
 //   moon / nebula — far backdrop body tints
 //   bloom         — extra bloom while in this zone
 //   accent        — the zone's signature colour (entry title card + the colour-flare)
@@ -395,53 +399,38 @@ export const CONFIG = {
 //                 so each zone has a signature SHAPE (ramps in dunes, tunnels+curves in
 //                 ice, twists in void). Capped at 1 → never breaks reachability.
 export const BIOMES = [
-  // 0 — THE CONSTRUCT: a stark chrome/blueprint world — crisp white circuitry on near-
-  // black. The ACHROMATIC zone (its identity is the absence of colour), so it still
-  // reads distinct among the saturated zones, but it's a real, announced zone like any
-  // other — it can be where a run starts.
-  {
-    name: "The Construct",
-    fog: 0x141821,
-    sun: 0xe6edf6,
-    skylineHue: 0.58,
-    skylineSpread: 0.05,
-    skyline: 0xd6e2f2,
-    moon: 0xdce6f2,
-    nebula: 0x8aa0c0,
-    bloom: 0.04,
-    accent: 0xd6e6f6,
-    tagline: "inside the machine",
-    skylineStyle: "towers",
-    skin: { pattern: "circuit", neon: 0xd6e2f2, neon2: 0x9fb8d8, panel: 0x0b0f18 },
-    boardMat: { roughness: 0.3, metalness: 0.35, emissive: 0x0c141f, emissiveIntensity: 0.1 },
-    genBias: { tunnel: 1, ramp: 1, curve: 1, yaw: 1 },
-  },
-  // 1 — NEON CITY: the vivid home zone. Cyan circuitry shot through with hot magenta —
-  // the floor-light + window colours of the base game, turned up.
+  // 0 — NEON CITY: the HOME / default look — the classic neon-dusk city with a DYNAMIC
+  // multi-hue skyline (the lively cycling window glow). A real named zone you start in,
+  // flash into, and return to. Its identity is that SHIFTING colour — vs the themed
+  // zones below, which each lock HARD to one colour. Wide skylineSpread = the dynamism;
+  // moderate skylineSat keeps it rich without going garish.
   {
     name: "Neon City",
-    fog: 0x0e0a26,
+    fog: 0x141a33,
     sun: 0xfff2d6,
     skylineHue: 0.83,
-    skylineSpread: 0.16,
-    skyline: 0xff3df0,
+    skylineSpread: 0.18, // WIDE — the signature dynamic multi-hue skyline (cyan↔magenta)
+    skylineSat: 0.66,
+    skyline: 0xff4bd6,
     moon: 0xbfe3ff,
     nebula: 0x6a7bff,
-    bloom: 0.06,
-    accent: 0x00e6ff,
-    tagline: "neon never sleeps",
+    bloom: 0.02,
+    accent: 0x36d6ff,
+    tagline: "where it all begins",
     skylineStyle: "towers",
-    skin: { pattern: "circuit", neon: 0x00e6ff, neon2: 0xff3df0, panel: 0x0a0d22 },
-    boardMat: { roughness: 0.32, metalness: 0.2, emissive: 0x0a1830, emissiveIntensity: 0.14 },
+    skylineVar: { density: 1.2, heightScale: 1.12, gapScale: 0.85 }, // dense, tall downtown
+    skin: { pattern: "grid", neon: 0x36d6ff, neon2: 0xff4bd6, panel: 0x10162e },
+    boardMat: { roughness: 0.34, metalness: 0.18, emissive: 0x0c1630, emissiveIntensity: 0.12 },
     genBias: { tunnel: 1, ramp: 1, curve: 1, yaw: 1 },
   },
-  // 2 — SUNSET DUNES: warm amber desert. Matte sandstone planks, golden light.
+  // 1 — SUNSET DUNES: warm amber desert. Matte sandstone planks, golden light. HARD amber.
   {
     name: "Sunset Dunes",
     fog: 0x351a10,
     sun: 0xffae55,
     skylineHue: 0.06,
-    skylineSpread: 0.06,
+    skylineSpread: 0.04,
+    skylineSat: 0.9,
     skyline: 0xffb04a,
     moon: 0xffcf9a,
     nebula: 0xff6a8a,
@@ -449,17 +438,19 @@ export const BIOMES = [
     accent: 0xff8a2a,
     tagline: "into the warm horizon",
     skylineStyle: "mesas",
+    skylineVar: { heightScale: 0.85 },
     skin: { pattern: "planks", neon: 0xff8a2a, neon2: 0xffd24a, panel: 0x231006 },
     boardMat: { roughness: 0.92, metalness: 0.02, emissive: 0x2a1000, emissiveIntensity: 0.14 },
     genBias: { tunnel: 0.5, ramp: 1.8, curve: 0.8, yaw: 1.4 },
   },
-  // 3 — ICE CAVERNS: cold crystalline cyan-white. Glassy veined decks, high gloss.
+  // 2 — ICE CAVERNS: cold crystalline cyan-white. Glassy veined decks, high gloss. HARD icy.
   {
     name: "Ice Caverns",
     fog: 0x0a2a3e,
     sun: 0xd6f0ff,
     skylineHue: 0.52,
-    skylineSpread: 0.08,
+    skylineSpread: 0.05,
+    skylineSat: 0.62,
     skyline: 0xbdf2ff,
     moon: 0xeaffff,
     nebula: 0x6ad6ff,
@@ -467,17 +458,19 @@ export const BIOMES = [
     accent: 0xbdf2ff,
     tagline: "the frozen deep",
     skylineStyle: "spires",
+    skylineVar: { heightScale: 1.15 },
     skin: { pattern: "veins", neon: 0xbdf2ff, neon2: 0x6fd0ff, panel: 0x07202e },
     boardMat: { roughness: 0.12, metalness: 0.45, emissive: 0x103a52, emissiveIntensity: 0.26 },
     genBias: { tunnel: 2.0, ramp: 0.8, curve: 1.8, yaw: 0.9 },
   },
-  // 4 — THE VOID: eerie violet nothingness. Dark rock glowing from within.
+  // 3 — THE VOID: eerie violet nothingness. Dark rock glowing from within. HARD violet.
   {
     name: "The Void",
     fog: 0x0a0614,
     sun: 0xb06bff,
     skylineHue: 0.74,
-    skylineSpread: 0.1,
+    skylineSpread: 0.05,
+    skylineSat: 0.8,
     skyline: 0xb060ff,
     moon: 0xcaa6ff,
     nebula: 0x7a3bff,
@@ -485,39 +478,42 @@ export const BIOMES = [
     accent: 0xb060ff,
     tagline: "beyond the edge",
     skylineStyle: "monoliths",
+    skylineVar: { density: 0.75, heightScale: 1.15 }, // sparse, tall slabs
     skin: { pattern: "pebbles", neon: 0xb060ff, neon2: 0xff5fd0, panel: 0x0a0614 }, // scattered glowing void-rubble
     boardMat: { roughness: 0.5, metalness: 0.2, emissive: 0x3a1f7a, emissiveIntensity: 0.42 },
     genBias: { tunnel: 1.4, ramp: 0.7, curve: 1.2, yaw: 1.6 },
   },
-  // 5 — COBALT GROOVE (after the track): deep electric cobalt-blue, a tiled plaza that
-  // reads like a lit dancefloor. Distinct from the icy white-cyan by being saturated +
-  // deep, with a checkerboard rhythm.
+  // 4 — COBALT GROOVE (after the track): deep electric cobalt-blue, a tiled plaza that
+  // reads like a lit dancefloor. HARD cobalt — tight hue + high saturation so the whole
+  // scene (skyline windows, city-light floor) reads unmistakably cobalt, not generic city.
   {
     name: "Cobalt Groove",
-    fog: 0x081230,
-    sun: 0xaecbff,
+    fog: 0x06102e,
+    sun: 0x9cc0ff,
     skylineHue: 0.62,
-    skylineSpread: 0.07,
-    skyline: 0x3a7bff,
+    skylineSpread: 0.025,
+    skylineSat: 0.95,
+    skyline: 0x2f6bff,
     moon: 0xbcd0ff,
-    nebula: 0x3050d0,
+    nebula: 0x2848c8,
     bloom: 0.1,
-    accent: 0x3a7bff,
+    accent: 0x2f6bff,
     tagline: "deep in the groove",
     skylineStyle: "towers",
+    skylineVar: { density: 0.9, heightScale: 1.0, gapScale: 1.15 }, // distinct from Neon City's dense downtown
     skin: { pattern: "plaza", neon: 0x2f6bff, neon2: 0x00d0ff, panel: 0x060c22 },
     boardMat: { roughness: 0.28, metalness: 0.3, emissive: 0x0a1a44, emissiveIntensity: 0.2 },
     genBias: { tunnel: 1.1, ramp: 1.0, curve: 1.5, yaw: 1.1 },
   },
-  // 6 — VELVET HORIZON (after the track): lush magenta-rose twilight, brick-lit walls.
-  // Magenta-PRIMARY (vs Neon City's cyan-primary with a magenta accent), so the two
-  // never read the same.
+  // 5 — VELVET HORIZON (after the track): lush magenta-rose twilight, brick-lit walls.
+  // Magenta-PRIMARY (vs Neon City's cyan-leaning dynamic mix), HARD rose.
   {
     name: "Velvet Horizon",
     fog: 0x270a24,
     sun: 0xffb0e0,
     skylineHue: 0.9,
-    skylineSpread: 0.08,
+    skylineSpread: 0.05,
+    skylineSat: 0.85,
     skyline: 0xff5fb0,
     moon: 0xffc0e6,
     nebula: 0xc04ba0,
@@ -525,6 +521,7 @@ export const BIOMES = [
     accent: 0xff4fa0,
     tagline: "the velvet hour",
     skylineStyle: "mesas",
+    skylineVar: { heightScale: 1.05 },
     skin: { pattern: "brick", neon: 0xff4fa0, neon2: 0xffa0d6, panel: 0x1c0816 },
     boardMat: { roughness: 0.4, metalness: 0.18, emissive: 0x2e0a22, emissiveIntensity: 0.2 },
     genBias: { tunnel: 0.8, ramp: 1.3, curve: 1.4, yaw: 1.0 },
@@ -538,25 +535,32 @@ export const BIOMES = [
 // powerup picker); `forced` pins the WHOLE run to one zone so you can study it.
 export const ZoneSeq = {
   zoneLen: 1250,  // metres each zone fills — long enough to settle in and vibe
-  enabled: null,  // Set of zone indices allowed in the random rotation (null = all)
+  homeIndex: 0,   // Neon City — the home/default look: opens the run + recurs as a base
+  homeEvery: 3,   // re-enter home after every N themed zones (the "venture back home" beat)
+  enabled: null,  // Set of THEMED zone indices allowed in the rotation (null = all)
   forced: null,   // pin the whole run to this zone index (testing, cheat key C)
-  _seq: [],       // this run's zone order (every zone, shuffled)
+  _seq: [],       // this run's zone order
   _cycleLen: 0,
 
-  // Reshuffle every zone into a fresh random order for this run (call from game reset).
-  // No special baseline — the run STARTS in whatever lands first (_seq[0]), and zones
-  // flow zone→zone, each an announced arrival. Math.random is fine here (per-run only,
-  // never on the unit-tested generator path).
+  // Build this run's order: OPEN on home (Neon City), then the themed zones in a random
+  // order, weaving home back every `homeEvery` so you cycle out to colour and back to the
+  // home base. Each entry — including the returns home — is an announced arrival. The
+  // cycle repeats seamlessly. Math.random is fine here (per-run; never on the tested path).
   build() {
-    let pool = BIOMES.map((_, i) => i);
-    if (this.enabled && this.enabled.size) pool = pool.filter((i) => this.enabled.has(i));
-    if (!pool.length) pool = BIOMES.map((_, i) => i);
-    for (let i = pool.length - 1; i > 0; i--) {
+    let themed = BIOMES.map((_, i) => i).filter((i) => i !== this.homeIndex);
+    if (this.enabled && this.enabled.size) themed = themed.filter((i) => this.enabled.has(i));
+    for (let i = themed.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
+      [themed[i], themed[j]] = [themed[j], themed[i]];
     }
-    this._seq = pool;
-    this._cycleLen = pool.length * this.zoneLen;
+    const seq = [this.homeIndex];
+    let c = 0;
+    for (const t of themed) {
+      seq.push(t);
+      if (++c % this.homeEvery === 0 && c < themed.length) seq.push(this.homeIndex);
+    }
+    this._seq = seq;
+    this._cycleLen = seq.length * this.zoneLen;
   },
 
   zoneAt(z) {

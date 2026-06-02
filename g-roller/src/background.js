@@ -10,8 +10,12 @@ import { Emitter } from "./emitter.js";
 // world: city = tall towers, dunes = low mesas + pyramids, ice = jagged crystal
 // spires, void = sparse floating monoliths. Bodies stay near-black; only the bright
 // WHITE windows take the cycling biome colour (keeps the tint ON the lit windows, not
-// washing the whole scene). `style` picks the silhouette.
-function skylineTexture(style = "towers") {
+// washing the whole scene). `style` picks the silhouette; `opts` lets a zone tweak its
+// own variant of that silhouette — { heightScale, gapScale, density } — so even two
+// "towers" zones (Neon City, Cobalt Groove) get visibly different walls (taller/denser
+// vs sparser/shorter), per the "buildings should change SOMEHOW per zone" note.
+function skylineTexture(style = "towers", opts = {}) {
+  const hs = opts.heightScale ?? 1, gs = opts.gapScale ?? 1, dens = opts.density ?? 1;
   const c = document.createElement("canvas");
   c.width = 512;
   c.height = 256;
@@ -36,44 +40,45 @@ function skylineTexture(style = "towers") {
     // DUNES: low, wide flat-topped buttes + the occasional pyramid. Short, sparse warm windows.
     while (x < 512) {
       if (R() < 0.32) { // pyramid / dune
-        const w = 44 + R() * 86, h = 28 + R() * 64;
+        const w = 44 + R() * 86, h = (28 + R() * 64) * hs;
         ctx.beginPath(); ctx.moveTo(x, 256); ctx.lineTo(x + w / 2, 256 - h); ctx.lineTo(x + w, 256); ctx.closePath(); ctx.fill();
-        x += w + 6 + R() * 18;
+        x += w + (6 + R() * 18) * gs;
       } else { // wide flat mesa, sometimes stepped
-        const w = 52 + R() * 96, h = 22 + R() * 52;
+        const w = 52 + R() * 96, h = (22 + R() * 52) * hs;
         ctx.fillRect(x, 256 - h, w, h);
         if (R() < 0.5) ctx.fillRect(x + w * 0.2, 256 - h - (10 + R() * 20), w * 0.55, 10 + R() * 20);
-        windows(x, 256 - h, w, h, 0.16);
-        x += w + 8 + R() * 16;
+        windows(x, 256 - h, w, h, 0.16 * dens);
+        x += w + (8 + R() * 16) * gs;
       }
     }
   } else if (style === "spires") {
     // ICE: jagged crystal spires — tall sharp triangles, overlapping into a ridge. Few glints.
     while (x < 512) {
-      const w = 16 + R() * 32, h = 70 + R() * 155;
+      const w = 16 + R() * 32, h = (70 + R() * 155) * hs;
       ctx.beginPath(); ctx.moveTo(x, 256); ctx.lineTo(x + w / 2, 256 - h); ctx.lineTo(x + w, 256); ctx.closePath(); ctx.fill();
       // a couple of bright glints up the spine
       ctx.fillStyle = win;
       for (let i = 0; i < 3; i++) if (R() < 0.4) ctx.fillRect(x + w / 2 - 1, 256 - h * (0.3 + i * 0.2), 3, 5);
       ctx.fillStyle = body;
-      x += w * (0.55 + R() * 0.35); // overlap → a serrated ridge
+      x += w * (0.55 + R() * 0.35) * gs; // overlap → a serrated ridge
     }
   } else if (style === "monoliths") {
     // VOID: sparse, very tall thin slabs with big gaps — floating monoliths in the dark.
     while (x < 512) {
-      x += 36 + R() * 86; // big gap before each
-      const w = 10 + R() * 26, h = 120 + R() * 125;
+      x += (36 + R() * 86) * gs / dens; // big gap before each (sparser when density<1)
+      const w = 10 + R() * 26, h = (120 + R() * 125) * hs;
       ctx.fillRect(x, 256 - h, w, h);
       windows(x, 256 - h, w, h, 0.1); // a few cold window dots
       x += w;
     }
   } else {
-    // CITY (default): tall rectangular towers, dense windows.
+    // CITY (default): tall rectangular towers, dense windows. density<1 → occasional gaps.
     while (x < 512) {
-      const w = 18 + R() * 46, h = 40 + R() * 170;
+      const w = 18 + R() * 46, h = (40 + R() * 170) * hs;
       ctx.fillRect(x, 256 - h, w, h);
       windows(x, 256 - h, w, h, 0.5);
-      x += w + 4;
+      x += w + 4 * gs;
+      if (R() > dens) x += 24 + R() * 40; // sparser skyline → leave a gap (a city "plot")
     }
   }
   const tex = new THREE.CanvasTexture(c);
@@ -211,9 +216,14 @@ export class Background {
     // so each zone reads as one colour family while still gently breathing.
     this._hue = 0.72; this._hueTarget = 0.72;          // skyline hue centre
     this._spread = 0.12; this._spreadTarget = 0.12;    // how far the cycle wanders
+    this._sat = 0.62; this._satTarget = 0.62;          // skyline window SATURATION (hard zone colour vs lively city)
     this._moonTint = new THREE.Color(0xffe9b0); this._moonTarget = new THREE.Color(0xffe9b0);
     this._haloTint = new THREE.Color(0xffd27a); this._haloTarget = new THREE.Color(0xffd27a);
     this._nebTint = new THREE.Color(0x9678ff); this._nebTarget = new THREE.Color(0x9678ff);
+    // City-light FLOOR tint — the glowing city far below takes on the zone's colour too,
+    // so the whole "city lighting" reads as the zone, not a fixed amber/cyan pool.
+    this._cityTint = new THREE.Color(0xffffff); this._cityTarget = new THREE.Color(0xffffff);
+    this._skylineSig = ""; // style+variation signature — regenerate the walls when it changes
 
     // Drifting nebula sprites.
     this.clouds = [];
@@ -399,15 +409,18 @@ export class Background {
   // Drive the backdrop mood from the active biome. The game calls this once on a
   // zone change with that biome's palette; update() then EASES toward these targets
   // (no snap). All tints are stored as THREE.Color targets / scalar hue targets.
-  setBiome({ skylineHue, skylineSpread, moon, nebula, skyline, skylineStyle }) {
-    // Side buildings: swap the silhouette SHAPE per zone (towers → mesas → spires →
-    // monoliths). Regenerate each range plane's texture; the window-glow colour keeps
-    // easing via the material colour in update(). Only when the style actually changes.
-    if (skylineStyle && skylineStyle !== this._skylineStyle) {
-      this._skylineStyle = skylineStyle;
+  setBiome({ skylineHue, skylineSpread, skylineSat, moon, nebula, skyline, skylineStyle, skylineVar, accent }) {
+    // Side buildings: swap the silhouette per zone. Regenerate the range planes when the
+    // SHAPE *or* the per-zone variation (density/height/gaps) changes — so even two
+    // "towers" zones get visibly different skylines, not the identical wall.
+    const style = skylineStyle || this._skylineStyle || "towers";
+    const sig = style + "|" + JSON.stringify(skylineVar || {});
+    if (sig !== this._skylineSig) {
+      this._skylineStyle = style;
+      this._skylineSig = sig;
       for (const p of this.ranges) {
         const old = p.userData.tex;
-        const tex = skylineTexture(skylineStyle);
+        const tex = skylineTexture(style, skylineVar || {});
         p.material.map = tex;
         p.userData.tex = tex;
         p.material.needsUpdate = true;
@@ -416,12 +429,16 @@ export class Background {
     }
     if (skylineHue != null) this._hueTarget = skylineHue;
     if (skylineSpread != null) this._spreadTarget = skylineSpread;
+    if (skylineSat != null) this._satTarget = skylineSat;
     if (moon != null) {
       this._moonTarget.setHex(moon);
       // Halo = a softer, slightly warmer echo of the moon tint.
       this._haloTarget.copy(this._moonTarget).multiplyScalar(0.92).offsetHSL(0.0, 0.05, -0.04);
     }
     if (nebula != null) this._nebTarget.setHex(nebula);
+    // City-light floor takes the zone's accent (pulled toward mid-brightness so it
+    // glows the zone colour without blowing out). Falls back to the window colour.
+    if (accent != null || skyline != null) this._cityTarget.setHex(accent ?? skyline);
     this.emitter.setTint(skyline); // the mouth glows the zone's neon window-accent
   }
 
@@ -439,9 +456,11 @@ export class Background {
     if (dHue > 0.5) dHue -= 1; else if (dHue < -0.5) dHue += 1;
     this._hue = (this._hue + dHue * k + 1) % 1;
     this._spread += (this._spreadTarget - this._spread) * k;
+    this._sat += (this._satTarget - this._sat) * k;
     this._moonTint.lerp(this._moonTarget, k);
     this._haloTint.lerp(this._haloTarget, k);
     this._nebTint.lerp(this._nebTarget, k);
+    this._cityTint.lerp(this._cityTarget, k);
 
     // Blackout powerdown fades the whole sky down too (not just the platforms), so
     // it's a real blackout instead of dark ground under a bright skyline.
@@ -486,6 +505,7 @@ export class Background {
     this.farLights.position.set(0, this.farLightsY, playerZ);
     this.farLights.rotation.z = t * 0.004;
     this.farLights.material.opacity = 0.32 * f;
+    this.farLights.material.color.copy(this._cityTint); // the city below glows the zone's colour
     // Dark occluder rides just below the lights so the void doesn't show through.
     this.farDark.position.set(0, this.farLightsY - 1, playerZ);
     this.farDark.material.opacity = 0.9 * f;
@@ -529,7 +549,9 @@ export class Background {
       // active zone's colour, still alive and shifting but never fighting it.
       const hue = (this._hue + Math.sin(t * 0.13 + i * 1.7) * this._spread + 1) % 1;
       const beat = this.beat || 0; // audiosurf: windows flash brighter on each beat
-      p.material.color.setHSL(hue, 0.62, Math.min(0.95, 0.6 + beat * 0.32));
+      // Saturation is per-zone (eased): high = a HARD single colour (Cobalt reads cobalt),
+      // low = pale/achromatic. Neon City keeps a wide hue spread for its lively shimmer.
+      p.material.color.setHSL(hue, this._sat, Math.min(0.95, 0.6 + beat * 0.32));
       p.material.opacity = p.userData.baseOpacity * (0.78 + 0.22 * Math.sin(t * 0.22 + i)) * (1 + beat * 0.6) * f;
     });
   }
