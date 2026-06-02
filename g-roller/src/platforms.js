@@ -1,10 +1,16 @@
 import * as THREE from "three";
-import { CONFIG, jumpReach, ramp, smoothstep, BIOMES, biomeAt } from "./config.js";
+import { CONFIG, BIOMES, biomeAt, ramp } from "./config.js";
 import { makeTextureLibrary, GROUND_TEXTURES } from "./textures.js";
 import { emojiCanvas } from "./icons.js";
+import { makeRng } from "./gen/rng.js";
+import { openness, danger, hazardChance } from "./gen/progression.js";
+import { budgets } from "./gen/reach.js";
+import { planStep, planScatter } from "./gen/planPath.js";
 
+// Render-side randomness (cosmetic mesh jitter, gem bob phase, obstacle patrol). The
+// GAMEPLAY decisions that need to be deterministic/testable live in src/gen/*; these
+// just decorate, so plain Math.random is fine here.
 const rand = (a, b) => a + Math.random() * (b - a);
-const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const chance = (p) => Math.random() < p;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -38,13 +44,6 @@ export const POWERUP_DEFS = {
 const GOOD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => POWERUP_DEFS[k].good);
 const BAD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => !POWERUP_DEFS[k].good);
 
-// Fairness guardrail: the harshest powerdowns never sit on the GUARANTEED-path
-// runes (you can't always jump-dodge a plate on the only route). Branch runes
-// may still carry them. No effect is instant-fatal, so unavoidable runes stay
-// survivable regardless.
-const RUNE_PATH_EXCLUDE = new Set(["blackout", "splat"]);
-const EMPTY_SET = new Set();
-
 // Pick a pickup type from a list, weighted by its spawn frequency.
 function weightedPick(keys) {
   let total = 0;
@@ -60,7 +59,7 @@ function weightedPick(keys) {
 class Platform {
   constructor(group, hx, hy, hz, type) {
     this.mesh = group; this.hx = hx; this.hy = hy; this.hz = hz;
-    this.type = type;            // "normal" | "bouncy" | "boost"
+    this.type = type;            // "normal" | "bouncy" | "boost" | "flipper" | "rune"
     this.obstacles = [];         // {hx,hy,hz, lx,ly,lz, kind}
     this.mover = null;           // {dirX, dirY, amp, speed, phase, baseX, baseY}
     this.dx = 0; this.dy = 0;    // movement applied this frame (so riders move too)
@@ -69,14 +68,16 @@ class Platform {
     this.leanX = 0;              // sideways bank: top rises this much per unit of x (+ raises the +x edge); drags you to the low side
     this._flipT = 0;             // flipper plate: seconds left on the hinge-kick animation (0 = at rest)
     this._tex = null;
-    this._geo = null;            // own geometry to dispose (curved boards only)
+    this._geo = null;            // own geometry to dispose (curved/spline boards only)
   }
   get pos() { return this.mesh.position; }
   get topY() { return this.mesh.position.y + this.hy; }
 }
 
-// Owns the whole platform world: a guaranteed-reachable main path plus bonus
-// branches, obstacles, moving boards, powerups, and a difficulty curve.
+// Owns the whole platform world. The BRAIN (where/what/how-big) lives in the pure
+// generator under src/gen/; this class is the RENDERER: it asks the generator for a
+// plan each step and turns that plan into THREE meshes, then runs the per-frame
+// motion/cull/collision bookkeeping.
 export class PlatformField {
   constructor(scene) {
     this.scene = scene;
@@ -91,8 +92,6 @@ export class PlatformField {
 
     // Glowing edge outlines for the BLACKOUT powerdown: every board gets a wireframe
     // child that lights up only when the lights cut out (emergency-aisle lighting).
-    // One shared bright material (blooms) + shared edge geometry for the cached shapes;
-    // curved boards get their own edge geometry. `blackout` toggles them all on/off.
     this._edgeMat = new THREE.LineBasicMaterial({ color: 0xffc24a, transparent: true, opacity: 0.2 });
     this._edgeGeoBox = new THREE.EdgesGeometry(this._geoBox);
     this._edgeGeoCyl = new THREE.EdgesGeometry(this._geoCyl);
@@ -105,23 +104,43 @@ export class PlatformField {
     this._gemGeo = new THREE.OctahedronGeometry(0.55);
 
     this._time = 0;
-    this._difficulty = 0;  // hazard ramp (slow)
-    this._spreadD = 0;     // spread ramp (fast)
+    this._rng = makeRng(Math.random); // the generator's random source (real game = truly random)
+    // The difficulty profile (one of CONFIG.gen.tiers) + the two live ramp values it
+    // produces. game.js swaps the profile via setProfile(); zen pins danger.
+    this.profile = CONFIG.gen.tiers[CONFIG.gen.defaultDifficulty];
+    this.fixedDanger = null; // when set (zen), pins the danger ramp here instead of escalating
+    this._O = 0;             // openness(playerZ, profile), recomputed each frame
+    this._D = 0;             // danger(playerZ) (or fixedDanger), recomputed each frame
+
     this.itemMultiplier = 1; // cheat code bumps this to spawn extra gems/powerups
-    this.activeEffects = 0;  // count of currently-active powerups/downs (pushed in from game.js each frame) — runes spawn less while this is high
-    this.difficultyMult = 1; // Easy/Medium/Hard scales the floor of the hazard ramps
-    this.spreadMult = 1;     // Easy/Medium/Hard scales how FAST the SPREAD ramp opens up (gaps/wander/clouds) — <1 keeps the field tight & survivable longer, >1 sprawls it fast
-    this.fixedDifficulty = null; // when set (zen mode), PINS the hazard ramp here instead of escalating with distance
+    this.activeEffects = 0;  // count of currently-active powerups (pushed in from game.js; reserved for rune gating)
     // Cheat-mode test tool: which powerup types are allowed to spawn. Default = all.
-    // Disable all but one and (with cheat's 5x items) it spawns constantly to test.
     this.enabledPowerups = new Set(Object.keys(POWERUP_DEFS));
     this._biomeTextures = BIOMES[0].textures;
-    this._stepIndex = 0;
-    this._stepsSinceTunnel = 0;
-    this._stepsSinceSpline = 0;
-    this._cursor = { x: 0, y: 0, z: 0 };
-    this._drift = { x: 0, y: 0 };  // wandering target the critical path heads toward
-    this._driftSteps = 0;
+
+    // The generator's walking state — a cursor plus a few counters. Bundled so it can
+    // be handed straight to planStep(). Initialized in reset().
+    this._state = this._freshState();
+  }
+
+  _freshState() {
+    return {
+      cursor: { x: 0, y: 0, z: 0 },
+      stepIndex: 0,
+      stepsSinceTunnel: 0,
+      stepsSinceSpline: 0,
+      drift: { x: 0, y: 0 },
+      driftSteps: CONFIG.gen.safeStraight,
+      launchRunway: 0,
+    };
+  }
+
+  // game.js calls this when the player picks Easy/Medium/Hard (or toggles zen). The
+  // profile is one line of knobs from CONFIG.gen.tiers; zen passes fixedDanger to pin
+  // the hazard ramp at a steady level instead of escalating with distance.
+  setProfile(profile, { fixedDanger = null } = {}) {
+    this.profile = profile;
+    this.fixedDanger = fixedDanger;
   }
 
   reset() {
@@ -132,26 +151,25 @@ export class PlatformField {
     this.gems.length = 0;
     this.powerups.length = 0;
     this._time = 0;
-    this._difficulty = 0;
-    this._spreadD = 0;
-    this._stepIndex = 0;
-    this._stepsSinceTunnel = 0;
-    this._stepsSinceSpline = 0;
-    this._drift = { x: 0, y: 0 };
-    this._driftSteps = CONFIG.safeStraight;
+    this._state = this._freshState();
 
     const starter = this._addBoard({
-      x: 0, y: -0.5, z: CONFIG.starterLength / 2 - 4,
-      w: CONFIG.starterWidth, len: CONFIG.starterLength, hy: 0.5,
+      x: 0, y: -0.5, z: CONFIG.world.starterLength / 2 - 4,
+      w: CONFIG.world.starterWidth, len: CONFIG.world.starterLength, hy: 0.5,
       geoType: "box", type: "normal", texName: "concrete",
     });
-    this._cursor = { x: 0, y: 0, z: starter.pos.z + starter.hz };
+    this._state.cursor = { x: 0, y: 0, z: starter.pos.z + starter.hz };
   }
 
   // --- Construction helpers -------------------------------------------------
 
   // Pick a ground texture from the current biome's palette.
   _groundTex() { return pick(this._biomeTextures || GROUND_TEXTURES); }
+
+  // Turn a plan's abstract texRole into a concrete texture name.
+  _texForRole(role) {
+    return role === "ground" ? this._groundTex() : role;
+  }
 
   // Clone a library texture and set its tiling repeat. `src` lets us tile an
   // alpha map (a different bitmap) with the SAME repeat as its diffuse `name`,
@@ -173,8 +191,9 @@ export class PlatformField {
     const group = new THREE.Group();
     group.position.set(x, y, z);
 
-    // Rune plates light themselves CYAN (good) or AMBER (bad) — same colour code as
-    // the floating pickups — so you can read what you're about to land on from afar.
+    // Rune plates light themselves CYAN (good) or AMBER (bad) so you can read what
+    // you're about to land on from afar. (Runes are currently disabled in the
+    // generator, but the rendering + game.js landing handler stay wired.)
     const runeEmissive = runePayload ? (runePayload.good ? 0x2fd9c0 : 0xffae3b) : 0x000000;
 
     const tex = this._texFor(texName, w, len);
@@ -187,11 +206,9 @@ export class PlatformField {
     });
 
     // GLASS ground tiles: the standard "normal" boards go semi-transparent so the
-    // glowing city-lights floor (far below at y≈-260) reads through them. The bold
-    // neon grid baked into the texture stays bright, and an alphaMap keeps that
-    // lattice near-solid while the cells turn to glass — so the tile's shape, edges
-    // and extent stay crystal-clear even though you can see through the surface.
-    // Boost/bouncy/flipper/rubber keep their own opaque identity (not glassed).
+    // glowing city-lights floor (far below) reads through them. The neon grid baked
+    // into the texture stays bright, and an alphaMap keeps that lattice near-solid
+    // while the cells turn to glass — so the tile's shape stays crystal-clear.
     let alphaTex = null;
     if (type === "normal") {
       const alpha = this.tex[`${texName}Alpha`];
@@ -204,9 +221,10 @@ export class PlatformField {
 
     let visual, ownGeo = null;
     if (spline) {
-      // Spline ribbon: a long undulating + meandering heightfield you roll along.
-      // Like curved boards, it owns its geometry and IS the landable surfaceMesh.
-      ownGeo = this._makeSplineGeo(w, len, spline);
+      // Spline ribbon: a long undulating + meandering heightfield you roll along. It
+      // owns its geometry and IS the landable surfaceMesh. The geometry is displaced
+      // by the SAME sampler the generator used for the gem trail + death-check.
+      ownGeo = this._makeSplineGeo(w, len, spline.sampler);
       mat.side = THREE.DoubleSide;
       visual = new THREE.Mesh(ownGeo, mat);
     } else if (curve) {
@@ -219,27 +237,22 @@ export class PlatformField {
       visual = new THREE.Mesh(geo, mat);
       visual.scale.set(w, hy * 2, len);
     }
-    // Angle is independent of shape and curve — any board can tilt. NEGATIVE atan:
-    // a +X rotation tilts the +z (forward) end DOWN, so we negate it to make
-    // slopeZ>0 = uphill in the travel direction (matches the generator's exit-height
-    // convention). Collision raycasts the real mesh, so the surface is always what
-    // you see — a tilted curved/round/boost board all just work.
+    // Angle is independent of shape and curve — any board can tilt. NEGATIVE atan so
+    // slopeZ>0 reads as uphill in the travel direction (matches the generator's
+    // exit-height convention). Collision raycasts the real mesh, so the surface is
+    // always what you see.
     if (slopeZ) visual.rotation.x = -Math.atan(slopeZ);
-    // Sideways bank, independent of the ramp pitch above. A +z roll lifts the +x
-    // edge and drops the -x edge; collision raycasts the real tilted mesh, so the
-    // ball sits on the bank and player.js drags it toward the low (-x) side.
+    // Sideways bank, independent of the ramp pitch. A +z roll lifts the +x edge.
     if (leanX) visual.rotation.z = Math.atan(leanX);
-    // Yaw: rotate the board's HEADING about the vertical axis so it points off
-    // diagonally. The surface stays horizontal (normal still +Y), so the down-ray
-    // collision is unaffected — it's just a turned runway you strafe along.
+    // Yaw: rotate the heading about the vertical axis so the runway points diagonally.
+    // The surface stays horizontal (normal still +Y), so the down-ray is unaffected.
     if (yaw) visual.rotation.y = yaw;
     visual.castShadow = true;
     visual.receiveShadow = true;
     group.add(visual);
 
     // Emergency edge lighting (lit only during blackout). Child of `visual` so it
-    // inherits the board's scale and slope automatically. Curved boards need their
-    // own edge geometry; flat/round boards share the cached unit-shape edges.
+    // inherits the board's scale and slope automatically.
     const edgeGeo = (curve || spline) ? new THREE.EdgesGeometry(ownGeo)
       : geoType === "cyl" ? this._edgeGeoCyl
       : geoType === "hex" ? this._edgeGeoHex
@@ -248,9 +261,7 @@ export class PlatformField {
     edge.visible = this.blackout;
     visual.add(edge);
 
-    // Bouncy gets a subtle coil spring under the deck (the FLIPPER's launch is now
-    // carried by its orange-chevron surface texture + the hinge-kick animation —
-    // no 3D props, which were reading as hazard spikes).
+    // Bouncy gets a subtle coil spring under the deck.
     if (type === "bouncy") this._decorateLaunchPad(group, type, w, len, hy);
 
     this.scene.add(group);
@@ -266,16 +277,14 @@ export class PlatformField {
     p.leanX = leanX;
     p.yaw = yaw;
     visual.userData.platform = p; // raycast maps a hit back to its Platform
-    p.surfaceMesh = visual;       // the one landable mesh (obstacles/tube added later aren't this)
+    p.surfaceMesh = visual;       // the one landable mesh
 
-    // Rune plate: hang the effect's glyph above the surface and remember the payload
-    // + a one-shot "spent" flag. game.js fires the effect on the FIRST landing, then
-    // sets _runeSpent so riding/re-landing the same plate never re-triggers it.
+    // Rune plate: hang the effect's glyph above the surface and remember the payload.
     if (runePayload) {
       p.runePayload = runePayload;
       p._runeSpent = false;
       const glyph = this._iconSprite(runePayload.type);
-      glyph.position.set(0, hy + 1.4, 0); // sit just above the (short) plate
+      glyph.position.set(0, hy + 1.4, 0);
       group.add(glyph);
     }
 
@@ -298,78 +307,27 @@ export class PlatformField {
     return g;
   }
 
-  // A long ribbon you roll ALONG: a finely tessellated flat plane whose vertices are
-  // displaced into rolling hills/valleys (Y) that ALSO meander left/right (X). It's a
-  // pure heightfield — exactly one surface height per (x,z), no overhangs — so the
-  // single straight-down collision raycast tracks it perfectly, the same way curved
-  // boards work. Both displacements are windowed by sin(pi*u) so they START and END at
-  // exactly 0: the near edge meets the incoming cursor (x,y), the far edge returns to
-  // the board's center (x,y), keeping the generator's gap/height bookkeeping valid.
-  // `opts`: ampY (hill height), wavesY (hill cycles), meanderX (side drift), wavesX
-  // (side swings), maxSlope (hard cap on |dy/dz| so no face nears the normal.y>0.1
-  // collision cutoff — i.e. the surface never becomes a wall you'd fall through).
-  _makeSplineGeo(w, len, opts) {
-    const { ampY, wavesY, meanderX, wavesX, maxSlope } = opts;
-    const g = new THREE.PlaneGeometry(w, len, CONFIG.splineSegX, CONFIG.splineSegZ);
+  // Build the spline ribbon mesh by displacing a tessellated plane with the shared
+  // sampler (src/gen/spline.js). Because the sampler is also what placed the gems and
+  // set the death-floor, the visible surface, the gem lane and the fall-check can't
+  // drift apart — that used to be three hand-synced copies of this wave math.
+  _makeSplineGeo(w, len, sampler) {
+    const g = new THREE.PlaneGeometry(w, len, CONFIG.gen.spline.segX, CONFIG.gen.spline.segZ);
     g.rotateX(-Math.PI / 2); // lay flat in xz, facing up (local z = -len/2..+len/2)
-
-    // Height along the ribbon: a couple of gentle sines, windowed to 0 at both ends.
-    // We then SCALE the whole profile down if its steepest slope would exceed maxSlope,
-    // so a tall/short ribbon can never produce a near-vertical face (fall-through).
-    const half = len / 2;
-    const u = (z) => (z + half) / len;             // 0 at near edge, 1 at far edge
-    const win = (uu) => Math.sin(Math.PI * uu);    // 0 at both ends, 1 in the middle
-    const heightRaw = (z) => {
-      const uu = u(z);
-      const a = Math.sin(uu * Math.PI * wavesY * 2);          // primary hills
-      const b = 0.35 * Math.sin(uu * Math.PI * wavesY * 2 * 2 + 1.7); // a softer overtone for variety
-      return win(uu) * ampY * (a + b);
-    };
-    // Probe the slope across the length to find the steepest dy/dz, then pick a scale
-    // that keeps it under maxSlope. (Cheap: sample the same segZ resolution we built.)
-    const stepZ = len / CONFIG.splineSegZ;
-    let maxAbsSlope = 0;
-    for (let z = -half; z < half; z += stepZ) {
-      const s = Math.abs((heightRaw(z + stepZ) - heightRaw(z)) / stepZ);
-      if (s > maxAbsSlope) maxAbsSlope = s;
-    }
-    const yScale = maxAbsSlope > maxSlope ? maxSlope / maxAbsSlope : 1;
-    const height = (z) => heightRaw(z) * yScale;
-
-    // Sideways meander of the centerline: a slow sine, also windowed to 0 at both ends
-    // so the near edge lines up with the incoming x and the far edge returns to center.
-    const meander = (z) => win(u(z)) * meanderX * Math.sin(u(z) * Math.PI * wavesX * 2);
-
     const pos = g.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const pz = pos.getZ(i);
-      pos.setX(i, pos.getX(i) + meander(pz)); // slide the strip sideways (still single-valued in (x,z))
-      pos.setY(i, height(pz));
+      pos.setX(i, pos.getX(i) + sampler.meanderAt(pz)); // slide the strip sideways (still single-valued in x,z)
+      pos.setY(i, sampler.heightAt(pz));
     }
     pos.needsUpdate = true;
     g.computeVertexNormals(); // lighting + the normal.y face filter need correct normals
     return g;
   }
 
-  // Difficulty scales the FLOOR of a hazard ramp (obstacle/moving/sharp-turn): Easy
-  // opens calmer, Hard busier. Clamped so a high multiplier can't push past the peak.
-  _hazRamp(pair, d) {
-    // Scale BOTH ends of the ramp by the difficulty mult (not just the floor), so
-    // Hard stays busier than Medium even at the late plateau — capped so it can't
-    // reach 100%. (Old version capped the floor at pair[1], making every tier
-    // converge to the same ceiling — that's why Hard ≈ Medium deep in a run.)
-    const lo = pair[0] * this.difficultyMult;
-    const hi = pair[1] * this.difficultyMult;
-    return Math.min(ramp([lo, hi], d), CONFIG.hazardCeil);
-  }
-
-  // Blackout can't dim pieces that light THEMSELVES — boost (green) and bouncy (red)
-  // plates use emissive, which ignores scene lights, so they stay vivid. Scale ONLY
-  // the plate-SURFACE glow in step with the blackout so those plates go indistinct
-  // like the dark ones. Obstacles (spikes/barriers — separate child meshes) keep
-  // their glow so hazards stay readable in the dark, and gems/powerups (not children
-  // of a platform) keep glowing as beacons. Lazily records each base; scale=1 restores.
-  // Runs every frame while dimmed so boards spawned mid-blackout are caught too.
+  // Blackout can't dim pieces that light THEMSELVES (boost/bouncy emissive), so scale
+  // ONLY the plate-surface glow in step with the blackout. Obstacles + gems keep
+  // their glow as readable beacons. Lazily records each base; scale=1 restores.
   setEmissiveScale(scale) {
     if (scale >= 0.999 && this._emissiveScale >= 0.999) return; // nothing to do in normal light
     this._emissiveScale = scale;
@@ -388,9 +346,9 @@ export class PlatformField {
   _addObstacle(p, kind) {
     // Decide up front whether this hazard PATROLS. Barriers span the width (no room
     // to slide sideways) so they patrol FORE/AFT; spikes are narrow so they slide
-    // side-to-side (sometimes fore/aft). The clamp below keeps a passable gap.
+    // side-to-side. Chance rides the danger ramp × the tier's hazard knob.
     const moves = (kind === "barrier" || kind === "spikes") &&
-      chance(this._hazRamp(CONFIG.obstacleMoveChance, this._difficulty));
+      chance(hazardChance(CONFIG.gen.hazard.obstacleMoveChance, this._D, this.profile));
     let lx, ly, lz, hx, hy, hz, mesh;
     if (kind === "barrier") {
       hx = p.hx * 0.82; hy = 0.7; hz = 0.4;
@@ -418,9 +376,8 @@ export class PlatformField {
       }
       p.mesh.add(mesh);
     } else if (kind === "pillars") {
-      // A slalom: two tall narrow pillars with a clear lane between (and lanes on the
-      // sides). Steer through or jump. Each pillar is its OWN collision box so the
-      // gaps are real openings, not one wide wall.
+      // A slalom: two tall narrow pillars with a clear lane between. Each pillar is
+      // its OWN collision box so the gaps are real openings, not one wide wall.
       hx = p.hx * 0.16; hy = 1.7; hz = 0.5;
       lz = rand(-p.hz * 0.2, p.hz * 0.2); ly = p.hy + hy;
       const pmat = new THREE.MeshStandardMaterial({ color: 0x2a2f3d, emissive: 0xff7a1c, emissiveIntensity: 0.5, roughness: 0.5 });
@@ -451,11 +408,10 @@ export class PlatformField {
     p.obstacles.push({ hx, hy, hz, lx, ly, lz, kind, mesh });
     if (moves) {
       const o = p.obstacles[p.obstacles.length - 1];
-      // Barriers patrol fore/aft (z) — they're too wide to slide sideways. Spikes are
-      // narrow, so they slide left/right, sometimes fore/aft.
+      // Barriers patrol fore/aft (z); spikes slide left/right, sometimes fore/aft.
       const axis = kind === "barrier" ? "z" : (chance(0.5) ? "x" : "z");
       const room = (axis === "x" ? p.hx - o.hx : p.hz - o.hz) - 0.5; // stay on the board
-      const amp = Math.min(ramp(CONFIG.obstacleMoveAmp, this._difficulty), Math.max(0, room));
+      const amp = Math.min(ramp(CONFIG.gen.hazard.obstacleMoveAmp, this._D), Math.max(0, room));
       if (amp > 0.6) {
         o.move = {
           axis, amp, speed: rand(0.8, 1.8), phase: rand(0, Math.PI * 2),
@@ -465,50 +421,16 @@ export class PlatformField {
     }
   }
 
-  _makeMover(p, big) {
-    // Slide distance grows with difficulty (gentle wander early, big swings late).
-    const base = ramp(CONFIG.moveAmp, this._difficulty);
-    const amp = big ? base * 1.3 : rand(base * 0.6, base);
-    // Direction: mostly horizontal/vertical, sometimes a crazy diagonal.
-    const roll = Math.random();
-    let dirX, dirY;
-    if (roll < 0.42) { dirX = 1; dirY = 0; }                 // horizontal slide
-    else if (roll < 0.74) { dirX = 0; dirY = 1; }            // vertical lift
-    else {                                                    // diagonal!
-      dirX = 0.707 * (chance(0.5) ? 1 : -1);
-      dirY = 0.707 * (chance(0.5) ? 1 : -1);
-    }
-    p.mover = { dirX, dirY, amp, speed: rand(0.7, 1.5), phase: rand(0, Math.PI * 2), baseX: p.pos.x, baseY: p.pos.y };
-  }
-
-  // A short glowing ring tunnel. The floor is a normal (landable) flat platform;
-  // the rings are see-through decor positioned below camera height, so the
-  // third-person view still sees the exit past the end of the tunnel.
-  _spawnTunnel(forwardSpeed) {
-    const reach = jumpReach();
-    const maxGap = forwardSpeed * reach.airTime * CONFIG.pathGapSafety;
-    const gap = clamp(rand(4, maxGap * 0.4), 3, maxGap);
-    const len = CONFIG.tunnelLength;
-    const w = 11;
-    const band = ramp(CONFIG.bandX, this._spreadD);
-    const x = clamp(this._cursor.x, -band, band);
-    const y = this._cursor.y; // flat all the way through
-    const z = this._cursor.z + gap + len / 2;
-
-    const p = this._addBoard({ x, y, z, w, len, hy: 0.5, geoType: "box", type: "normal", texName: "concrete" });
-    this._addTunnelTube(p, len);
-    this._cursor = { x, y, z: z + len / 2 };
-    this._stepsSinceTunnel = 0;
-    this._stepIndex++;
-
-    // A line of gems down the middle as a reward for taking the tunnel.
-    for (let k = 0; k < 4; k++) this._addGem(x, y + 0.6, z - len / 2 + (k + 0.7) * (len / 5)); // +0.8 in _addGem keeps these ~in the rings
+  // Apply a generator-decided mover to a freshly-placed board. baseX/baseY are this
+  // board's spawn position (the motion oscillates around it).
+  _applyMover(p, m) {
+    p.mover = { ...m, baseX: p.pos.x, baseY: p.pos.y };
   }
 
   // A full semi-transparent tube you roll through (kept short so the exit shows
   // through it in the third-person view).
   _addTunnelTube(p, len) {
-    const r = CONFIG.tunnelRadius;
+    const r = CONFIG.gen.tunnel.radius;
     const geo = new THREE.CylinderGeometry(r, r, len, 30, 1, true); // open-ended cylinder
     const mat = new THREE.MeshStandardMaterial({
       color: 0x8a5bff, emissive: 0x6a3bff, emissiveIntensity: 0.55,
@@ -522,93 +444,6 @@ export class PlatformField {
     p._geo = geo; // dispose this geometry when the platform is culled
   }
 
-  // A long undulating + meandering ribbon you roll ALONG (tracking its surface) to
-  // the far end, then JUMP to the next piece. It's one traversable heightfield board
-  // (no mid jumps, no obstacles/movers/runes/slope/curve/lean) — its own thing.
-  // SPACING ("track then jump"): the entry gap is a normal jump gap from the cursor;
-  // because both the Y-undulation and the X-meander are windowed to ZERO at both
-  // ends, the near edge sits flush at the incoming (x,y) and the far end returns to
-  // the board's center (x,y) — so we just advance the cursor to the ribbon's far end
-  // and the next board's gap is computed from there, exactly like any other board.
-  _spawnSpline(forwardSpeed) {
-    const sd = this._spreadD, hd = this._difficulty;
-    const reach = jumpReach();
-    const maxGap = forwardSpeed * reach.airTime * CONFIG.pathGapSafety;
-    const gap = clamp(rand(4, maxGap * 0.4), 3, maxGap); // a normal jump onto the ribbon
-
-    // WIDE + gentle early, NARROWER + more dramatic with distance (spread ramp). Every
-    // amplitude is still clamped by splineMaxSlope inside _makeSplineGeo so the surface
-    // can never approach vertical — the ball always rolls the full length safely.
-    const len = ramp(CONFIG.splineLength, sd);
-    const w = ramp(CONFIG.splineWidth, sd);
-    const spline = {
-      ampY: ramp(CONFIG.splineAmpY, sd),
-      wavesY: ramp(CONFIG.splineWavesY, sd),
-      meanderX: ramp(CONFIG.splineMeanderX, sd),
-      wavesX: ramp(CONFIG.splineWavesX, sd),
-      maxSlope: CONFIG.splineMaxSlope,
-    };
-
-    const band = ramp(CONFIG.bandX, sd);
-    const x = clamp(this._cursor.x, -band, band);
-    const y = this._cursor.y; // board center; the displaced near edge meets this height
-    const z = this._cursor.z + gap + len / 2;
-
-    // hy is the COLLISION half-thickness; the rolling surface is the displaced mesh.
-    // hx must cover the FULL extent (half-width + peak meander) so the down-raycast's
-    // x-prefilter (plat.hx + radius*0.5) never skips the ribbon where it has drifted.
-    const p = this._addBoard({
-      x, y, z, w, len, hy: 0.5, geoType: "box", type: "normal", texName: this._groundTex(), spline,
-    });
-    p.hx = w / 2 + spline.meanderX + 1; // widen the landing/raycast box to include the meander
-    p._surfaceMinY = y - spline.ampY - 1; // deepest valley of the ribbon — the real floor for death checks
-
-    // Far end: displacement is 0 there by construction, so the exit is the center (x,y).
-    this._cursor = { x, y, z: z + len / 2 };
-    this._stepsSinceSpline = 0;
-    this._stepIndex++;
-
-    // A trail of gems down the ribbon as a reward for riding it — placed on the SURFACE
-    // (follow the undulation + meander) so they sit in the roll lane, not buried/floating.
-    const n = 6;
-    for (let k = 0; k < n; k++) {
-      const uu = (k + 0.5) / n;
-      const lz = -len / 2 + uu * len;
-      const sy = this._splineHeightAt(spline, len, lz);
-      const sx = this._splineMeanderAt(spline, len, lz);
-      this._addGem(x + sx, y + sy + 0.2, z + lz); // +0.8 inside _addGem lifts it to roll height
-    }
-  }
-
-  // Mirror the Y-undulation in _makeSplineGeo (windowed sines, slope-capped) so gem
-  // placement tracks the real surface. Kept in lockstep with the geometry builder.
-  _splineHeightAt(spline, len, lz) {
-    const { ampY, wavesY, maxSlope } = spline;
-    const half = len / 2;
-    const u = (z) => (z + half) / len;
-    const win = (uu) => Math.sin(Math.PI * uu);
-    const raw = (z) => {
-      const uu = u(z);
-      return win(uu) * ampY * (Math.sin(uu * Math.PI * wavesY * 2) + 0.35 * Math.sin(uu * Math.PI * wavesY * 4 + 1.7));
-    };
-    const stepZ = len / CONFIG.splineSegZ;
-    let maxAbsSlope = 0;
-    for (let z = -half; z < half; z += stepZ) {
-      const s = Math.abs((raw(z + stepZ) - raw(z)) / stepZ);
-      if (s > maxAbsSlope) maxAbsSlope = s;
-    }
-    const yScale = maxAbsSlope > maxSlope ? maxSlope / maxAbsSlope : 1;
-    return raw(lz) * yScale;
-  }
-
-  // Mirror the X-meander in _makeSplineGeo so gems follow the ribbon's drift.
-  _splineMeanderAt(spline, len, lz) {
-    const { meanderX, wavesX } = spline;
-    const half = len / 2;
-    const uu = (lz + half) / len;
-    return Math.sin(Math.PI * uu) * meanderX * Math.sin(uu * Math.PI * wavesX * 2);
-  }
-
   _addGem(x, top, z) {
     const mesh = new THREE.Mesh(this._gemGeo, new THREE.MeshStandardMaterial({
       color: 0x66f0ff, emissive: 0x33d0ff, emissiveIntensity: 0.9, roughness: 0.2, metalness: 0.3,
@@ -619,54 +454,24 @@ export class PlatformField {
     this.gems.push({ mesh, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
   }
 
-  // Power pickup, telegraphed by color + shape + a glyph sprite so you can read it
-  // from a distance. Powerdowns are the majority (they act like dodgeable obstacles)
-  // and skew further that way with difficulty.
   // Pick a powerup type honoring the good/bad ratio, but only from types enabled in
   // the cheat test menu. Falls back to the other pool's enabled types; null if none.
   _pickPowerupType(d) {
-    const good = chance(ramp(CONFIG.goodPowerupChance, d));
+    const good = chance(ramp(CONFIG.gen.items.goodChance, d));
     const inPool = (list) => list.filter((k) => this.enabledPowerups.has(k));
     const first = inPool(good ? GOOD_POWERUPS : BAD_POWERUPS);
     const pool = first.length ? first : inPool(good ? BAD_POWERUPS : GOOD_POWERUPS);
     return pool.length ? weightedPick(pool) : null;
   }
 
-  // Pick the effect a rune plate carries. Mirrors _pickPowerupType (honours the
-  // cheat spawn-pool filter + the same weighted pick), but the GOOD/bad split is
-  // decided by the caller (so it uses the SAME goodPowerupChance lean as floaters —
-  // no bias toward good). `onPath` runes drop the harshest powerdowns (blackout/
-  // splat) since you can't always dodge a plate on the guaranteed route; branch
-  // runes allow them. Returns {type, good} or null if nothing's enabled.
-  _pickRuneType(good, onPath) {
-    const banned = onPath ? RUNE_PATH_EXCLUDE : EMPTY_SET;
-    const inPool = (list) => list.filter((k) => this.enabledPowerups.has(k) && !banned.has(k));
-    let g = good;
-    let first = inPool(g ? GOOD_POWERUPS : BAD_POWERUPS);
-    if (!first.length) { g = !g; first = inPool(g ? GOOD_POWERUPS : BAD_POWERUPS); } // fall back to the other pool
-    return first.length ? { type: weightedPick(first), good: g } : null;
-  }
-
-  // The effective rune spawn chance: the distance ramp, eased DOWN by how many
-  // effects are already active (cooldown = active LOAD, not a timer). At 0 active
-  // it's the full ramped chance; ~2 active is a trickle; 3+ is basically none until
-  // they wear off. activeEffects is pushed in each frame from game.js.
-  _runeChance(d) {
-    const base = ramp(CONFIG.runeChance, d);
-    const load = Math.max(0, 1 - (this.activeEffects || 0) * CONFIG.runeLoadFactor);
-    return base * load;
-  }
-
   _addPowerup(x, top, z, d = 0) {
     const type = this._pickPowerupType(d);
     if (!type) return; // every type disabled in the cheat test menu → nothing spawns
     const def = POWERUP_DEFS[type];
-    const good = def.good; // the picked type's own good/bad flag — used by the HUD + collect FX. Was a stray undefined ref since the _pickPowerupType refactor, which silently threw before the powerup could be tracked.
+    const good = def.good;
 
-    // Everything spawns GROUNDED on the platform now (no floating pickups) — right
-    // in the roll lane at ball-center height. You collect or dodge by where you
-    // steer/jump, not by reaching up for floaters.
-    const grounded = true;
+    // Everything spawns GROUNDED on the platform, right in the roll lane — you collect
+    // or dodge by where you steer/jump, not by reaching up for floaters.
     const y = top + 0.95;
 
     const group = new THREE.Group();
@@ -674,19 +479,18 @@ export class PlatformField {
       color: def.color, emissive: def.color, emissiveIntensity: 0.85, roughness: 0.25, metalness: 0.3,
     }));
     group.add(mesh);
-    // Visible "aura" cloud = the actual trigger zone (rolling INTO it collects the
-    // pickup), tinted green for buffs / red for powerdowns so you read good/bad AND
-    // its catch range at a glance. Radius matches the harvest radius below.
+    // Visible "aura" cloud = the actual trigger zone, tinted green for buffs / red for
+    // powerdowns so you read good/bad AND its catch range at a glance.
     const aura = new THREE.Mesh(this._auraGeo(), new THREE.MeshBasicMaterial({
       color: good ? 0x46e07a : 0xff5046, transparent: true, opacity: 0.16,
       depthWrite: false, blending: THREE.AdditiveBlending,
     }));
-    aura.scale.setScalar(CONFIG.powerupAuraRadius);
+    aura.scale.setScalar(CONFIG.effects.powerupAuraRadius);
     group.add(aura);
     group.add(this._iconSprite(type)); // floating glyph above the shape
     group.position.set(x, y, z);
     this.scene.add(group);
-    this.powerups.push({ mesh: group, type, good, grounded, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
+    this.powerups.push({ mesh: group, type, good, grounded: true, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
   }
 
   // Cached unit sphere for the pickup aura cloud (scaled per-pickup to the radius).
@@ -695,22 +499,20 @@ export class PlatformField {
     return this._sphereGeo;
   }
 
-  // A subtle coil spring beneath the bouncy deck — reinforces the springy read of
-  // its ripple-ring surface texture. Pure decoration (collision uses surfaceMesh).
-  // Material is per-board (NOT cached) — _disposeBoard traverses the group and
-  // disposes every mesh material on cull, so a shared one would get freed mid-run.
+  // A subtle coil spring beneath the bouncy deck. Material is per-board (NOT cached) —
+  // _disposePlatform traverses the group and disposes every mesh material on cull.
   _decorateLaunchPad(group, type, w, len, hy) {
     if (type !== "bouncy") return;
-    if (!this._coilGeo) this._coilGeo = new THREE.TorusGeometry(1, 0.12, 8, 18); // geometry is safe to share (not traverse-disposed)
+    if (!this._coilGeo) this._coilGeo = new THREE.TorusGeometry(1, 0.12, 8, 18); // geometry is safe to share
     const coilMat = new THREE.MeshStandardMaterial({
       color: 0xff3f7a, emissive: 0xff1f5a, emissiveIntensity: 0.55, roughness: 0.4, metalness: 0.5,
     });
-    const r = Math.min(w, len) * 0.26; // smaller than before — a compact spring, not a huge one
+    const r = Math.min(w, len) * 0.26;
     for (let i = 0; i < 3; i++) {
       const ring = new THREE.Mesh(this._coilGeo, coilMat);
       ring.rotation.x = Math.PI / 2;       // lie flat — stacked flat rings read as a coil
       ring.scale.setScalar(r);
-      ring.position.y = -hy - 0.4 - i * r * 0.45; // hang a short coil just below the deck
+      ring.position.y = -hy - 0.4 - i * r * 0.45;
       group.add(ring);
     }
   }
@@ -731,9 +533,7 @@ export class PlatformField {
     return g;
   }
 
-  // A camera-facing EMOJI glyph hovering above a pickup or rune plate. The stylized
-  // vector icons washed out in-world (glossy/glassy, hard to read), so the in-game
-  // pickups use plain bold emoji — big and readable. (The HUD keeps the vector set.)
+  // A camera-facing EMOJI glyph hovering above a pickup or rune plate.
   _iconSprite(key) {
     if (!this._iconCache) this._iconCache = {};
     let mat = this._iconCache[key];
@@ -744,20 +544,13 @@ export class PlatformField {
       this._iconCache[key] = mat;
     }
     const s = new THREE.Sprite(mat);
-    s.scale.set(3.0, 3.0, 1); // 2x the old 1.5 — big and easy to read above the pickup
+    s.scale.set(3.0, 3.0, 1);
     s.position.set(0, 2.1, 0);
     return s;
   }
 
-  // Pickups either sit just above the pad (collected while rolling) or float
-  // clearly overhead (an obvious jump) — never in the ambiguous in-between.
-  _floatY(top) {
-    return top + (chance(0.5) ? rand(0.9, 1.3) : rand(4.3, 5.6));
-  }
-
   // Does a candidate box overlap any nearby STATIC platform? Moving boards are
-  // ignored — they're allowed to slide over things (that's the only case where
-  // overlap is OK).
+  // ignored — they're allowed to slide over things.
   _overlaps(x, y, z, hx, hy, hz) {
     for (const p of this.platforms) {
       if (p.mover) continue;
@@ -769,9 +562,8 @@ export class PlatformField {
     return false;
   }
 
-  // Remove any static decor platforms that overlap the just-placed critical
-  // platform (the path takes priority), so static pieces never sit inside each
-  // other. Movers are left alone.
+  // Remove any static decor platforms that overlap the just-placed critical platform
+  // (the path takes priority), so static pieces never sit inside each other.
   _clearOverlapping(keep) {
     for (let i = this.platforms.length - 1; i >= 0; i--) {
       const p = this.platforms[i];
@@ -785,261 +577,73 @@ export class PlatformField {
     }
   }
 
-  // --- Path generation ------------------------------------------------------
+  // --- Generation (render side) ---------------------------------------------
 
-  _randGeo(roundChance) {
-    // Hex/round pads are rare early (small accents) and become common later;
-    // everything else is a box with varied thickness.
-    if (Math.random() < roundChance) {
-      return chance(0.5)
-        ? { geoType: "cyl", hy: rand(0.5, 1.0) }
-        : { geoType: "hex", hy: rand(0.5, 1.0) };
-    }
-    const roll = Math.random();
-    if (roll < 0.6) return { geoType: "box", hy: 0.6 };
-    if (roll < 0.82) return { geoType: "box", hy: rand(1.3, 2.4) }; // thick block
-    return { geoType: "box", hy: 0.28 };                            // thin slab
+  // Build the per-step context the pure generator reads.
+  _ctx(forwardSpeed) {
+    return {
+      profile: this.profile,
+      O: this._O,
+      D: this._D,
+      budgets: budgets(forwardSpeed),
+      rng: this._rng,
+      itemMultiplier: this.itemMultiplier,
+    };
   }
 
-  // Extend the world by one step: lay the next GUARANTEED-REACHABLE critical
-  // platform (it wanders toward a roaming target — up, over and across — but
-  // every step stays within jump reach), then strew a cloud of branch platforms
-  // around it so the field sprawls into a journey with many possible routes.
-  _extendPath(forwardSpeed) {
-    const hd = this._difficulty;   // hazard ramp (slow)
-    const reach = jumpReach();
-    const maxRise = reach.height * CONFIG.pathRiseSafety;
-    const maxGap = forwardSpeed * reach.airTime * CONFIG.pathGapSafety;
-    const maxLateral = CONFIG.sideSpeed * reach.airTime * CONFIG.pathLateralSafety;
-
-    // The first few pads run straight ahead (spread pinned to 0); after that the
-    // field opens up fast on the SPREAD ramp while hazards stay on the slow one.
-    const safe = this._stepIndex < CONFIG.safeStraight;
-
-    // Occasionally the next stretch is a glowing ring tunnel.
-    if (!safe && this._stepsSinceTunnel >= CONFIG.tunnelCooldown && chance(ramp(CONFIG.tunnelChance, hd))) {
-      this._spawnTunnel(forwardSpeed);
-      return;
-    }
-    this._stepsSinceTunnel++;
-
-    // Or a long undulating "spline" ribbon you roll the whole length of, then jump
-    // off the far end. Gated + cooled-down like tunnels so they never cluster.
-    if (!safe && this._stepsSinceSpline >= CONFIG.splineCooldown && chance(ramp(CONFIG.splineChance, hd))) {
-      this._spawnSpline(forwardSpeed);
-      return;
-    }
-    this._stepsSinceSpline++;
-
-    const sd = safe ? 0 : this._spreadD;
-    const dd = safe ? 0 : hd;
-    const band = ramp(CONFIG.bandX, sd);
-
-    // Roaming target: every few steps, pick a new far-off (x, y) for the path to
-    // head toward. This is what turns a straight line into a sweeping journey.
-    if (!safe && --this._driftSteps <= 0) {
-      this._driftSteps = randInt(CONFIG.driftEvery[0], CONFIG.driftEvery[1]);
-      this._drift.x = clamp(rand(-band, band), -band, band);
-      const vy = ramp(CONFIG.driftY, sd);
-      this._drift.y = clamp(this._cursor.y + rand(-vy * 0.7, vy), -30, 55);
-    }
-
-    const g = this._randGeo(ramp(CONFIG.roundGeoChance, sd));
-    const round = g.geoType !== "box";
-    // Pad SIZE rides a difficulty-scaled ramp: the same distance counts as "harder"
-    // on Hard (×1.7) and "easier" on Easy (×0.55), so Hard pads shrink toward small
-    // single-jump pads while Easy keeps generous landings. (Gaps stay reachable —
-    // they're sized off jumpReach, not pad size.)
-    const padD = safe ? 0 : Math.min(1, hd * this.difficultyMult);
-    const w = rand(ramp(CONFIG.padWidthLo, padD), ramp(CONFIG.padWidthHi, padD));
-    let len = rand(ramp(CONFIG.padLenLo, padD), ramp(CONFIG.padLenHi, padD));
-    if (round) len = Math.min(len, rand(10, 18));
-
-    // Reachable step budgets (open up with SPREAD).
-    const gap = clamp(rand(maxGap * ramp(CONFIG.gapFracLo, sd), maxGap * ramp(CONFIG.gapFracHi, sd)), 3, maxGap);
-    const lateral = maxLateral * ramp(CONFIG.lateralFrac, sd);
-    const dyUp = maxRise * ramp(CONFIG.riseFrac, sd);
-    const dyDown = ramp(CONFIG.dropDepth, sd);
-
-    // Bias the step toward the roaming target, then add randomness — but always
-    // clamp to what a jump can actually clear, so the critical path stays solvable.
-    let dx, dy;
-    if (safe) {
-      dx = rand(-1, 1) * 0.5;
-      dy = rand(-1.2, 1.2);
-    } else {
-      const toX = clamp(this._drift.x - this._cursor.x, -lateral, lateral);
-      const sharp = chance(this._hazRamp(CONFIG.sharpTurnChance, hd));
-      dx = sharp ? clamp(toX + (chance(0.5) ? 1 : -1) * rand(lateral * 0.5, lateral), -lateral, lateral)
-                 : toX * 0.6 + rand(-lateral, lateral) * 0.4;
-      const toY = clamp(this._drift.y - this._cursor.y, dyDown, dyUp);
-      dy = toY * 0.6 + rand(dyDown, dyUp) * 0.4;
-    }
-
-    let type = "normal";
-    let runePayload = null;
-    if (!safe) {
-      // Runes come first: a rune plate is a board you trigger by LANDING on. Its
-      // chance ramps with distance AND eases down while you already have effects
-      // active (gated in _runeChance). onPath=true → keep blackout/splat off it.
-      // difficultyMult 0 = zen / no-hazards: no runes (they're effect-triggers).
-      if (this.difficultyMult > 0 && chance(this._runeChance(dd))) {
-        runePayload = this._pickRuneType(chance(ramp(CONFIG.goodPowerupChance, dd)), true);
-        if (runePayload) type = "rune";
-      }
-      if (type === "normal") {
-        if (chance(CONFIG.flipperChance)) type = "flipper"; // rare hinged launch pad
-        else if (chance(0.1)) type = "boost";
-      }
-    }
-    const texName = type === "boost" ? "boost" : type === "flipper" ? "flipper" : type === "rune" ? "rune" : this._groundTex();
-    if (type === "flipper") len = rand(9, 14); // small launch panels — a full-length flipper looks wrong
-    if (type === "rune") len = rand(9, 14);    // short plate so a jump can clear a bad one
-
-    // Angle (slope) and curve (bow) are independent display PROPERTIES, not their
-    // own plate types: any board — flat, boost, round, and a mover below — can tilt
-    // and/or bow, in any combination, on top of its shape/size/texture. Rolled here
-    // (before placement) so a longer ramp doesn't throw off the gap that follows it.
-    // (Tunnels are a separate structure and stay flat for now.)
-    let slopeZ = 0, curve = 0, leanX = 0, yaw = 0;
-    if (!safe && type !== "flipper" && type !== "rune") { // flippers + runes stay flat (no slope/curve/lean/yaw) so the rune reads clearly and a jump can clear a bad one
-      // Yaw (a diagonal runway) is rolled FIRST and is EXCLUSIVE: a yawed board stays
-      // flat — no slope/curve/lean — so it reads as one clean turned plank you strafe
-      // along. Heading sign is random; magnitude grows with SPREAD (subtle early).
-      if (!round && chance(ramp(CONFIG.yawChance, sd))) {
-        yaw = (chance(0.5) ? 1 : -1) * rand(CONFIG.yawAmount[0], ramp(CONFIG.yawAmount, sd));
-        len *= CONFIG.yawLenBoost; // a real diagonal runway to track along
-      } else {
-        if (chance(ramp(CONFIG.rampChance, sd))) {
-          slopeZ = (chance(0.5) ? 1 : -1) * rand(CONFIG.rampSlope[0], CONFIG.rampSlope[1]);
-          if (!round) len *= ramp(CONFIG.rampLenBoost, sd); // box ramps run longer; keep round tiles small
-        }
-        if (!round && chance(ramp(CONFIG.curveChance, sd))) {
-          // Random magnitude: most are gentle, some are dramatic half-pipes. Concave
-          // (+, funnels in) favored over convex (-, rolls off). curveForce reads this
-          // magnitude, so a deep bowl also pulls you sideways hard ("gravity").
-          const mag = rand(CONFIG.curveAmount[0], CONFIG.curveAmount[1]);
-          curve = (chance(0.7) ? 1 : -1) * mag;
-        }
-        // Sideways bank — independent of ramp/curve, so a board can climb AND lean.
-        // Chance ramps with difficulty (_hazRamp); the magnitude's upper bound grows
-        // with spread (ramp(.., sd)), so early boards are barely tilted and later ones
-        // bank for real. Side is random. player.js drags you toward the low edge.
-        if (chance(this._hazRamp(CONFIG.leanChance, hd))) {
-          const mag = rand(CONFIG.leanAmount[0], ramp(CONFIG.leanAmount, sd));
-          leanX = (chance(0.5) ? 1 : -1) * mag;
-        }
-      }
-    }
-
-    // Lay the board's NEAR end at the reachable jump target, then run it along its
-    // heading (rotated by yaw). For a normal board (yaw 0) this is the old behaviour:
-    // near end at cursor.z+gap, board running straight ahead. For a yawed board the
-    // far end (and the next gap) veers off diagonally — the path "shoots off to the side".
-    const nearX = clamp(this._cursor.x + dx, -band - 4, band + 4);
-    const nearY = this._cursor.y + dy;
-    const nearZ = this._cursor.z + gap;
-    const fdx = Math.sin(yaw), fdz = Math.cos(yaw); // board's forward (heading) unit dir
-    const x = nearX + fdx * (len / 2);             // board CENTER
-    const z = nearZ + fdz * (len / 2);
-    const yCenter = slopeZ ? nearY + slopeZ * (len / 2) : nearY; // ramp near edge meets the incoming height
-
-    // Acceleration plates are always flat boxes (forward arrows); ramps use a
-    // thin box too so their near edge meets the incoming height cleanly.
-    const geoType = type === "boost" || type === "flipper" || type === "rune" ? "box" : g.geoType;
-    const hy = type === "boost" || type === "flipper" || type === "rune" || slopeZ ? 0.5 : g.hy;
-    const p = this._addBoard({ x, y: yCenter, z, w, len, hy, geoType, type, texName, slopeZ, curve, leanX, yaw, runePayload });
-    if (yaw) {
-      // Widen the collision prefilter box to the diagonal footprint. The down-ray
-      // still hits the real turned mesh; this just keeps the ball in the candidate
-      // set across the board's full rotated X/Z extent (mirrors the spline's p.hx).
-      p.hx = (w / 2) * Math.abs(Math.cos(yaw)) + (len / 2) * Math.abs(Math.sin(yaw));
-      p.hz = (len / 2) * Math.abs(Math.cos(yaw)) + (w / 2) * Math.abs(Math.sin(yaw));
-    }
-    const exitY = slopeZ ? yCenter + slopeZ * (len / 2) : yCenter;
-    this._cursor = { x: clamp(nearX + fdx * len, -band - 4, band + 4), y: exitY, z: nearZ + fdz * len };
-    this._clearOverlapping(p); // static pieces never sit inside each other
-
-    if (!safe && type !== "rune") { // runes stay a clean, still, readable plate — no movers/obstacles on them
-      // Movement is a property too — a board can slide/lift while tilted or bowed.
-      // (Not on yawed boards: a sliding diagonal runway is too chaotic to track.)
-      if (!yaw && chance(this._hazRamp(CONFIG.movingChance, hd))) this._makeMover(p, false);
-      // Obstacles stay off ramps/curves/yaw: a spike you can't dodge mid-climb or
-      // mid-strafe is unfair.
-      if (type === "normal" && !slopeZ && !curve && !yaw && len > 12 && chance(this._hazRamp(CONFIG.obstacleChance, hd))) {
-        const r = Math.random();
-        let kind;
-        if (r < 0.34) kind = "spikes";
-        else if (r < 0.6) kind = "barrier";
-        else if (r < 0.8) kind = "pillars";
-        else kind = len > 22 ? "overhead" : "barrier"; // overhead needs grounded runway to be fair
-        this._addObstacle(p, kind);
-      }
-    }
-    // Item multiplier (1 normally, more with the cheat code) spawns extra
-    // gems/powerups, spread sideways so they don't pile up. A rune IS the powerup
-    // (landing on it fires the effect), so it never also gets a floating pickup/gem.
-    const py = p.pos.y;
-    if (type !== "rune") for (let k = 0; k < this.itemMultiplier; k++) {
-      const ox = (k - (this.itemMultiplier - 1) / 2) * 3;
-      if (chance(0.4)) this._addGem(x + ox, py + p.hy, z);
-      // difficultyMult 0 = zen / no-hazards: skip powerups entirely (gems are harmless candy).
-      if (this.difficultyMult > 0 && chance(CONFIG.powerupChance)) this._addPowerup(x + ox, py + p.hy, z + rand(-len * 0.3, len * 0.3), hd);
-    }
-
-    if (!safe) this._scatterCloud(x, exitY, z, sd, hd);
-    this._stepIndex++;
+  // Extend the world by one step: ask the generator for the next critical board,
+  // render it, then render its scatter cloud (planScatter returns [] for safe/
+  // structure steps, so this is a no-op there).
+  _step(forwardSpeed) {
+    const ctx = this._ctx(forwardSpeed);
+    const plan = planStep(this._state, ctx);
+    this._renderBoardPlan(plan);
+    for (const branch of planScatter(plan, this._state, ctx)) this._renderScatterPlan(branch);
   }
 
-  // Strew a handful of branch platforms around the front. They aren't on the
-  // guaranteed path — they're the parallax sprawl: alternate routes, high
-  // perches, low ledges. Overlap-checked so nothing spawns inside anything else.
-  _scatterCloud(cx, cy, cz, sd, hd) {
-    const n = Math.round(ramp(CONFIG.cloudCount, sd));
-    const rx = ramp(CONFIG.cloudRadiusX, sd);
-    const ry = ramp(CONFIG.cloudRadiusY, sd);
-    for (let i = 0; i < n; i++) {
-      const x = clamp(cx + rand(-rx, rx), -CONFIG.bandX[1] - 10, CONFIG.bandX[1] + 10);
-      let y = clamp(cy + rand(-ry, ry), -32, 58);
-      const z = cz + rand(-CONFIG.cloudZSpread * 0.55, CONFIG.cloudZSpread);
-      const g = this._randGeo();
-      const round = g.geoType !== "box";
-      const w = rand(ramp(CONFIG.padWidthLo, hd) * 0.7, ramp(CONFIG.padWidthHi, hd));
-      let len = rand(8, ramp(CONFIG.padLenHi, hd));
-      if (round) len = Math.min(len, rand(8, 14));
-      // NUDGE the candidate UP out of any static overlap (movers are exempt — they're
-      // allowed to slide over things) instead of dropping it or letting it intersect.
-      let tries = 0;
-      while (this._overlaps(x, y, z, w / 2, g.hy, len / 2) && tries < 7) { y += g.hy * 2 + 2.5; tries++; }
-      if (this._overlaps(x, y, z, w / 2, g.hy, len / 2)) continue; // couldn't clear it → skip
+  // Turn a critical/structure plan into meshes + decorations.
+  _renderBoardPlan(plan) {
+    const p = this._addBoard({
+      x: plan.x, y: plan.y, z: plan.z, w: plan.w, len: plan.len, hy: plan.hy,
+      geoType: plan.geoType, type: plan.type, texName: this._texForRole(plan.texRole),
+      slopeZ: plan.slopeZ, curve: plan.curve, leanX: plan.leanX, yaw: plan.yaw, spline: plan.spline,
+    });
 
-      // Branch runes: navigation choices off the main path involve runes too. Rolled
-      // FIRST so it wins over bouncy; onPath=false → harsh powerdowns (blackout/splat)
-      // are allowed here since you CHOSE this branch (the path stays survivable).
-      let runePayload = null;
-      if (this.difficultyMult > 0 && chance(this._runeChance(hd))) {
-        runePayload = this._pickRuneType(chance(ramp(CONFIG.goodPowerupChance, hd)), false);
-      }
-      if (runePayload) {
-        const rlen = rand(9, 14); // short plate so a jump clears a bad one
-        this._addBoard({ x, y, z, w, len: rlen, hy: 0.5, geoType: "box", type: "rune", texName: "rune", runePayload });
-        continue; // a rune IS the powerup — no bouncy swap, no floating items on it
-      }
-
-      const bouncy = chance(0.16);
-      const p = this._addBoard({
-        x, y, z, w, len, hy: bouncy ? 0.5 : g.hy,
-        geoType: bouncy ? "box" : g.geoType,
-        type: bouncy ? "bouncy" : "normal",
-        texName: bouncy ? "rubber" : this._groundTex(),
-      });
-      for (let m = 0; m < this.itemMultiplier; m++) {
-        const ox = (m - (this.itemMultiplier - 1) / 2) * 2.5;
-        if (chance(0.5)) this._addGem(x + ox, y + p.hy, z); // reward exploring off-path
-        // difficultyMult 0 = zen / no-hazards: skip powerups (gems still spawn — harmless).
-        if (this.difficultyMult > 0 && chance(0.2)) this._addPowerup(x + ox, y + p.hy, z, hd);
-      }
+    if (plan.spline) {
+      p.hx = plan.spline.hxPad;                       // widen the raycast box to include the meander
+      p._surfaceMinY = plan.y + plan.spline.surfaceMinOffset; // deepest valley — the real floor for death checks
     }
+    if (plan.yaw) {
+      // Widen the collision prefilter box to the rotated footprint (the down-ray still
+      // hits the real turned mesh; this just keeps the ball in the candidate set).
+      p.hx = (plan.w / 2) * Math.abs(Math.cos(plan.yaw)) + (plan.len / 2) * Math.abs(Math.sin(plan.yaw));
+      p.hz = (plan.len / 2) * Math.abs(Math.cos(plan.yaw)) + (plan.w / 2) * Math.abs(Math.sin(plan.yaw));
+    }
+    if (plan.tunnel) this._addTunnelTube(p, plan.len);
+    if (plan.kind === "path") this._clearOverlapping(p); // critical path takes priority over decor
+    if (plan.mover) this._applyMover(p, plan.mover);
+    if (plan.obstacle) this._addObstacle(p, plan.obstacle.kind);
+
+    for (const g of plan.gems) this._addGem(g.x, g.top, g.z);
+    for (const u of plan.powerups) this._addPowerup(u.x, u.top, u.z, this._D);
+    return p;
+  }
+
+  // Render a branch (scatter) candidate. The generator can't see the placed world, so
+  // overlap resolution happens here: nudge the candidate UP out of any static overlap,
+  // or skip it if it can't clear.
+  _renderScatterPlan(b) {
+    let y = b.y, tries = 0;
+    while (this._overlaps(b.x, y, b.z, b.w / 2, b.hy, b.len / 2) && tries < 7) { y += b.hy * 2 + 2.5; tries++; }
+    if (this._overlaps(b.x, y, b.z, b.w / 2, b.hy, b.len / 2)) return; // couldn't clear it → skip
+    const lift = y - b.y; // how far we nudged (its gems/powerups ride along)
+
+    this._addBoard({
+      x: b.x, y, z: b.z, w: b.w, len: b.len, hy: b.hy,
+      geoType: b.geoType, type: b.type, texName: this._texForRole(b.texRole),
+    });
+    for (const g of b.gems) this._addGem(g.x, g.top + lift, g.z);
+    for (const u of b.powerups) this._addPowerup(u.x, u.top + lift, u.z, this._D);
   }
 
   _disposePlatform(p) {
@@ -1048,15 +652,17 @@ export class PlatformField {
     if (p._tex) p._tex.dispose();
     if (p._alphaTex) p._alphaTex.dispose();
     if (p._geo) p._geo.dispose();
-    if (p._edgeGeo) p._edgeGeo.dispose(); // curved boards own their edge geometry
+    if (p._edgeGeo) p._edgeGeo.dispose(); // curved/spline boards own their edge geometry
   }
 
   // --- Per-frame ------------------------------------------------------------
 
   update(dt, playerZ, forwardSpeed, magnetPos = null) {
     this._time += dt;
-    this._difficulty = this.fixedDifficulty != null ? this.fixedDifficulty : smoothstep(playerZ / CONFIG.difficultyDistance);
-    this._spreadD = smoothstep(playerZ * this.spreadMult / CONFIG.spreadDistance);
+    // The two ramps: openness opens the journey FAST (scaled per-tier), danger ramps
+    // threat SLOWLY (or is pinned by zen). Everything the generator does reads these.
+    this._O = openness(playerZ, this.profile);
+    this._D = this.fixedDanger != null ? this.fixedDanger : danger(playerZ);
     this._biomeTextures = BIOMES[biomeAt(playerZ)].textures; // platforms re-skin per biome
 
     // Light/extinguish every board's edge outline when blackout flips on/off.
@@ -1065,10 +671,10 @@ export class PlatformField {
       for (const pl of this.platforms) if (pl._edge) pl._edge.visible = this.blackout;
     }
 
-    while (this._cursor.z < playerZ + CONFIG.keepAheadDistance) this._extendPath(forwardSpeed);
+    while (this._state.cursor.z < playerZ + CONFIG.world.keepAheadDistance) this._step(forwardSpeed);
 
-    // Move the sliding platforms and record their per-frame delta so riders
-    // (the player) can be carried along.
+    // Move the sliding platforms and record their per-frame delta so riders (the
+    // player) can be carried along.
     for (const p of this.platforms) {
       if (!p.mover) { p.dx = 0; p.dy = 0; continue; }
       const m = p.mover;
@@ -1079,28 +685,25 @@ export class PlatformField {
       p.pos.x = nx; p.pos.y = ny;
     }
 
-    // Flipper plates: animate the hinge kick (pivot the surface forward about its
-    // BACK edge) while _flipT counts down. Pure visual juice — the launch already
-    // fired the instant you touched it. position offsets pin the back edge so it
-    // reads as a trap-door/catapult swinging up rather than spinning in place.
+    // Flipper plates: animate the hinge kick while _flipT counts down. Pure visual
+    // juice — the launch already fired the instant you touched it.
     for (const p of this.platforms) {
       if (p._flipT <= 0) continue;
       p._flipT = Math.max(0, p._flipT - dt);
       const m = p.surfaceMesh;
       if (!m) continue;
-      const phase = 1 - p._flipT / CONFIG.flipperFlipTime; // 0 -> 1 across the kick
+      const phase = 1 - p._flipT / CONFIG.plates.flipper.flipTime; // 0 -> 1 across the kick
       const a = Math.sin(phase * Math.PI) * 1.2;            // lift to ~69°, then back to flat
-      // Hinge at the FAR (+z) edge; the NEAR (camera-side, -z) edge swings UP so the
-      // surface deflects you FORWARD (matches the actual launch) — like a diving board.
+      // Hinge at the FAR (+z) edge; the NEAR edge swings UP so the surface deflects
+      // you FORWARD (matches the actual launch) — like a diving board.
       m.rotation.x = a;
-      m.position.y = p.hz * Math.sin(a);                    // pin the far edge as the hinge
+      m.position.y = p.hz * Math.sin(a);
       m.position.z = p.hz * (1 - Math.cos(a));
       if (p._flipT === 0) { m.rotation.x = 0; m.position.set(0, 0, 0); } // settle flat
     }
 
     // Patrolling obstacles: slide barriers/spikes along their platform. Move BOTH the
-    // mesh AND the collision box (o.lx/lz) by the same offset from their bases, so the
-    // hitbox tracks the visual — collision reads plat.pos + o.lx/lz every frame.
+    // mesh AND the collision box by the same offset so the hitbox tracks the visual.
     for (const p of this.platforms) {
       for (const o of p.obstacles) {
         if (!o.move) continue;
@@ -1111,9 +714,7 @@ export class PlatformField {
       }
     }
 
-    // Audiosurf: faint cool glow pulse on the plain ground tiles in time with the beat
-    // (normal tiles only — coloured plates keep their own emissive). Runs while the beat
-    // is up plus one frame after, to settle the glow back to zero.
+    // Audiosurf: faint cool glow pulse on the plain ground tiles in time with the beat.
     if (this.beat > 0.003 || this._beatPrev > 0.003) {
       const g = this.beat;
       for (const p of this.platforms) {
@@ -1129,11 +730,10 @@ export class PlatformField {
     for (const g of this.gems) {
       if (g.collected) continue;
       g.mesh.rotation.y += dt * 2.2; g.mesh.rotation.x += dt * 1.1;
-      // While the magnet is pulling a gem, fly it STRAIGHT to the player on all
-      // axes — don't bob, or the bob fights the pull and the gem just hovers near
-      // you (offset in Y) and never reaches collection range.
-      if (magnetPos && g.mesh.position.distanceTo(magnetPos) < CONFIG.magnetRadius) {
-        g.mesh.position.lerp(magnetPos, Math.min(1, dt * CONFIG.magnetPull));
+      // While the magnet is pulling a gem, fly it STRAIGHT to the player on all axes —
+      // don't bob, or the bob fights the pull and the gem hovers near you forever.
+      if (magnetPos && g.mesh.position.distanceTo(magnetPos) < CONFIG.effects.magnetRadius) {
+        g.mesh.position.lerp(magnetPos, Math.min(1, dt * CONFIG.effects.magnetPull));
       } else {
         g.mesh.position.y = g.baseY + Math.sin(this._time * 2.5 + g.phase) * 0.35;
       }
@@ -1142,12 +742,11 @@ export class PlatformField {
       if (u.collected) continue;
       u.mesh.rotation.y += dt * 1.6;             // spin the group; glyph sits on the y-axis so it stays put
       u.mesh.children[0].rotation.x += dt * 1.3; // tumble just the shape
-      // Grounded powerdowns bob only slightly so they never sink into the platform.
       u.mesh.position.y = u.baseY + Math.sin(this._time * 2 + u.phase) * (u.grounded ? 0.12 : 0.4);
     }
 
     // Cull everything left behind.
-    const cullZ = playerZ - CONFIG.cullBehindDistance;
+    const cullZ = playerZ - CONFIG.world.cullBehindDistance;
     for (let i = this.platforms.length - 1; i >= 0; i--) {
       const p = this.platforms[i];
       if (p.pos.z + p.hz < cullZ) { this._disposePlatform(p); this.platforms.splice(i, 1); }
@@ -1158,19 +757,18 @@ export class PlatformField {
       if (this.powerups[i].mesh.position.z < cullZ) { this.scene.remove(this.powerups[i].mesh); this.powerups.splice(i, 1); }
   }
 
-  // Lowest platform top among the floors currently drawn around the player.
-  // Death is measured against this so you never die while a tile you could have
-  // landed on is still on screen below you. Returns -Infinity if none nearby.
+  // Lowest platform top among the floors currently drawn around the player. Death is
+  // measured against this so you never die while a tile you could have landed on is
+  // still on screen below you. Returns -Infinity if none nearby.
   lowestTopNear(z) {
     let min = Infinity;
     for (const p of this.platforms) {
       // Look further AHEAD (out to the keep-ahead horizon): during a long descending
-      // hop the board you're falling toward must count, or the floor reads as the
-      // high board you just left and you "die" in mid-air over a perfectly good gap.
+      // hop the board you're falling toward must count, or the floor reads as the high
+      // board you just left and you "die" in mid-air over a perfectly good gap.
       if (p.pos.z < z - 25 || p.pos.z > z + 190) continue;
-      // A spline's rolling surface dips to pos.y - ampY in its valleys (well below the
-      // board's flat topY). Use that valley depth so rolling/falling through a deep
-      // spline trough isn't mistaken for "fell off the world".
+      // A spline's rolling surface dips to its valleys (below the flat topY). Use that
+      // depth so rolling/falling through a deep trough isn't mistaken for falling off.
       const surf = p._surfaceMinY != null ? p._surfaceMinY : p.topY;
       if (surf < min) min = surf;
     }
@@ -1178,9 +776,7 @@ export class PlatformField {
   }
 
   // Grounded pickups collect on TOUCH: a modest volume around the ball, not a tall
-  // column. `lane` is the x/z reach, `height` the vertical reach. Kept short on
-  // purpose so a real jump lifts you clear of a powerdown (you dodge by jumping or
-  // steering) while rolling over — or a small hop — still grabs it.
+  // column — so a real jump lifts you clear of a powerdown while rolling over grabs it.
   _reach(pos, playerPos, lane, height) {
     const dx = pos.x - playerPos.x, dz = pos.z - playerPos.z;
     return dx * dx + dz * dz < lane * lane && Math.abs(pos.y - playerPos.y) < height;
@@ -1199,7 +795,7 @@ export class PlatformField {
 
   harvestPowerups(playerPos, radius) {
     const grabbed = [];
-    const aura = CONFIG.powerupAuraRadius + radius; // matches the visible cloud (cloud radius + ball radius)
+    const aura = CONFIG.effects.powerupAuraRadius + radius; // matches the visible cloud (cloud radius + ball radius)
     for (const u of this.powerups) {
       if (u.collected) continue;
       if (this._reach(u.mesh.position, playerPos, aura, aura)) {
@@ -1210,9 +806,8 @@ export class PlatformField {
     return grabbed;
   }
 
-  // Cheat menu changed the allowed types — yank any already-spawned pickups whose
-  // type is no longer enabled, so the filter takes effect immediately (not just on
-  // platforms generated from here on).
+  // Cheat menu changed the allowed types — yank any already-spawned pickups whose type
+  // is no longer enabled, so the filter takes effect immediately.
   pruneDisabledPowerups() {
     for (let i = this.powerups.length - 1; i >= 0; i--) {
       const u = this.powerups[i];

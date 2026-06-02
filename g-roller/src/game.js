@@ -30,9 +30,9 @@ export class Game {
   constructor(canvas) {
     this.canvas = canvas;
     this.state = "start";
-    this.baseSpeed = CONFIG.forwardSpeed;
+    this.baseSpeed = CONFIG.player.forwardSpeed;
     this._diffSpeedMult = 1; // per-difficulty base-speed factor (set from the chosen level below)
-    this._speed = CONFIG.forwardSpeed; // smoothed actual speed (eases toward the target)
+    this._speed = CONFIG.player.forwardSpeed; // smoothed actual speed (eases toward the target)
     this._speedTimer = 0;
     this._accelBonus = 0;  // speed bonus accumulated while riding acceleration plates
     this._accelHold = 0;   // seconds left coasting at top speed after leaving a plate
@@ -40,7 +40,7 @@ export class Game {
     this._cheat = false;
     this._konami = [];
     this._firstPerson = false;
-    this._diffLevel = CONFIG.defaultDifficulty; // index into CONFIG.difficultyLevels
+    this._diffLevel = CONFIG.gen.defaultDifficulty; // index into CONFIG.gen.tiers
     this._zen = false; // Zen mode: no death (power-bounce instead), no scoring/gems, no hazards
     this._god = false; // God mode (cheat): no death (power-bounce) but difficulty + scoring stay NORMAL — get harder without dying
     this._audiosurf = false; // Audiosurf mode: the world pulses on the music's beat
@@ -143,8 +143,8 @@ export class Game {
     window.addEventListener("keydown", (e) => {
       if (this.state === "playing" || e.repeat) return; // arrows steer during play; ignore key-repeat
       this._konami.push(e.code);
-      if (this._konami.length > CONFIG.cheatCode.length) this._konami.shift();
-      if (CONFIG.cheatCode.every((k, i) => this._konami[i] === k)) {
+      if (this._konami.length > CONFIG.cheat.code.length) this._konami.shift();
+      if (CONFIG.cheat.code.every((k, i) => this._konami[i] === k)) {
         this._konami = [];
         this._toggleCheat();
       }
@@ -201,9 +201,9 @@ export class Game {
 
   _buildScene() {
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x141a33, CONFIG.fogNear, CONFIG.fogFar);
+    this.scene.fog = new THREE.Fog(0x141a33, CONFIG.effects.fogNear, CONFIG.effects.fogFar);
     this._fogLevel = 0; // smoothed 0..1 fog-powerdown amount (pulls the horizon in)
-    this._fogSmoke = new THREE.Color(CONFIG.fogSmokeColor); // grey the fog tints toward while fogged — reads as smoke, not shadow
+    this._fogSmoke = new THREE.Color(CONFIG.effects.fogSmokeColor); // grey the fog tints toward while fogged — reads as smoke, not shadow
     this._rainLevel = 0; // smoothed 0..1 rain-powerdown amount (drives the windshield overlay)
 
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 1200);
@@ -234,8 +234,8 @@ export class Game {
   }
 
   _resetWorld() {
-    this.baseSpeed = CONFIG.forwardSpeed;
-    this._speed = CONFIG.forwardSpeed;
+    this.baseSpeed = CONFIG.player.forwardSpeed;
+    this._speed = CONFIG.player.forwardSpeed;
     this._speedTimer = 0;
     this._accelBonus = 0;
     this._accelHold = 0;
@@ -255,8 +255,8 @@ export class Game {
     this.background.dim = 0;
     this.field.blackout = false;
     this._fogLevel = 0;
-    this.scene.fog.near = CONFIG.fogNear;
-    this.scene.fog.far = CONFIG.fogFar;
+    this.scene.fog.near = CONFIG.effects.fogNear;
+    this.scene.fog.far = CONFIG.effects.fogFar;
     this.canvas.classList.remove("is-tripping");
     this.scene.fog.color.setHex(BIOMES[0].fog);
     this.sun.color.setHex(BIOMES[0].sun);
@@ -278,16 +278,16 @@ export class Game {
     let n = 0;
     for (const k of BAD_EFFECTS) if (this._effects[k] > 0) n++;
     if (n === 0) return 0;
-    return n * CONFIG.powerdownMult + (n - 1) * CONFIG.powerdownStackBonus;
+    return n * CONFIG.scoring.powerdownMult + (n - 1) * CONFIG.scoring.powerdownStackBonus;
   }
 
   _effectiveSpeed() {
     let s = this.baseSpeed * this._diffSpeedMult; // Hard runs faster, Easy slower (gaps scale to live speed, so still reachable)
     if (!this._zen) s += this._accelBonus; // boost-plate accel — off in zen so it stays calm (no getting faster & faster)
-    if (this._effects.surge > 0) s += CONFIG.surgeAmount;
-    s += this.input.throttle * CONFIG.manualSpeed; // Up/Down arrows or thumbstick Y
-    if (this._effects.slow > 0) s *= CONFIG.slowFactor;
-    return Math.max(CONFIG.minSpeed, Math.min(CONFIG.maxForwardSpeed + CONFIG.accelMax + 6, s));
+    if (this._effects.surge > 0) s += CONFIG.effects.surgeAmount;
+    s += this.input.throttle * CONFIG.player.manualSpeed; // Up/Down arrows or thumbstick Y
+    if (this._effects.slow > 0) s *= CONFIG.effects.slowFactor;
+    return Math.max(CONFIG.player.minSpeed, Math.min(CONFIG.player.maxForwardSpeed + CONFIG.plates.accel.max + 6, s));
   }
 
   // How long a timed effect lasts — straight off its POWERUP_DEFS entry.
@@ -344,29 +344,24 @@ export class Game {
     this._syncSettings();
   }
 
-  // Push the effective hazard mult into the field. Zen mode forces it to 0, which
-  // makes _hazRamp return 0 — so no obstacles, movers, sharp turns, lean or powerups.
+  // Push the chosen tier's profile (pace/hazard/openness/density/drama) into the
+  // generator. Zen pins the danger ramp at a fixed mild point so it never escalates;
+  // normal play lets danger ramp with distance.
   _applyDifficultyMult() {
     if (this._zen) {
-      // Zen sits at a steady MEDIUM (not empty, not escalating): use Medium's mult and
-      // PIN the hazard ramp to a fixed point so it never ramps up with distance.
-      const med = CONFIG.difficultyLevels.find((l) => l.name === "Medium") ?? CONFIG.difficultyLevels[CONFIG.defaultDifficulty];
-      this.field.difficultyMult = med.mult;
-      this.field.spreadMult = med.spreadMult ?? 1; // zen sits at Medium's sprawl
-      this.field.fixedDifficulty = CONFIG.zenDifficulty;
+      // Zen sits at a steady MEDIUM: use Medium's profile and pin danger.
+      const med = CONFIG.gen.tiers.find((l) => l.name === "Medium") ?? CONFIG.gen.tiers[CONFIG.gen.defaultDifficulty];
+      this.field.setProfile(med, { fixedDanger: CONFIG.zen.fixedDanger });
     } else {
-      const lvl = CONFIG.difficultyLevels[this._diffLevel];
-      this.field.difficultyMult = lvl.mult;
-      this.field.spreadMult = lvl.spreadMult ?? 1; // Easy stays tight longer, Hard sprawls fast
-      this.field.fixedDifficulty = null; // normal: hazards ramp with distance
+      this.field.setProfile(CONFIG.gen.tiers[this._diffLevel]);
     }
   }
 
   _cycleDifficulty() {
-    this._diffLevel = (this._diffLevel + 1) % CONFIG.difficultyLevels.length;
-    const lvl = CONFIG.difficultyLevels[this._diffLevel];
+    this._diffLevel = (this._diffLevel + 1) % CONFIG.gen.tiers.length;
+    const lvl = CONFIG.gen.tiers[this._diffLevel];
     this._applyDifficultyMult(); // takes effect on platforms generated from here on
-    this._diffSpeedMult = lvl.speedMult ?? 1; // Hard runs faster, Easy slower
+    this._diffSpeedMult = lvl.pace; // Hard runs faster, Easy slower
     this._toast(`🎚️ ${lvl.name.toUpperCase()}`, "#ffd34e");
     this._syncSettings();
   }
@@ -409,7 +404,7 @@ export class Game {
       this.sound.start(); // a toggle is a user gesture, so audio is allowed to start
       // Keep the current track if it's already beat-steady (Pulse Runner OR Solar
       // Drive); only switch to the default rhythmic track if the pick can't carry it.
-      if (!this.sound.currentSteady()) this.sound.setTrack(CONFIG.audiosurfTrack);
+      if (!this.sound.currentSteady()) this.sound.setTrack(CONFIG.audiosurf.track);
       this._installBeatHook();
       this._toast("🎵 AUDIOSURF: On", "#ff4bd6");
     } else {
@@ -436,7 +431,7 @@ export class Game {
   // gem-sparkle accent at the ball. The decay (in _loop) folds it into bloom + FOV.
   _fireBeatPulse() {
     if (!this._audiosurf) return; // a stale scheduled callback after toggling off
-    this._beatPulse = this._reducedMotion ? CONFIG.audiosurfReducedScale : 1;
+    this._beatPulse = this._reducedMotion ? CONFIG.audiosurf.reducedScale : 1;
     // Light gameplay accent: a small cyan sparkle on the ball, in sync with the beat.
     if (this.state === "playing" && !this._reducedMotion) {
       this.particles.burst(this.player.position, 0xff4bd6, 6);
@@ -497,7 +492,7 @@ export class Game {
     s.fx.textContent = `🎚️ Music FX: ${this.sound.reactive ? "On" : "Off"}`;
     s.motion.textContent = `🌿 Reduced Motion: ${this._reducedMotion ? "On" : "Off"}`;
     s.view.textContent = `👁 View: ${this._firstPerson ? "First-person" : "Third-person"}`;
-    s.difficulty.textContent = `🎚️ Difficulty: ${CONFIG.difficultyLevels[this._diffLevel].name}`;
+    s.difficulty.textContent = `🎚️ Difficulty: ${CONFIG.gen.tiers[this._diffLevel].name}`;
     if (s.skin) s.skin.textContent = `🎨 Ball Skin: ${BALL_SKINS[this._skinIndex ?? 0].name}`;
     if (s.zen) s.zen.textContent = "🧘 Zen Mode: " + (this._zen ? "On" : "Off");
     if (s.audiosurf) s.audiosurf.textContent = "🎵 Audiosurf: " + (this._audiosurf ? "On" : "Off");
@@ -535,7 +530,7 @@ export class Game {
     const diff = get("gr_diff");
     if (diff !== null) {
       const i = Number(diff);
-      if (i >= 0 && i < CONFIG.difficultyLevels.length) this._diffLevel = i;
+      if (i >= 0 && i < CONFIG.gen.tiers.length) this._diffLevel = i;
     }
     const zen = get("gr_zen");
     if (zen !== null) this._zen = zen === "1";
@@ -546,10 +541,10 @@ export class Game {
     // Play audiosurf's rhythmic track while it's on, otherwise the saved manual choice.
     this.sound.setTrack(this._userTrack);
     // Audiosurf needs a steady beat; keep the saved pick if it's steady, else default.
-    if (this._audiosurf && !this.sound.currentSteady()) this.sound.setTrack(CONFIG.audiosurfTrack);
+    if (this._audiosurf && !this.sound.currentSteady()) this.sound.setTrack(CONFIG.audiosurf.track);
     this._applyDifficultyMult(); // apply restored (or default) level — forced to 0 in zen
     document.body.classList.toggle("is-zen", this._zen); // hide HUD counters if restored into zen
-    this._diffSpeedMult = CONFIG.difficultyLevels[this._diffLevel].speedMult ?? 1;
+    this._diffSpeedMult = CONFIG.gen.tiers[this._diffLevel].pace;
     const skin = get("gr_skin");
     this._skinIndex = this.player.setSkin(skin !== null ? Number(skin) : 0); // apply saved (or default) skin
   }
@@ -568,7 +563,7 @@ export class Game {
 
   _toggleCheat() {
     this._cheat = !this._cheat;
-    this.field.itemMultiplier = this._cheat ? CONFIG.cheatItemMultiplier : 1;
+    this.field.itemMultiplier = this._cheat ? CONFIG.cheat.itemMultiplier : 1;
     if (!this._cheat) this._setAllPowerups(true); // leaving cheat restores the full spawn pool
     this._toast(
       this._cheat ? "🎮 CHEAT ON · pick your spawn pool in ⚙️" : "CHEAT OFF",
@@ -592,7 +587,7 @@ export class Game {
       this._dyingT += dt;
       const pl = this.player, v = pl.vel;
       if (pl.mesh.visible) {
-        v.y -= CONFIG.gravity * dt;          // only gravity — forward/sideways are locked
+        v.y -= CONFIG.player.gravity * dt;          // only gravity — forward/sideways are locked
         pl.position.y += v.y * dt;           // position IS the mesh position — falls straight down
         pl._roll(dt);                        // keeps tumbling (its forward/side spin is retained)
         // Ease the gaze toward the ball (seeded from the live view dir in _die, so no snap).
@@ -608,7 +603,7 @@ export class Game {
       // with a hard safety cap in case the fall never registers a splash.
       if (this.input.startPresses !== this._seenStart) { this._seenStart = this.input.startPresses; this._finishDeath(); }
       else if (this._splashT != null && this._dyingT - this._splashT >= 1.5) this._finishDeath();
-      else if (this._dyingT >= CONFIG.fallDeathHang) this._finishDeath();
+      else if (this._dyingT >= CONFIG.world.fallDeathHang) this._finishDeath();
     } else if (this.state === "paused") {
       // Frozen. A jump press (or Esc, handled in keydown) resumes — NOT a restart.
       if (this.input.startPresses !== this._seenStart) {
@@ -627,9 +622,9 @@ export class Game {
     // the beat, not a glow that lingers). _tickPlaying / _tickCamera fold the live
     // value into bloom + FOV; on the title screen we add the bloom kick here so the
     // pulse is visible there too (where the loop below skips _tickPlaying's bloom line).
-    if (this._beatPulse > 0) this._beatPulse = Math.max(0, this._beatPulse - dt * CONFIG.audiosurfDecay);
+    if (this._beatPulse > 0) this._beatPulse = Math.max(0, this._beatPulse - dt * CONFIG.audiosurf.decay);
     if (this._audiosurf && this.state !== "playing") {
-      this.bloom.strength = this._bloomBase + (this._biomeBloom || 0) + this._beatPulse * CONFIG.audiosurfBloomKick;
+      this.bloom.strength = this._bloomBase + (this._biomeBloom || 0) + this._beatPulse * CONFIG.audiosurf.bloomKick;
     }
 
     this.particles.update(dt);
@@ -646,7 +641,7 @@ export class Game {
     // If Audiosurf is on (e.g. restored from a saved pref before audio existed), make
     // sure the rhythmic track is forced and the beat hook is live now that audio runs.
     if (this._audiosurf) {
-      if (!this.sound.currentSteady()) this.sound.setTrack(CONFIG.audiosurfTrack); // any steady track is fine for the on-beat pulse
+      if (!this.sound.currentSteady()) this.sound.setTrack(CONFIG.audiosurf.track); // any steady track is fine for the on-beat pulse
       if (!this.sound.onBeat) this._installBeatHook();
     }
     if (this.state === "dead") this._resetWorld();
@@ -663,9 +658,9 @@ export class Game {
     // pace, no getting-faster-and-faster.
     if (!this._zen) {
       this._speedTimer += dt;
-      if (this._speedTimer >= CONFIG.speedRampEvery) {
+      if (this._speedTimer >= CONFIG.world.speedRampEvery) {
         this._speedTimer = 0;
-        this.baseSpeed = Math.min(CONFIG.maxForwardSpeed, this.baseSpeed + CONFIG.speedRampAmount);
+        this.baseSpeed = Math.min(CONFIG.player.maxForwardSpeed, this.baseSpeed + CONFIG.world.speedRampAmount);
       }
     }
     if (this._invuln > 0) this._invuln -= dt;
@@ -684,9 +679,9 @@ export class Game {
     // to light its platform edges (emergency-aisle glow). Eases in and back out.
     const darkTarget = this._effects.blackout > 0 ? 1 : 0;
     this._darkLevel += (darkTarget - this._darkLevel) * (1 - Math.exp(-dt / 0.45));
-    const m = 1 - this._darkLevel * (1 - CONFIG.blackoutDim);
+    const m = 1 - this._darkLevel * (1 - CONFIG.effects.blackoutDim);
     // Audiosurf: flash the scene lights brighter on each beat — the "ground" pump.
-    const beatLight = this._audiosurf ? this._beatPulse * CONFIG.audiosurfLightKick : 0;
+    const beatLight = this._audiosurf ? this._beatPulse * CONFIG.audiosurf.lightKick : 0;
     this.hemi.intensity = this._hemiBase * (m + beatLight);
     this.sun.intensity = this._sunBase * (m + beatLight);
     this.background.dim = this._darkLevel; // fade the skyline/moon down too
@@ -704,8 +699,8 @@ export class Game {
     // DISTANCE while the lights stay on, so you can't read far-off platforms).
     const fogTarget = this._effects.fog > 0 ? 1 : 0;
     this._fogLevel += (fogTarget - this._fogLevel) * (1 - Math.exp(-dt / 0.5));
-    this.scene.fog.near = CONFIG.fogNear + (CONFIG.fogBlindNear - CONFIG.fogNear) * this._fogLevel;
-    this.scene.fog.far = CONFIG.fogFar + (CONFIG.fogBlindFar - CONFIG.fogFar) * this._fogLevel;
+    this.scene.fog.near = CONFIG.effects.fogNear + (CONFIG.effects.fogBlindNear - CONFIG.effects.fogNear) * this._fogLevel;
+    this.scene.fog.far = CONFIG.effects.fogFar + (CONFIG.effects.fogBlindFar - CONFIG.effects.fogFar) * this._fogLevel;
     // Tint the fog toward grey smoke as it rolls in — otherwise distance just fades
     // to the dark biome colour (reads as shadow, not smoke). Strong lerp so it wins
     // against the biome colour crossfade; when fog lifts, _fogLevel→0 hands the
@@ -722,7 +717,7 @@ export class Game {
     // Audiosurf adds a brief bloom kick on each beat (decayed in _loop) on top of
     // the usual base + fog + biome flare — the core "pulses with the music" feel.
     this.bloom.strength = this._bloomBase + this._fogLevel * 0.7 + this._biomeBloom + this._biomeFlash
-      + (this._audiosurf ? this._beatPulse * CONFIG.audiosurfBloomKick : 0);
+      + (this._audiosurf ? this._beatPulse * CONFIG.audiosurf.bloomKick : 0);
 
     // Rain powerdown: heavy windshield rain. Fade the lens overlay in/out with the
     // effect + ramp a blur (wet, blurred vision — cousin of fog). The streaks and
@@ -766,8 +761,8 @@ export class Game {
     // While riding a boost plate, chase the target FAST so the whole speed gain
     // lands before you lift off — otherwise the eased catch-up keeps climbing in the
     // air (felt like "accelerating mid-jump"). Slow-mo easing still wins when active.
-    const tau = this._effects.slow > 0 && target < this._speed ? CONFIG.slowEase
-      : this.player.onBoost ? CONFIG.accelEase
+    const tau = this._effects.slow > 0 && target < this._speed ? CONFIG.effects.slowEase
+      : this.player.onBoost ? CONFIG.plates.accel.ease
       : 0.33;
     this._speed += (target - this._speed) * (1 - Math.exp(-dt / tau));
     const speed = this._speed;
@@ -785,9 +780,9 @@ export class Game {
     // _effMult folds in the powerdown risk/reward bonus on top of the combo multiplier
     // (also used for gem pickups + the HUD this frame).
     this._effMult = this.multiplier + this._dangerBonus();
-    if (!this._zen) this.score += speed * dt * CONFIG.scorePerMeter * this._effMult; // scoring is off in zen
+    if (!this._zen) this.score += speed * dt * CONFIG.scoring.scorePerMeter * this._effMult; // scoring is off in zen
     this._comboTimer += dt;
-    if (this._comboTimer >= CONFIG.comboDecay && this.multiplier > 1) {
+    if (this._comboTimer >= CONFIG.scoring.comboDecay && this.multiplier > 1) {
       this.multiplier -= 1; this._comboTimer = 0;
     }
     this._updateBiome(this.player.position.z, dt);
@@ -800,7 +795,7 @@ export class Game {
       maxAirJumps: this._effects.doublejump > 0 ? 1 : 0,
       flight: this._effects.flight > 0,
       morph: this._effects.morph > 0,
-      gravityScale: this._effects.lowgrav > 0 ? CONFIG.lowgravScale : 1,
+      gravityScale: this._effects.lowgrav > 0 ? CONFIG.effects.lowgravScale : 1,
       flubber: this._effects.flubber > 0,
     };
     const ev = this.player.update(dt, this.input, ctx, this.field);
@@ -810,12 +805,12 @@ export class Game {
     // you stay. After you leave you coast at top speed for a beat (accelHold), then
     // bleed off in a steady LINEAR decel — momentum draining, not a hard cutoff.
     if (this.player.onBoost) {
-      this._accelBonus = Math.min(CONFIG.accelMax, this._accelBonus + (CONFIG.accelRate + this._accelBonus * CONFIG.accelGrowth) * dt);
-      this._accelHold = CONFIG.accelHold;
+      this._accelBonus = Math.min(CONFIG.plates.accel.max, this._accelBonus + (CONFIG.plates.accel.rate + this._accelBonus * CONFIG.plates.accel.growth) * dt);
+      this._accelHold = CONFIG.plates.accel.hold;
     } else if (this._accelHold > 0) {
       this._accelHold -= dt; // still launched — hold the top speed before decel starts
     } else {
-      this._accelBonus = Math.max(0, this._accelBonus - CONFIG.accelDecay * dt);
+      this._accelBonus = Math.max(0, this._accelBonus - CONFIG.plates.accel.decay * dt);
     }
 
     if (ev.jumped) this.sound.jump();
@@ -845,7 +840,7 @@ export class Game {
       // Zen mode doesn't count gems or score them — but they still sparkle on pickup.
       if (!this._zen) {
         this.gems += 1;
-        this.score += CONFIG.gemScore * (this._effMult ?? this.multiplier);
+        this.score += CONFIG.scoring.gemScore * (this._effMult ?? this.multiplier);
       }
       this.particles.burst(pos, 0x66f0ff, 16);
     }
@@ -867,9 +862,9 @@ export class Game {
     // re-trigger until you fall back down.
     if ((this._zen || this._god) && this.player.vel.y < 0) {
       const floor = this.field.lowestTopNear(this.player.position.z);
-      const catchLine = (floor === -Infinity ? 0 : floor) - CONFIG.zenCatchDepth;
+      const catchLine = (floor === -Infinity ? 0 : floor) - CONFIG.zen.catchDepth;
       if (this.player.position.y < catchLine) {
-        this.player.vel.y = CONFIG.jumpSpeed * CONFIG.zenBounce;
+        this.player.vel.y = CONFIG.player.jumpSpeed * CONFIG.zen.bounce;
         this.player.vel.x *= 0.5;
         this.particles.burst(this.player.position, 0x9affd6, 18);
         this.sound.bounce();
@@ -886,9 +881,9 @@ export class Game {
       // Forward BLAST on top of the big vertical. Inject straight into the live speed
       // (uncapped by accelMax) so you genuinely fly FORWARD, not just up like a
       // trampoline — then it eases back. The accel bonus + hold sustain it briefly.
-      this._speed = Math.min(CONFIG.flipperMaxSpeed, this._speed + CONFIG.flipperForward); // fling FASTER than the normal ceiling — that's the power
-      this._accelBonus = Math.min(CONFIG.accelMax, this._accelBonus + CONFIG.flipperForward);
-      this._accelHold = CONFIG.accelHold;
+      this._speed = Math.min(CONFIG.plates.flipper.maxSpeed, this._speed + CONFIG.plates.flipper.forward); // fling FASTER than the normal ceiling — that's the power
+      this._accelBonus = Math.min(CONFIG.plates.accel.max, this._accelBonus + CONFIG.plates.flipper.forward);
+      this._accelHold = CONFIG.plates.accel.hold;
       this.particles.burst(p, 0xff7a1c, 28); this._shake = 0.5; this._toast("LAUNCH!", "#ff7a1c"); this.sound.bounce();
     } else if (ev.landed === "boost") {
       this.particles.burst(p, 0x2bff6a, 16); this.sound.boost(); // acceleration plate — speed builds while you ride it
@@ -916,7 +911,7 @@ export class Game {
       // Shield absorbs the hit, smashes the obstacle, and grants a mercy window —
       // but a survived mistake breaks your combo.
       this._effects.shield = false;
-      this._invuln = CONFIG.invulnTime;
+      this._invuln = CONFIG.effects.invulnTime;
       this.multiplier = 1; this._comboTimer = 0;
       this.field.removeObstacle(hit.platform, hit.obstacle);
       this.particles.burst(this.player.position, 0x35e0ff, 26);
@@ -931,9 +926,9 @@ export class Game {
 
   // A clean graze past a hazard: bonus, multiplier bump, juice.
   _onNearMiss() {
-    this.multiplier = Math.min(CONFIG.multiplierMax, this.multiplier + 1);
+    this.multiplier = Math.min(CONFIG.scoring.multiplierMax, this.multiplier + 1);
     this._comboTimer = 0;
-    this.score += CONFIG.nearMissBonus * this.multiplier;
+    this.score += CONFIG.scoring.nearMissBonus * this.multiplier;
     this._freeze = 0.05;
     if (!this._reducedMotion) this._shake = Math.max(this._shake, 0.2);
     this._toast(`CLOSE! ×${this.multiplier}`, "#ffd34e");
@@ -1053,7 +1048,7 @@ export class Game {
       console.log(
         `[G-Roller] DEATH — fell off. ball.y=${this.player.position.y.toFixed(1)}, ` +
         `lowest landable surface near=${floor === -Infinity ? "NONE" : floor.toFixed(1)}, ` +
-        `fallMargin=${CONFIG.fallMargin} (died once ball.y < surface-margin), ` +
+        `fallMargin=${CONFIG.world.fallMargin} (died once ball.y < surface-margin), ` +
         `grounded=${this.player.grounded}, z=${this.player.position.z.toFixed(1)}, speed=${this._speed.toFixed(1)}`
       );
     } else {
@@ -1142,7 +1137,7 @@ export class Game {
     this._hud.mult.textContent = danger > 0 ? `×${this.multiplier + danger}🔥` : `×${this.multiplier}`;
     this._hud.distance.textContent = Math.max(0, Math.floor(this.player.position.z));
     this._hud.speed.textContent = Math.round(this._speed); // smoothed actual speed — spikes when you ride an accel plate
-    if (this._hud.diff) this._hud.diff.textContent = CONFIG.difficultyLevels[this._diffLevel].name;
+    if (this._hud.diff) this._hud.diff.textContent = CONFIG.gen.tiers[this._diffLevel].name;
     this._hud.jumps.textContent = Math.max(0, this.player.jumpCount);
     this._hud.gems.textContent = this.gems;
     this._hud.bestScore.textContent = this.bestScore.toLocaleString();
@@ -1216,10 +1211,10 @@ export class Game {
     // Smooth the throttle and use it for a clear, bidirectional FOV punch:
     // accelerating widens the view, braking narrows it.
     this._throttleSmooth += (this.input.throttle - this._throttleSmooth) * 0.1;
-    const speedFov = Math.min(14, Math.max(0, this._speed - CONFIG.forwardSpeed) * 0.4);
+    const speedFov = Math.min(14, Math.max(0, this._speed - CONFIG.player.forwardSpeed) * 0.4);
     // Audiosurf: a quick FOV widen on each beat (rides the same decaying pulse as the
     // bloom kick) so the camera "breathes" with the music alongside the glow flash.
-    const beatFov = this._audiosurf ? this._beatPulse * CONFIG.audiosurfFovKick : 0;
+    const beatFov = this._audiosurf ? this._beatPulse * CONFIG.audiosurf.fovKick : 0;
     const targetFov = this._baseFov + speedFov + this._throttleSmooth * 6 + beatFov;
     if (Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.camera.fov += (targetFov - this.camera.fov) * 0.08;

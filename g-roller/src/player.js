@@ -413,7 +413,7 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
 // riding moving platforms and bumping into obstacles.
 export class Player {
   constructor(scene) {
-    this.radius = CONFIG.playerRadius;
+    this.radius = CONFIG.player.playerRadius;
 
     const group = new THREE.Group();
     // ONE MeshPhysicalMaterial for every skin. It extends MeshStandardMaterial, so
@@ -640,7 +640,7 @@ export class Player {
     // landing still fires the moment we touch down.
     if (input.jumpPresses !== this._seenPresses) {
       this._seenPresses = input.jumpPresses;
-      this._jumpBuffer = CONFIG.jumpBufferTime;
+      this._jumpBuffer = CONFIG.player.jumpBufferTime;
     }
     this._jumpBuffer = Math.max(0, this._jumpBuffer - dt);
 
@@ -649,19 +649,19 @@ export class Player {
 
     let jumped = false;
     if (ctx.flight && input.jumpHeld) {
-      v.y = CONFIG.flightLift; this.grounded = false; // hold jump to soar
+      v.y = CONFIG.effects.flightLift; this.grounded = false; // hold jump to soar
     } else if ((this._jumpBuffer > 0 || input.jumpHeld) && canGroundJump) {
       // Fire on a buffered press OR simply because the button is HELD — so holding
       // jump auto-hops the instant you touch down (or within coyote time as you roll
       // off an edge). This is the grace for "I was a few frames late to the button."
-      v.y = CONFIG.jumpSpeed; this.grounded = false; this.airJumps = 0;
+      v.y = CONFIG.player.jumpSpeed; this.grounded = false; this.airJumps = 0;
       this._coyote = 0; this._jumpBuffer = 0; jumped = true; this._controlledJump = true;
     } else if (this._jumpBuffer > 0 && this.airJumps < ctx.maxAirJumps) {
-      v.y = CONFIG.jumpSpeed; this.airJumps++; this._jumpBuffer = 0; jumped = true; this._controlledJump = true; // double jump
+      v.y = CONFIG.player.jumpSpeed; this.airJumps++; this._jumpBuffer = 0; jumped = true; this._controlledJump = true; // double jump
     } else if (this._controlledJump && !input.jumpHeld && v.y > 0 && !this.grounded) {
       // "Hold for height" only chops a jump the PLAYER initiated — auto-launches
       // (trampolines, flubber) keep their full velocity so they go big.
-      v.y /= CONFIG.quickDescentDivisor;
+      v.y /= CONFIG.player.quickDescentDivisor;
     }
 
     // Steering (steerMult flips for the "reverse" powerdown). When morphed, the
@@ -675,14 +675,14 @@ export class Player {
                 + 0.30 * Math.sin(this._t * 5.3 + 2.1)
                 + 0.25 * Math.sin(this._t * 14.7 + 0.7)
                 + this._morphDrift;
-      steer = steer * 0.55 + wob * (CONFIG.morphWobble / CONFIG.sideSpeed); // less of your own control, too
+      steer = steer * 0.55 + wob * (CONFIG.effects.morphWobble / CONFIG.player.sideSpeed); // less of your own control, too
     }
-    v.x = steer * CONFIG.sideSpeed;
+    v.x = steer * CONFIG.player.sideSpeed;
     v.z = ctx.forwardSpeed;
     // Asymmetric gravity: float UP gently (riseGravity), fall DOWN fast (full gravity).
     // That's the "swinging from the rooftops" feel — long, floaty hang on the way up,
     // a satisfying drop on the way down. gravityScale (low-grav powerup) still applies.
-    const g = v.y > 0 ? CONFIG.riseGravity : CONFIG.gravity;
+    const g = v.y > 0 ? CONFIG.player.riseGravity : CONFIG.player.gravity;
     v.y -= g * (ctx.gravityScale || 1) * dt;
 
     const prevBottom = p.y - this.radius;
@@ -704,26 +704,26 @@ export class Player {
         let fresh = !prevRide;
         if (best.type === "bouncy") {
           // Trampoline: a MASSIVE auto-launch (not chopped — see _controlledJump).
-          v.y = CONFIG.jumpSpeed * CONFIG.bounceBoost; this.airJumps = 0; this._controlledJump = false;
+          v.y = CONFIG.player.jumpSpeed * CONFIG.plates.bounce.boost; this.airJumps = 0; this._controlledJump = false;
         } else if (best.type === "flipper") {
           // Flipper: hinged springboard. Big vertical AND a forward blast (added in
           // game._onLanded). Kicks the plate's flip animation. SENDS you — survive the landing.
-          v.y = CONFIG.jumpSpeed * CONFIG.flipperVertical; this.airJumps = 0; this._controlledJump = false;
-          best._flipT = CONFIG.flipperFlipTime; fresh = true; landed = "flipper";
+          v.y = CONFIG.player.jumpSpeed * CONFIG.plates.flipper.vertical; this.airJumps = 0; this._controlledJump = false;
+          best._flipT = CONFIG.plates.flipper.flipTime; fresh = true; landed = "flipper";
         } else if (ctx.flubber) {
           // Flubber powerdown: auto-bounce off ANY surface, a bit higher than a
           // jump — you have to steer in the air to stay on course.
-          p.y = bestTop + this.radius; v.y = CONFIG.jumpSpeed * CONFIG.flubberBounce; this.airJumps = 0;
+          p.y = bestTop + this.radius; v.y = CONFIG.player.jumpSpeed * CONFIG.effects.flubberBounce; this.airJumps = 0;
           this._controlledJump = false; fresh = true; landed = "flubber";
         } else {
           p.y = bestTop + this.radius; v.y = 0; this.grounded = true; this._ridePlat = best; this.airJumps = 0;
           this._controlledJump = false;
           if (best.type === "boost") this.onBoost = true; // game ramps speed while you ride it
           // Curved board: drift toward the middle (concave) or off the sides (convex).
-          if (best.curve) p.x += -CONFIG.curveForce * best.curve * (p.x - best.pos.x) * dt;
+          if (best.curve) p.x += -CONFIG.plates.curveForce * best.curve * (p.x - best.pos.x) * dt;
           // Banked board: a constant downhill drag toward the low edge (leanX>0 lifts
           // the +x side, so you slide toward -x). Steer against it or roll off the side.
-          if (best.leanX) p.x += -CONFIG.leanForce * best.leanX * dt;
+          if (best.leanX) p.x += -CONFIG.plates.leanForce * best.leanX * dt;
         }
         this.lastGroundedY = bestTop;
         // Only report a fresh landing (not every grounded frame) so landing
@@ -735,7 +735,7 @@ export class Player {
     // Launch off the top of an up-ramp: keep some of the climb as a hop (clamped
     // so a fast steep ramp doesn't fling you like a full jump).
     if (!this.grounded && prevRide && prevRide.slopeZ > 0 && prevRide !== this._ridePlat && v.y <= 0) {
-      v.y = Math.max(v.y, Math.min(prevRide.slopeZ * v.z * CONFIG.rampLaunch, CONFIG.jumpSpeed * 0.8));
+      v.y = Math.max(v.y, Math.min(prevRide.slopeZ * v.z * CONFIG.plates.rampLaunch, CONFIG.player.jumpSpeed * 0.8));
     }
 
     // --- Obstacle collision + near-miss detection ---
@@ -750,7 +750,7 @@ export class Player {
         if (dz > o.hz + r || dy > o.hy + r) continue;     // not alongside it
         if (dx <= o.hx + r) {
           if (!ctx.invuln) { hit = { platform: plat, obstacle: o }; break; }
-        } else if (dx <= o.hx + r + CONFIG.nearMissMargin && !o._nm) {
+        } else if (dx <= o.hx + r + CONFIG.scoring.nearMissMargin && !o._nm) {
           o._nm = true; nearMiss = true; // grazed it — counts once per obstacle
         }
       }
@@ -768,13 +768,13 @@ export class Player {
     this._roll(dt);
 
     // Refresh coyote time from this frame's grounded state (read next frame).
-    if (this.grounded) this._coyote = CONFIG.coyoteTime;
+    if (this.grounded) this._coyote = CONFIG.player.coyoteTime;
     else this._coyote = Math.max(0, this._coyote - dt);
 
     // Die only once we're below the lowest floor still drawn nearby — so there's
     // truly nothing left to land on (not just below the last pad we stood on).
     const floor = field.lowestTopNear(p.z);
-    const died = !this.grounded && p.y < floor - CONFIG.fallMargin;
+    const died = !this.grounded && p.y < floor - CONFIG.world.fallMargin;
     return { died, landed, hit, nearMiss, jumped, pos: p };
   }
 

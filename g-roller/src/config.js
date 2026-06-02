@@ -1,277 +1,355 @@
-// All the gameplay numbers in one place. Built on the original Unity
-// GameManager values, tuned so the web version feels good and the main path is
-// always reachable with a well-timed jump.
+// =============================================================================
+// G-Roller config — every tunable number, grouped by what it controls.
+//
+// Sections:
+//   player    — the ball's own movement & physics
+//   plates    — how special plates push the ball (accel/bounce/flipper/tilt)
+//   effects   — how each powerup/powerdown behaves once collected
+//   scoring   — the score & combo economy
+//   world     — run framing (culling, death, starter, base-speed ramp)
+//   zen       — the calm no-death mode
+//   audiosurf — the beat-pulse mode
+//   cheat     — the secret test menu
+//   gen       — THE procedural generator: what spawns, where, how often, how big
+//
+// The mental model for `gen`: it decides WHAT pieces spawn, WHERE, HOW OFTEN and
+// HOW BIG. How the ball RESPONDS to a piece lives in player/plates/effects. So a
+// ramp's spawn-chance + steepness is in gen, but the launch it gives you is in
+// plates; an obstacle's spawn-chance is in gen, but no "response" — you just dodge.
+//
+// Difficulty (Easy/Medium/Hard) is NOT a pile of special-cases. It's five intuitive
+// knobs per tier (see `gen.tiers`) that scale one shared ruleset. See the long note
+// above `gen` for the full model.
+// =============================================================================
 
 export const CONFIG = {
-  // Player movement (units per second)
-  sideSpeed: 20,
-  forwardSpeed: 24, // starting auto-run speed (eases up from here) — 5% slower
-  maxForwardSpeed: 63,
-  jumpSpeed: 42, // launch velocity — trimmed from 50 so the take-off is less "springy"/explosive
-  gravity: 39, // FALL gravity (the drop the player likes — kept full-strength)
-  riseGravity: 23, // ASCENT gravity — much weaker than fall, so the jump floats UP slowly (Spider-Man swing feel) but still drops fast. Asymmetric on purpose.
-  playerRadius: 0.9,
+  // --- The ball -------------------------------------------------------------
+  player: {
+    sideSpeed: 20, // left/right strafe (units per second)
+    forwardSpeed: 24, // starting auto-run speed (eases up from here)
+    maxForwardSpeed: 63,
+    minSpeed: 15, // speed never eases below this (so you can't stall)
+    manualSpeed: 8, // Up/Down arrows nudge speed this much (kept small so gaps stay reachable)
 
-  // Variable jump: releasing jump while rising chops upward speed for a fast drop
-  quickDescentDivisor: 1.7,
+    jumpSpeed: 42, // launch velocity — trimmed from 50 so take-off is less "springy"
+    gravity: 39, // FALL gravity (the drop the player likes — full strength)
+    riseGravity: 23, // ASCENT gravity — weaker, so the jump floats UP slowly (Spider-Man swing feel). Asymmetric on purpose.
+    quickDescentDivisor: 1.7, // releasing jump while rising chops upward speed by this for a fast drop
+    playerRadius: 0.9,
 
-  // Forgiveness so edge/just-landed jumps always register:
-  coyoteTime: 0.1, // still jump for this long after rolling off a ledge
-  jumpBufferTime: 0.5, // a jump pressed this soon before landing still fires (generous quick-jump grace)
+    // Forgiveness so edge/just-landed jumps always register:
+    coyoteTime: 0.1, // still jump for this long after rolling off a ledge
+    jumpBufferTime: 0.5, // a jump pressed this soon before landing still fires
+  },
 
-  // Acceleration plates (the green-arrow boards): the longer you ride one, the
-  // faster you go — speed builds up smoothly while on it and eases back off when
-  // you leave it.
-  // The build COMPOUNDS: rate = accelRate + currentBonus * accelGrowth. A quick
-  // tap (land + jump straight off) only nudges you; ride the full length and it
-  // steepens into a real zoom, capping just under a second of solid riding.
-  accelRate: 13, // initial speed gained per second the instant you touch a plate
-  accelGrowth: 2.3, // how fast the build rate itself ramps up the longer you ride
-  accelMax: 42, // cap on the accumulated bonus — a big top-end on a full ride
-  accelHold: 1.4, // seconds you stay launched at top speed before the decel kicks in
-  accelDecay: 9, // speed lost per second after the hold — a steady, linear glide back
-  accelEase: 0.09, // while ON a boost plate, speed chases its target THIS fast (small = snappy) so all the gain happens before you lift off — no accelerating in mid-air
+  // --- How special plates push the ball -------------------------------------
+  plates: {
+    // Acceleration plates (green arrows): the longer you ride one, the faster you
+    // go. The build COMPOUNDS — a quick tap nudges you; a full ride steepens into a
+    // real zoom that caps just under a second of solid riding.
+    accel: {
+      rate: 13, // speed gained per second the instant you touch a plate
+      growth: 2.3, // how fast that build rate itself ramps the longer you ride
+      max: 42, // cap on the accumulated bonus
+      hold: 1.4, // seconds at top speed before the decay kicks in
+      decay: 9, // speed lost per second after the hold (steady linear glide back)
+      ease: 0.09, // while ON a plate, speed chases its target this fast (small = snappy, so the gain happens before you lift off)
+    },
+    // Trampoline boards (pink): launch you up like a boosted jump.
+    bounce: { boost: 1.7 }, // launch velocity = player.jumpSpeed * this
+    // Flipper plate (orange): a hinged springboard that sends you up AND forward.
+    flipper: {
+      vertical: 1.75, // launch v.y = player.jumpSpeed * this (big air — it's a CANNON)
+      forward: 95, // forward speed BLAST injected on launch
+      maxSpeed: 150, // the flipper launch can fling you this fast (vs the normal ~111 ceiling)
+      flipTime: 0.4, // seconds the hinge-kick animation lasts
+    },
+    // Board-tilt responses — how the ball reacts to a board's slope/curve/bank.
+    rampLaunch: 0.7, // fraction of climb speed kept as a hop off an up-ramp
+    curveForce: 16, // sideways "gravity" on a curved board — multiplied by the (random) curve, so a deep bowl pulls hard
+    leanForce: 14, // downhill "gravity" while riding a banked board — multiplied by the (random) lean
+  },
 
-  // Trampoline boards (the pink ones): launch you up like a boosted jump.
-  bounceBoost: 1.7, // launch velocity = jumpSpeed * this (trimmed — jumpSpeed 50 made 2.05 absurd)
-  zenBounce: 2.0, // Zen mode: a would-be-fatal fall instead power-bounces you up at jumpSpeed * this (~200% jump)
-  zenCatchDepth: 32, // Zen mode: how far BELOW the lowest nearby board you fall before the bounce catches you — high enough that you watch a real fall, not an instant fling
-  zenDifficulty: 0.2, // Zen mode: the hazard ramp is PINNED here (no escalation with distance) — a steady, mild-but-interesting Medium level, not Easy-empty and not ramping into panic
+  // --- How each powerup / powerdown behaves ---------------------------------
+  // (Each effect's duration, color, icon, label and good/bad flag live together on
+  // its POWERUP_DEFS entry in platforms.js — one source of truth. These are the
+  // strength/tuning knobs only.)
+  effects: {
+    powerupChance: 0.3, // chance a path platform spawns a pickup
+    powerupAuraRadius: 5, // visible glowing trigger-cloud radius around each pickup
+    magnetRadius: 32, // gems within this distance get sucked in
+    magnetPull: 22, // how hard the magnet yanks gems
+    slowFactor: 0.72, // forward speed multiplier while slowed
+    slowEase: 2.4, // seconds to ease into the slow
+    surgeAmount: 16, // extra forward speed while surged (a powerdown)
+    invulnTime: 1.2, // mercy window after a shielded hit
+    flightLift: 19, // upward speed while flying
+    morphWobble: 12, // strength of the steering wobble while morphed
+    lowgravScale: 0.45, // gravity multiplier while low-grav is active
+    flubberBounce: 1.3, // bounce velocity = player.jumpSpeed * this
+    blackoutDim: 0.3,
+    fogNear: 80,
+    fogFar: 230, // normal fog distances (clear & far-seeing)
+    fogBlindNear: 42,
+    fogBlindFar: 95, // "fogged" distances — clear close, grey wall beyond
+    fogSmokeColor: 0x494d55, // dark mid-grey the fog tints toward while fogged
+  },
 
-  // Flipper plate (orange): a hinged springboard that pivots forward and SENDS you
-  // up AND forward — a directed launch. Survive the landing. Reuses the box plate;
-  // the "flip" is just an animated hinge kick (no new geometry).
-  flipperVertical: 1.75, // launch v.y = jumpSpeed * this — big air (it's a CANNON). Still distinct from the red bouncy because of the huge forward blast below.
-  flipperForward: 95, // forward speed BLAST on launch — injected into live speed (clamped to flipperMaxSpeed, well above normal max) so you genuinely FLY forward fast + far, then ease back
-  flipperMaxSpeed: 150, // the flipper launch can fling you THIS fast forward (vs the normal ~111 ceiling) — that's what makes it feel powerful
-  flipperFlipTime: 0.4, // seconds the hinge-kick animation lasts
-  flipperChance: 0.08, // chance a non-safe main-path board is a flipper (not gated by zen/difficulty — just rare)
+  // --- Score & combo economy ------------------------------------------------
+  // Score = distance * multiplier (+ gems and near-miss bonuses). The multiplier
+  // climbs as you take risks and decays if you play it safe.
+  scoring: {
+    scorePerMeter: 1,
+    gemScore: 25,
+    nearMissBonus: 50,
+    nearMissMargin: 1.2, // grazing an obstacle within this extra distance = near-miss
+    multiplierMax: 12,
+    comboDecay: 4, // seconds without a combo event before the multiplier drops 1
+    // Riding out powerdowns cranks scoring: each active one adds powerdownMult, and
+    // every one beyond the first adds an extra stack bonus — surviving three at once
+    // scores far more than three one-at-a-time.
+    powerdownMult: 1,
+    powerdownStackBonus: 1,
+  },
 
-  // Manual throttle (Up/Down arrows or the thumbstick Y axis): a slight, eased
-  // speed nudge. Kept small so the path stays reachable (gaps have 50% headroom).
-  manualSpeed: 8,
-  minSpeed: 15, // speed never eases below this (so you can't stall)
+  // --- Run framing ----------------------------------------------------------
+  world: {
+    keepAheadDistance: 200, // generate platforms out to this far ahead of the player
+    cullBehindDistance: 70, // remove platforms this far behind
+    // Death: game over only once you fall this far below the LOWEST landable surface
+    // still drawn near you. Deep, so a near-miss is a long recoverable plunge.
+    fallMargin: 42,
+    fallDeathHang: 10, // hard cap (s) on the fall-death cinematic
+    starterLength: 64,
+    starterWidth: 18,
+    // Base auto-run speed nudges up slowly with distance (keeps the early game relaxed).
+    speedRampEvery: 20, // metres between nudges
+    speedRampAmount: 1.2,
+  },
 
-  // Two eased ramps drive everything. SPREAD opens the field up FAST (degrees of
-  // freedom — the path starts to wander wide, up and over, through a scattered
-  // cloud of branch platforms). HAZARD ramps the danger in SLOWLY (obstacles,
-  // movers, shrinking pads, powerdowns). Each [easy, hard] pair interpolates from
-  // its ramp's value 0 -> 1. So the world sprawls into a journey early while
-  // staying gentle, and only gets genuinely dangerous deep into a run.
-  speedRampEvery: 20, // base auto-run speed nudges up this often (slow ramp — keeps the early game relaxed)
-  speedRampAmount: 1.2,
-  spreadDistance: 650, // metres before the field is fully "spread out"
-  difficultyDistance: 8000, // metres before hazards peak — long & gentle so a run is a "mood", not a panic
+  // --- Zen mode: calm, no-death, scoring off --------------------------------
+  zen: {
+    bounce: 2.0, // a would-be-fatal fall instead power-bounces you up at jumpSpeed * this
+    catchDepth: 32, // how far BELOW the lowest nearby board you fall before the bounce catches you
+    fixedDanger: 0.2, // the hazard ramp is PINNED here (no escalation) — a steady mild Medium
+  },
 
-  keepAheadDistance: 200,
-  cullBehindDistance: 70,
-  pathRiseSafety: 0.8, // fraction of max jump height a step may rise
-  pathGapSafety: 0.8, // fraction of jump distance a forward gap may span
-  pathLateralSafety: 0.6, // fraction of strafe reach a sideways step may take
-  safeStraight: 2, // just a plank or two to ease in, then it spreads out fast
+  // --- Audiosurf: the world pulses ON the beat ------------------------------
+  audiosurf: {
+    track: 4, // index into TRACKS — "Pulse Runner" (the most beat-forward)
+    bloomKick: 0.7, // bloom/sun flash added on each beat
+    fovKick: 1.0, // degrees of FOV punch per beat (small — camera movement is distracting)
+    lightKick: 0.4, // fraction the scene lights brighten per beat (the GROUND flash pump)
+    skyKick: 0.8, // how much the skyline windows flash brighter per beat
+    decay: 7, // how fast the pulse decays per second (higher = punchier)
+    reducedScale: 0.4, // soften the whole pulse this much when reduced-motion is on
+  },
 
-  // --- Critical path (the guaranteed-reachable chain). Opens up with SPREAD.
-  // Like a spline drawn through the city: it winds up, over, down and across in
-  // big sweeps, but every step stays within a jump's reach. ---
-  gapFracLo: [0.28, 0.82], // longer early hops (less frantic) — the floaty jump gives the reach for it
-  gapFracHi: [0.5, 1.0],
-  lateralFrac: [0.4, 1.0], // how much of the reachable strafe a step may use
-  riseFrac: [0.4, 1.0], // how much of the reachable rise a step may use
-  dropDepth: [-4, -10], // how far a step may drop
-  bandX: [26, 180], // how far the path may wander left/right (sprawls WIDE — each step still clamped to reachable strafe)
-  driftEvery: [2, 12], // steps between picking a new wander target
-  driftY: [24, 90], // vertical reach of wander targets (big up-and-over)
+  // --- Secret cheat code (half-Contra) on the start/game-over screen ---------
+  // Unlocks the per-powerup spawn-pool picker + God-mode key for testing effects.
+  cheat: {
+    code: ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight"],
+    itemMultiplier: 1, // spawn frequency in cheat mode (kept at 1× — the menu is the tool)
+  },
 
-  // --- Scatter cloud: branch platforms strewn around the path for the sprawl. ---
-  cloudCount: [1, 4], // extra platforms per step (grows with spread) — plenty of jump OPTIONS even on Easy, a busy field of small single-jump pads deep on Hard
-  cloudRadiusX: [18, 110], // how wide the cloud scatters (a touch wider — reinforces the open feel)
-  cloudRadiusY: [12, 60], // how tall the cloud scatters (parallax layers)
-  cloudZSpread: 54, // depth jitter of cloud platforms around the front
+  // ===========================================================================
+  // gen — THE procedural generator
+  // ===========================================================================
+  //
+  // TWO progression ramps run over distance (preserves "the world opens up FAST,
+  // but gets dangerous SLOWLY"):
+  //   openness(z) 0→1 over `opennessDistance` — how much the field has opened (the
+  //               journey feel: wander, vertical reach, gap length, scatter spread).
+  //   danger(z)   0→1 over `dangerDistance`   — how dangerous it's become (obstacle,
+  //               mover, sharp-turn, lean frequency; pads shrink).
+  //
+  // FIVE per-tier knobs (`tiers`) scale that one ruleset. This is all Easy/Med/Hard
+  // are — no special-cases:
+  //   pace      — base auto-run speed multiplier.
+  //   hazard    — scales hazard CHANCES (the danger ramp's output) + how fast pads
+  //               shrink. Higher = busier & a higher danger plateau.
+  //   openness  — scales how FAST the world opens (the openness ramp's input distance).
+  //               NOTE: this only differentiates tiers during the RAMP — it saturates
+  //               at 1.0 by ~opennessDistance, after which all tiers are "fully open".
+  //               For plateau width, that's what `sprawl` is for.
+  //   sprawl    — scales how WIDE/TALL the route + scatter roam AT THE PLATEAU (the
+  //               wander band, vertical corridor, drift reach, scatter radius). This
+  //               is the knob that makes Hard keep sweeping wider than Medium deep in
+  //               a run; openness alone can't (it maxes out). Only touches the WANDER
+  //               TARGET / decor spread — never a single jump's reach, so it's safe.
+  //   density   — scales how MANY scatter/branch platforms spawn. **>1 = more options
+  //               (forgiving), <1 = sparser (commit to the path).** Decoupled from
+  //               sprawl ON PURPOSE: sprawl widens the field, density populates it.
+  //               (Old bug: one "spread" lever did both, so Hard scattered platforms
+  //               far AND spawned more of them — wide-but-also-more = unreachable yet
+  //               easier. Splitting them is the fix.)
+  //   drama     — scales the spectacle (spline/ramp/curve/yaw/tunnel freq & intensity).
+  //
+  // INVARIANT across every tier: the critical path is always solvable. Gaps/rises/
+  // laterals are sized off jumpReach() × the `reach` safety fractions and never
+  // exceed what a jump clears. Tiers change FEEL and FORGIVENESS, not whether the
+  // path can be jumped. Hard is harder via sparser options + more hazards + faster
+  // pace + wilder drama — never via an impossible gap.
+  //
+  // Every [lo, hi] pair below is interpolated by a 0→1 ramp via ramp(pair, t). The
+  // comment on each says which ramp drives it.
+  // ===========================================================================
+  gen: {
+    // Progression ramps
+    opennessDistance: 650, // metres for the field to fully open (scaled per-tier by `openness`)
+    dangerDistance: 8000, // metres for hazards to peak — long & gentle so a run is a "mood", not a panic
+    hazardCeil: 0.92, // global cap on any hazard chance after the tier's `hazard` mult (so Hard stays < 100%)
+    safeStraight: 2, // the first N steps run straight ahead (ease-in) before anything opens up
 
-  // --- Pad size: BIG early (long winding jumps, generous landings) and only
-  // shrinking modestly with HAZARD difficulty. ---
-  padLenLo: [48, 14], // boards run LONGER early (more landing room, less rushed), shrinking with hazard
-  padLenHi: [70, 20],
-  padWidthLo: [16, 7],
-  padWidthHi: [23, 10],
+    // Reachability safety — fraction of the ball's true jump reach a step may use.
+    // The contract that keeps every tier solvable. Lower = more headroom.
+    reach: {
+      rise: 0.8, // fraction of max jump HEIGHT a step may rise
+      gap: 0.8, // fraction of jump DISTANCE a forward gap may span
+      lateral: 0.6, // fraction of strafe reach a sideways step may take
+    },
 
-  // --- Hazards: a small floor right after the safe intro (so spikes, obstacles
-  // and moving platforms show up early), ramping to their peak. ---
-  obstacleChance: [0.18, 0.7], // more obstacles now there are 4 kinds (barrier/spikes/pillars/overhead)
-  movingChance: [0.2, 0.7], // moving boards are a big part of the mix (calmer early floor)
-  moveAmp: [4, 12],
-  sharpTurnChance: [0.08, 0.38],
-  obstacleMoveChance: [0.0, 0.55], // chance a barrier/spike PATROLS (slides on its platform); ramps with difficulty
-  obstacleMoveAmp: [2, 6.5], // patrol half-range in units; grows with difficulty (clamped to fit the board, keeping a gap)
+    // The guaranteed-reachable critical path. It winds toward a roaming target (up,
+    // over, across) in big sweeps, but every step stays within a jump.
+    //   gap/lateral/rise/drop — per-STEP budgets, ride the OPENNESS ramp, stay <1.0
+    //     of jump reach (the solvability contract). NOT scaled by `sprawl`.
+    //   bandX/bandY/driftY — how far the WANDER TARGET roams. Ride openness AND the
+    //     tier's `sprawl` knob, so the route sweeps wider/taller on harder tiers even
+    //     once openness has maxed out. Widening these only means the path takes MORE
+    //     (still-reachable) steps to travel there — it never enlarges a single jump.
+    path: {
+      gapFracLo: [0.28, 0.78], // fraction-of-max-gap LOW end (longer early hops; the floaty jump gives the reach)
+      gapFracHi: [0.45, 0.92], // HIGH end — kept under 1.0 so even fully open there's jump headroom
+      lateralFrac: [0.35, 0.85], // how much of the reachable strafe a step may use
+      riseFrac: [0.35, 0.85], // how much of the reachable rise a step may use
+      dropDepth: [-4, -10], // how far a step may drop
+      bandX: [24, 90], // how far the path may wander left/right (× tier sprawl)
+      bandY: [-38, 64], // vertical corridor the wander target stays within (× tier sprawl)
+      driftEvery: [2, 12], // steps between picking a new wander target
+      driftY: [24, 80], // vertical reach of each wander target (× tier sprawl)
+    },
 
-  // Difficulty levels (cycled in the ⚙️ panel, shown in the HUD). `mult` scales the
-  // WHOLE hazard ramp — floor AND ceiling — so the tiers stay distinct even deep in
-  // a run (not just early), capped by hazardCeil so Hard can't hit 100%. `speedMult`
-  // scales the base auto-run speed (gaps are sized to live speed, so this stays
-  // reachable). Together they make Easy/Medium/Hard feel like different games.
-  // `spreadMult` scales how FAST the SPREAD ramp opens the field up (gaps, lateral
-  // wander, vertical reach, scatter clouds, yaw — everything that ramps on _spreadD).
-  // This is what makes the tiers actually PLAY differently: on Easy the field stays
-  // tight, close and gentle for much longer (small reachable hops → you survive and
-  // go FAR); on Hard it sprawls into big, wide, near-max-reach jumps fast (you die
-  // more) — WITHOUT moving any faster. Hazards (obstacles/movers) still scale on `mult`.
-  difficultyLevels: [
-    { name: "Easy", mult: 0.8, speedMult: 0.92, spreadMult: 0.75 },
-    { name: "Medium", mult: 1.0, speedMult: 1.0, spreadMult: 1.0 },
-    { name: "Hard", mult: 1.7, speedMult: 1.15, spreadMult: 2.5 },
-  ],
-  hazardCeil: 0.92, // global cap on any hazard chance after the difficulty mult (so Hard stays < 100%)
-  defaultDifficulty: 1, // index into difficultyLevels (Medium)
-  goodPowerupChance: [0.6, 0.25], // chance a pickup is GOOD — powerdowns are the majority (they're dodgeable obstacles), more so deeper in
-  roundGeoChance: [0.04, 0.4], // hex/round pads: rare & small early, common later
+    // Branch/decor platforms strewn around the path — the parallax "free-floating"
+    // backdrop + alternate routes. COUNT rides openness × tier `density` (the
+    // forgiveness lever). SPREAD (radius) rides openness × tier `openness`, kept
+    // tight enough that branches stay relevant/reachable, not flung off-screen.
+    scatter: {
+      count: [2, 3], // base extra platforms per step (× tier density → Easy ~3-4, Hard ~1-2)
+      radiusX: [16, 56], // how wide the cloud scatters (× tier sprawl; was 110 base — too far to reach)
+      radiusY: [12, 42], // how tall the cloud scatters (× tier sprawl; parallax layers)
+      zSpread: 54, // depth jitter around the front
+      bouncyChance: 0.16, // chance a branch platform is a trampoline
+      gemChance: 0.5, // chance a branch carries a gem (reward exploring)
+      powerupChance: 0.2, // chance a branch carries a powerup
+    },
 
-  // --- Tunnels: a short run of glowing rings you roll through. Kept short so
-  // the exit is always visible past it in the third-person camera. ---
-  tunnelChance: [0.05, 0.2],
-  tunnelCooldown: 6, // min normal steps between tunnels
-  tunnelLength: 34,
-  tunnelRings: 7,
-  tunnelRadius: 4,
+    // Pad size: BIG early (generous landings), shrinking modestly as DANGER rises
+    // (× tier `hazard`). Gaps stay reachable regardless — they're sized off jumpReach,
+    // not pad size.
+    pad: {
+      lenLo: [48, 14],
+      lenHi: [70, 20],
+      widthLo: [16, 7],
+      widthHi: [23, 10],
+    },
 
-  // --- Spline boards (wave ground): one LONG undulating ribbon you roll ALONG
-  // (rolling hills/valleys that also meander left/right) to the far end before
-  // jumping to the next piece. A pure heightfield — collision raycasts the real
-  // displaced surface (same as curved boards), so the down-ray "just works" as
-  // long as the surface never approaches vertical (normal.y > 0.1). Everything
-  // here is tuned GENTLE-and-WIDE early, narrower + more dramatic with distance,
-  // but always clamped so the ball can roll the whole length without being flung
-  // off or falling through. ---
-  splineChance: [0.14, 0.4], // chance a non-safe step becomes a spline ribbon (ramps with HAZARD)
-  splineCooldown: 7, // min normal steps between spline boards — a real cool-off after one so they don't chain back-to-back
-  splineLength: [70, 320], // ribbon length grows with SPREAD — short-but-interesting early, epic deep in
-  splineWidth: [22, 12], // WIDE early (easy to stay on), NARROWER with SPREAD
-  splineSegZ: 120, // tessellation along the length (smooth hills even on the long ribbons)
-  splineSegX: 8, // tessellation across the width
-  splineAmpY: [7.0, 20.0], // hill/valley height (peak rise), grows with SPREAD — big rolling terrain, capped below so the surface never goes near-vertical
-  splineWavesY: [1.5, 3.0], // how many hill+valley cycles fit along the ribbon — modest so the long length reads as long-wavelength sweeps, not chop
-  splineMeanderX: [8.0, 22.0], // sideways drift of the centerline (peak), grows with SPREAD — winding but keyboard-manageable side-speed
-  splineWavesX: [0.5, 1.2], // how many left/right swings along the ribbon
-  splineMaxSlope: 0.9, // HARD CAP on |dy/dz| anywhere on the surface (~42°). Steep, dramatic hills but still above the normal.y>0.1 collision cutoff so the ball never falls through a crest.
+    // Hazards — frequency rides the DANGER ramp, output scaled by tier `hazard`
+    // (and capped by hazardCeil).
+    hazard: {
+      obstacleChance: [0.18, 0.7], // barrier / spikes / pillars / overhead
+      movingChance: [0.2, 0.7], // boards that slide/lift
+      moveAmp: [4, 12], // how far movers travel
+      sharpTurnChance: [0.08, 0.38], // the path takes a hard lateral jog
+      obstacleMoveChance: [0.0, 0.55], // chance a barrier/spike PATROLS along its board
+      obstacleMoveAmp: [2, 6.5], // patrol half-range (clamped to fit the board)
+      leanChance: [0.05, 0.4], // boards banked left/right; frequency rides danger
+      leanAmount: [0.03, 0.22], // the bank's steepness; magnitude grows with openness×drama
+    },
 
-  // --- Ramps & curved boards ---
-  // Ramps RE-ENABLED with the proper fix: collision now raycasts straight down
-  // against the real platform meshes (exact surface for flat/ramp/curved), and
-  // the ramp mesh rotation sign was corrected. Starting gentle.
-  rampChance: [0.22, 0.32], // tilted boards you roll up/down (and launch off the top) — common from the start
-  rampLenBoost: [1.5, 1.0], // ramps run longer than a normal pad (esp. early) — relaxed climbs, not panic jumps
-  rampSlope: [0.22, 0.42], // rise/run (tan of the ramp angle)
-  rampLaunch: 0.7, // fraction of climb speed kept as a hop off an up-ramp
-  curveChance: [0.05, 0.25], // boards curved across their width
-  curveAmount: [0.04, 0.14], // parabola steepness, RANDOM per board: gentle slopes up to dramatic half-pipes
-  curveForce: 16, // sideways "gravity" — multiplied by the (random) curve, so a deep bowl pulls hard, a soft one barely
-  leanChance: [0.05, 0.4], // boards banked left/right (independent of ramp/curve); chance ramps with difficulty — near-zero early, common at peak
-  leanAmount: [0.03, 0.22], // sideways tilt (rise/run across the width), RANDOM per board; the upper bound grows with difficulty so it starts barely-there
-  leanForce: 14, // downhill "gravity" while riding a banked board — multiplied by the (random) lean, so a steep bank drags hard
+    // Drama — the spectacle. Spawn frequency + intensity ride OPENNESS/DANGER, scaled
+    // by tier `drama` (Easy calmer, Hard wilder).
+    ramp: {
+      chance: [0.22, 0.32], // tilted boards you roll up/down (and launch off the top)
+      lenBoost: [1.5, 1.0], // ramps run longer than a normal pad (esp. early — relaxed climbs)
+      slope: [0.22, 0.42], // rise/run (tan of the ramp angle)
+    },
+    curve: {
+      chance: [0.05, 0.25], // boards curved across their width
+      amount: [0.04, 0.14], // parabola steepness, random per board: gentle slope → dramatic half-pipe
+    },
+    yaw: {
+      // A board whose HEADING is turned, so the safe ground veers off diagonally in a
+      // straight line — you roll +z but must STRAFE to track it. Capped so
+      // forwardSpeed*tan(yaw) stays under sideSpeed (you can always keep up).
+      chance: [0.04, 0.32],
+      amount: [0.06, 0.28], // tan of the heading angle (~15° at peak)
+      lenBoost: 1.4, // yawed boards run longer — a real diagonal runway
+    },
+    roundGeoChance: [0.04, 0.4], // hex/round pads: rare & small early, common later
 
-  // --- Yaw boards: a board whose HEADING is rotated, so the safe ground veers off
-  // diagonally in a straight line. You roll forward (+z always) but must STRAFE to
-  // track the diagonal runway to its far end, where the next gap waits. Not a spline
-  // (no hills) — just a turned plank. Subtle early, sharper deep in, but always
-  // capped so forwardSpeed*tan(yaw) stays under sideSpeed (you can always keep up). ---
-  yawChance: [0.04, 0.32], // chance a normal board veers off diagonally — rare early, common deep in
-  yawAmount: [0.06, 0.28], // tan of the heading angle (sideways veer); upper bound grows with SPREAD — barely-there early, ~15° at peak (still strafe-able)
-  yawLenBoost: 1.4, // yawed boards run longer than a normal pad — a real diagonal runway to track along
+    // Tunnels — a short run of glowing rings you roll through. Kept short so the exit
+    // is always visible past it. Frequency rides danger × drama.
+    tunnel: {
+      chance: [0.05, 0.2],
+      cooldown: 6, // min normal steps between tunnels
+      length: 34,
+      rings: 7,
+      radius: 4,
+    },
 
-  // Powerups / powerdowns
-  powerupChance: 0.3, // chance a path platform spawns a pickup (bumped — the wide sprawl has room for more)
-  powerupAuraRadius: 5, // VISIBLE glowing "cloud" radius (world units) around each pickup; rolling into the cloud triggers it (gems stay at the normal small touch radius)
-  // Rune plates: a board TYPE you trigger by LANDING on (not a dodgeable floater).
-  // The chance a board is a rune RAMPS UP with distance [near, far] so deep runs
-  // force harder routing. Gated down by how many effects you already have active
-  // (see runeLoadFactor) so they ease off while you're juggling powerups.
-  runeChance: [0, 0], // DISABLED — the aura-cloud floating pickups cover powerups now, so the land-to-trigger rune blocks are retired
-  runeLoadFactor: 0.4, // each currently-active effect cuts the rune chance by this much (1 - n*factor); ~2 effects = a trickle, 3+ = almost none until they expire
-  // NOTE: each effect's DURATION (timing), color, icon, label and good/bad flag now
-  // live together on its POWERUP_DEFS entry in platforms.js — one source of truth.
-  // What stays here is the per-effect TUNING params (how strong each effect is):
-  magnetRadius: 32, // gems within this distance get sucked in
-  magnetPull: 22, // how hard the magnet yanks gems (higher = they catch up)
-  slowFactor: 0.72, // forward speed multiplier while slowed (gentler than before)
-  slowEase: 2.4, // seconds to ease INTO the slow (so it's not sudden)
-  surgeAmount: 16, // extra forward speed while surged (a powerdown)
-  invulnTime: 1.2, // brief mercy window after a shielded hit
-  flightLift: 19, // upward speed while flying
-  morphWobble: 12, // strength of the steering wobble while morphed (cranked — hard to control)
-  lowgravScale: 0.45, // gravity multiplier while low-grav is active
-  flubberBounce: 1.3, // bounce velocity = jumpSpeed * this (a bit higher than a jump)
-  blackoutDim: 0.3,
-  fogNear: 80,
-  fogFar: 230, // normal fog distances (clear & far-seeing)
-  fogBlindNear: 42,
-  fogBlindFar: 95, // "fogged" distances — clear close (obstacles still readable ~2s out), grey wall beyond
-  fogSmokeColor: 0x494d55, // dark mid-grey the fog tints toward while fogged — under the bloom threshold (no glow), dims the deep field into murk, neutral enough to read as smoke not blue shadow
+    // Spline ribbons — one LONG undulating + meandering heightfield you roll ALONG to
+    // the far end before jumping off. A pure heightfield (single surface height per
+    // x,z) so the straight-down collision raycast tracks it. Frequency rides danger ×
+    // drama; size/intensity rides openness × drama. Everything is clamped by maxSlope
+    // so the surface never nears vertical (no fall-through).
+    spline: {
+      chance: [0.14, 0.4], // chance a non-safe step becomes a ribbon
+      cooldown: 7, // min normal steps between ribbons (a real cool-off so they don't chain)
+      length: [70, 320], // ribbon length — short-but-interesting early, epic deep in
+      width: [22, 12], // WIDE early (easy to stay on), narrower deeper
+      segZ: 120, // tessellation along the length (smooth hills even when long)
+      segX: 8, // tessellation across the width
+      ampY: [7.0, 20.0], // hill/valley height (peak rise)
+      wavesY: [1.5, 3.0], // hill+valley cycles along the ribbon (modest = long-wavelength sweeps, not chop)
+      meanderX: [8.0, 22.0], // sideways drift of the centerline (peak) — winding but keyboard-manageable
+      wavesX: [0.5, 1.2], // left/right swings along the ribbon
+      maxSlope: 0.9, // HARD CAP on |dy/dz| (~42°) — steep, dramatic, but above the normal.y>0.1 collision cutoff
+    },
 
-  // Secret cheat code (half-Contra, no A/B) entered on the start/game-over
-  // screen: unlocks the per-powerup spawn-pool picker (and God-mode key) so you can
-  // test specific effects. Spawn frequency stays at the normal 1× — the menu is the tool.
-  cheatCode: [
-    "ArrowUp",
-    "ArrowUp",
-    "ArrowDown",
-    "ArrowDown",
-    "ArrowLeft",
-    "ArrowRight",
-    "ArrowLeft",
-    "ArrowRight",
-  ],
-  cheatItemMultiplier: 1, // spawn frequency in cheat mode — kept at 1× (normal); cheat just opens the spawn-pool picker
+    // Item spawn chances not covered above.
+    items: {
+      flipperChance: 0.08, // chance a non-safe main-path board is a flipper (rare, not gated by tier)
+      boostChance: 0.1, // chance a non-safe main-path board is an accel plate
+      goodChance: [0.6, 0.25], // chance a pickup is GOOD — powerdowns are the majority (dodgeable obstacles), more so deeper in (rides danger)
+      gemChance: 0.4, // chance a main-path board carries a gem
+    },
 
-  // Score & combo economy. A single Score = distance * multiplier (+ gems and
-  // near-miss bonuses). The multiplier climbs as you take risks and decays if you
-  // play it safe; a survived mistake (shielded hit) resets it.
-  scorePerMeter: 1,
-  gemScore: 25,
-  nearMissBonus: 50,
-  nearMissMargin: 1.2, // grazing an obstacle within this extra distance = near-miss
-  multiplierMax: 12,
-  comboDecay: 4, // seconds without a combo event before the multiplier drops 1
+    // Rune plates — DISABLED (the aura-cloud floating pickups cover powerups now).
+    // Kept wired so they can be re-enabled by raising runeChance.
+    rune: {
+      chance: [0, 0],
+      loadFactor: 0.4, // each active effect cuts the rune chance by this (1 - n*factor)
+    },
 
-  // Risk/reward: riding out powerdowns cranks your scoring multiplier. Each active
-  // powerdown adds this much, and every powerdown beyond the first adds an extra
-  // STACK bonus on top — so surviving three at once scores far more than three
-  // one-at-a-time. Adds on top of the combo multiplier; lasts only while they're active.
-  powerdownMult: 1, // multiplier added per active powerdown
-  powerdownStackBonus: 1, // extra multiplier per powerdown beyond the first (when several stack)
-
-  // Death: game over only once you fall this far below the LOWEST landable surface
-  // still drawn near you (i.e. there's genuinely nothing left to land on). Deep, so
-  // a near-miss is a long recoverable-feeling plunge — not an instant cutoff.
-  fallMargin: 42,
-  fallDeathHang: 10, // hard safety cap (s) on the fall-death cinematic; normally the card shows ~0.5s after splashdown, well before this
-
-  // Starter platform
-  starterLength: 64,
-  starterWidth: 18,
-
-  // --- Audiosurf mode: the world pulses ON the music's beat. The two rhythmic
-  // tracks ("Neon Highway" #4 124bpm, "Pulse Runner" #5 134bpm) are the only ones
-  // with full drums — the other three are ambient and wouldn't feel synced. We
-  // force #5 (the driving one) when the mode turns on.
-  audiosurfTrack: 4, // index into TRACKS — "Pulse Runner" (the most beat-forward)
-  audiosurfBloomKick: 0.7, // bloom/sun flash added on each beat (a touch stronger now)
-  audiosurfFovKick: 1.0, // degrees of FOV punch on each beat — kept SMALL (camera movement was distracting)
-  audiosurfLightKick: 0.4, // fraction the scene lights brighten on each beat — the GROUND flash pump
-  audiosurfSkyKick: 0.8, // how much the skyline windows flash brighter on each beat
-  audiosurfDecay: 7, // how fast the pulse decays per second (higher = punchier/snappier)
-  audiosurfReducedScale: 0.4, // soften the whole pulse this much when reduced-motion is on
+    // Easy / Medium / Hard — five knobs each. See the big note above for what they
+    // mean. The whole difficulty system is THESE THREE LINES.
+    tiers: [
+      { name: "Easy", pace: 0.92, hazard: 0.8, openness: 0.9, sprawl: 1.0, density: 1.4, drama: 0.7 },
+      { name: "Medium", pace: 1.0, hazard: 1.0, openness: 1.0, sprawl: 1.45, density: 1.0, drama: 1.0 },
+      { name: "Hard", pace: 1.15, hazard: 1.5, openness: 1.2, sprawl: 2.1, density: 0.6, drama: 1.4 },
+    ],
+    defaultDifficulty: 1, // index into tiers (Medium)
+  },
 };
 
 // Themed zones the run passes through. Each retints the fog + sun, restricts the
-// platform texture set, AND drives the backdrop mood: a signature window-glow tint
-// + a hue the skyline cycle CENTERS on (so each zone reads as its own colour
-// family while still gently shifting), plus moon + nebula tints. All in the same
-// "neon dusk" system from DESIGN.md — distinct moods, one cohesive world.
-//   skylineHue  — 0..1 hue the per-window glow biases toward (skyline stays in this family)
-//   skylineSpread — how far around skylineHue the gentle cycle is allowed to wander
-//   skyline     — bright window-glow colour (the accent the towers light up)
-//   moon        — moon body tint
-//   nebula      — nebula/cloud tint
-//   bloom       — extra bloom strength while in this zone (a signature flare level)
+// platform texture set, AND drives the backdrop mood. All in the same "neon dusk"
+// system from DESIGN.md — distinct moods, one cohesive world.
+//   skylineHue  — 0..1 hue the per-window glow biases toward
+//   skylineSpread — how far around skylineHue the gentle cycle wanders
+//   skyline     — bright window-glow colour
+//   moon / nebula — body tints
+//   bloom       — extra bloom strength while in this zone
 export const BIOMES = [
   // Neon City — cool blue dusk, teal + magenta window glow (the baseline city).
   {
@@ -336,27 +414,27 @@ export function biomeAt(z) {
   return BIOMES.length - 1;
 }
 
-// Peak height of a full jump and the air time it grants — used by the platform
-// generator to guarantee the next stepping stone is always reachable.
+// Peak height of a full jump and the air time it grants — the basis for every
+// "is the next stepping stone reachable?" calculation in the generator.
 export function jumpReach() {
   // Asymmetric gravity: float UP on riseGravity, fall DOWN on the full gravity.
-  // Peak height and total air time must reflect BOTH so the path generator keeps
-  // sizing gaps/rises to what the ball can actually clear.
-  const v = CONFIG.jumpSpeed,
-    gUp = CONFIG.riseGravity,
-    gDown = CONFIG.gravity;
+  // Peak height and total air time reflect BOTH so the generator sizes gaps/rises
+  // to what the ball can actually clear.
+  const v = CONFIG.player.jumpSpeed,
+    gUp = CONFIG.player.riseGravity,
+    gDown = CONFIG.player.gravity;
   const h = (v * v) / (2 * gUp); // peak rise (taller than a symmetric jump)
   const airTime = v / gUp + Math.sqrt((2 * h) / gDown); // slow rise + faster fall back to launch height
   return { height: h, airTime };
 }
 
-// Linear interpolate an [easy, hard] config pair by the 0..1 difficulty.
-export function ramp(pair, d) {
-  return pair[0] + (pair[1] - pair[0]) * d;
+// Linear interpolate an [lo, hi] pair by a 0..1 ramp value.
+export function ramp(pair, t) {
+  return pair[0] + (pair[1] - pair[0]) * t;
 }
 
-// Eased difficulty curve: gentle at the start (and near the peak), steeper in
-// the middle. Keeps the opening calm so the game eases the player in.
+// Eased 0..1 curve: gentle at the start (and near the peak), steeper in the middle.
+// Keeps the opening calm so the game eases the player in.
 export function smoothstep(t) {
   t = Math.max(0, Math.min(1, t));
   return t * t * (3 - 2 * t);
