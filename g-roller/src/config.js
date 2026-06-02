@@ -58,35 +58,35 @@ export const CONFIG = {
   // movers, shrinking pads, powerdowns). Each [easy, hard] pair interpolates from
   // its ramp's value 0 -> 1. So the world sprawls into a journey early while
   // staying gentle, and only gets genuinely dangerous deep into a run.
-  speedRampEvery: 14, // base auto-run speed nudges up this often (slow ramp — keeps the early game relaxed)
+  speedRampEvery: 20, // base auto-run speed nudges up this often (slow ramp — keeps the early game relaxed)
   speedRampAmount: 1.2,
   spreadDistance: 650, // metres before the field is fully "spread out"
-  difficultyDistance: 2800, // metres before hazards peak — long & gentle so a run is a "mood", not a panic
+  difficultyDistance: 8000, // metres before hazards peak — long & gentle so a run is a "mood", not a panic
 
-  keepAheadDistance: 185,
+  keepAheadDistance: 200,
   cullBehindDistance: 70,
-  pathRiseSafety: 0.62, // fraction of max jump height a step may rise
-  pathGapSafety: 0.5, // fraction of jump distance a forward gap may span
-  pathLateralSafety: 0.44, // fraction of strafe reach a sideways step may take
+  pathRiseSafety: 0.8, // fraction of max jump height a step may rise
+  pathGapSafety: 0.8, // fraction of jump distance a forward gap may span
+  pathLateralSafety: 0.6, // fraction of strafe reach a sideways step may take
   safeStraight: 2, // just a plank or two to ease in, then it spreads out fast
 
   // --- Critical path (the guaranteed-reachable chain). Opens up with SPREAD.
   // Like a spline drawn through the city: it winds up, over, down and across in
   // big sweeps, but every step stays within a jump's reach. ---
-  gapFracLo: [0.28, 0.52], // longer early hops (less frantic) — the floaty jump gives the reach for it
+  gapFracLo: [0.28, 0.82], // longer early hops (less frantic) — the floaty jump gives the reach for it
   gapFracHi: [0.5, 1.0],
   lateralFrac: [0.4, 1.0], // how much of the reachable strafe a step may use
   riseFrac: [0.4, 1.0], // how much of the reachable rise a step may use
   dropDepth: [-4, -10], // how far a step may drop
-  bandX: [26, 120], // how far the path may wander left/right (sprawls WIDE — each step still clamped to reachable strafe)
-  driftEvery: [4, 9], // steps between picking a new wander target
-  driftY: [24, 70], // vertical reach of wander targets (big up-and-over)
+  bandX: [26, 180], // how far the path may wander left/right (sprawls WIDE — each step still clamped to reachable strafe)
+  driftEvery: [2, 12], // steps between picking a new wander target
+  driftY: [24, 90], // vertical reach of wander targets (big up-and-over)
 
   // --- Scatter cloud: branch platforms strewn around the path for the sprawl. ---
-  cloudCount: [3, 6], // extra platforms per step (grows with spread) — plenty of jump OPTIONS even on Easy, a busy field of small single-jump pads deep on Hard
-  cloudRadiusX: [18, 94], // how wide the cloud scatters (a touch wider — reinforces the open feel)
-  cloudRadiusY: [12, 40], // how tall the cloud scatters (parallax layers)
-  cloudZSpread: 34, // depth jitter of cloud platforms around the front
+  cloudCount: [1, 4], // extra platforms per step (grows with spread) — plenty of jump OPTIONS even on Easy, a busy field of small single-jump pads deep on Hard
+  cloudRadiusX: [18, 110], // how wide the cloud scatters (a touch wider — reinforces the open feel)
+  cloudRadiusY: [12, 60], // how tall the cloud scatters (parallax layers)
+  cloudZSpread: 54, // depth jitter of cloud platforms around the front
 
   // --- Pad size: BIG early (long winding jumps, generous landings) and only
   // shrinking modestly with HAZARD difficulty. ---
@@ -116,22 +116,22 @@ export const CONFIG = {
   // go FAR); on Hard it sprawls into big, wide, near-max-reach jumps fast (you die
   // more) — WITHOUT moving any faster. Hazards (obstacles/movers) still scale on `mult`.
   difficultyLevels: [
-    { name: "Easy", mult: 0.55, speedMult: 0.92, spreadMult: 0.5 },
-    { name: "Medium", mult: 1.0, speedMult: 1.0, spreadMult: 1.1 },
-    { name: "Hard", mult: 1.7, speedMult: 1.15, spreadMult: 2.1 },
+    { name: "Easy", mult: 0.8, speedMult: 0.92, spreadMult: 0.75 },
+    { name: "Medium", mult: 1.0, speedMult: 1.0, spreadMult: 1.0 },
+    { name: "Hard", mult: 1.7, speedMult: 1.15, spreadMult: 2.5 },
   ],
   hazardCeil: 0.92, // global cap on any hazard chance after the difficulty mult (so Hard stays < 100%)
   defaultDifficulty: 1, // index into difficultyLevels (Medium)
-  goodPowerupChance: [0.4, 0.25], // chance a pickup is GOOD — powerdowns are the majority (they're dodgeable obstacles), more so deeper in
+  goodPowerupChance: [0.6, 0.25], // chance a pickup is GOOD — powerdowns are the majority (they're dodgeable obstacles), more so deeper in
   roundGeoChance: [0.04, 0.4], // hex/round pads: rare & small early, common later
 
   // --- Tunnels: a short run of glowing rings you roll through. Kept short so
   // the exit is always visible past it in the third-person camera. ---
-  tunnelChance: [0.0, 0.16],
+  tunnelChance: [0.05, 0.2],
   tunnelCooldown: 6, // min normal steps between tunnels
   tunnelLength: 34,
   tunnelRings: 7,
-  tunnelRadius: 4.5,
+  tunnelRadius: 4,
 
   // --- Spline boards (wave ground): one LONG undulating ribbon you roll ALONG
   // (rolling hills/valleys that also meander left/right) to the far end before
