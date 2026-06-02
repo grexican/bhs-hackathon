@@ -1,0 +1,140 @@
+/* ============================================================
+   THEME: LIQUID GLASS  (overlay — loaded after styles.css)
+   Apple's 2025 lens language: clearer-than-frost panels, bright
+   directional specular rim, glossy top-edge highlight, large squircle
+   corners, content sitting over a vivid moving-color background.
+   NOTE: true edge refraction needs an SVG feDisplacementMap fed into
+   backdrop-filter (Chromium-only, needs DOM SVG) — out of reach for a
+   CSS-only swap, so the lens is faked with rim light + gloss + saturate.
+   ============================================================ */
+
+:root {
+  --bg:        #070a14;
+  --bg-2:      rgba(255,255,255,0.06);   /* surfaces are glass, not solid */
+  --surface:   rgba(255,255,255,0.08);
+  --line:      rgba(255,255,255,0.22);
+  --line-hot:  rgba(255,255,255,0.40);
+
+  --ink:       #f6f8ff;
+  --ink-soft:  #d4dcf0;
+  --ink-faint: #9fb0d0;
+
+  --amber:     #5ac8fa;   /* iOS azure leads */
+  --amber-hot: #32ade6;
+  --cyan:      #64d2ff;
+  --cyan-deep: #0a84ff;
+  --rose:      #ff6482;
+  --violet:    #bf5af2;
+
+  --grid-ink:  transparent;
+
+  --serif: -apple-system, "SF Pro Display", system-ui, sans-serif;  /* Apple feel = sans display */
+  --sans:  -apple-system, "SF Pro Text", system-ui, "Space Grotesk", sans-serif;
+  --mono:  "SF Mono", "IBM Plex Mono", ui-monospace, monospace;
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* the glass kit: low blur (stay clear), bright multi-inset rim, soft drop */
+  --lg-blur: blur(10px) saturate(170%) brightness(1.05);
+  --lg-fill: rgba(255,255,255,0.10);
+  --lg-shadow:
+    0 18px 50px rgba(0,0,0,0.45),
+    inset 0 1px 1px rgba(255,255,255,0.65),
+    inset 0 6px 24px rgba(255,255,255,0.22),
+    inset 0 -10px 26px rgba(10,20,40,0.30);
+}
+
+/* deep base + drifting colored orbs give the lens something to bend */
+body {
+  background:
+    radial-gradient(46% 40% at 16% 14%, rgba(90,200,250,0.45) 0%, transparent 60%),
+    radial-gradient(44% 42% at 86% 22%, rgba(191,90,242,0.40) 0%, transparent 60%),
+    radial-gradient(50% 45% at 70% 92%, rgba(10,132,255,0.40) 0%, transparent 62%),
+    radial-gradient(40% 40% at 30% 80%, rgba(255,100,130,0.30) 0%, transparent 60%),
+    #070a14;
+  background-attachment: fixed;
+}
+body::after { display: none; }   /* the scanline fights the gloss */
+::selection { background: rgba(90,200,250,0.5); color: #fff; }
+
+h1, h2, h3 { color: var(--ink); letter-spacing: -0.02em; }
+p { color: var(--ink-soft); }
+em { color: #5ac8fa; font-style: normal; }
+a { color: #64d2ff; }
+.eyebrow { color: #9ad6ff; }
+
+/* shared glass recipe applied via a relative pseudo-gloss on key surfaces */
+.nav, .btn, .btn--ghost, .panel, .stage, .node, .sub, .fact, .chip, .theme-pick__select, .spectrum {
+  position: relative;
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
+}
+
+/* nav: a clear glass shelf */
+.nav { background: rgba(255,255,255,0.07); border-bottom: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.5); }
+.nav__brand { color: var(--ink); }
+.nav__brand b { color: #5ac8fa; }
+.nav__links a { color: var(--ink-soft); }
+.nav__links a:hover { color: #fff; }
+
+/* buttons: glass pills with a wet specular edge */
+.btn { clip-path: none; border-radius: 999px; border: 1px solid rgba(255,255,255,0.35);
+  background: linear-gradient(180deg, rgba(90,200,250,0.55), rgba(10,132,255,0.42));
+  color: #fff; font-weight: 600; box-shadow: var(--lg-shadow);
+  transition: transform .25s var(--ease), box-shadow .25s var(--ease); }
+.btn:hover { transform: translateY(-2px); background: linear-gradient(180deg, rgba(120,212,255,0.65), rgba(40,160,255,0.5)); }
+.btn:active { transform: translateY(0) scale(0.98); }
+.btn--ghost { background: var(--lg-fill); color: #fff; border: 1px solid rgba(255,255,255,0.3); }
+.btn--ghost:hover { background: rgba(255,255,255,0.16); color: #fff; border-color: rgba(255,255,255,0.5); }
+
+.chip { color: #cfeaff; border: 1px solid rgba(255,255,255,0.3); background: var(--lg-fill); border-radius: 999px; }
+
+/* panels / stages: thick clear glass slabs, big squircle corners */
+.panel, .stage { background: var(--lg-fill); border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 26px; box-shadow: var(--lg-shadow); }
+/* glossy highlight that kisses the top edge — the "liquid" tell */
+.panel::before, .node::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 2;
+  background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.08) 16%, transparent 42%);
+  -webkit-mask: linear-gradient(180deg, #000 0%, transparent 46%);
+          mask: linear-gradient(180deg, #000 0%, transparent 46%);
+}
+.corner { border-color: rgba(255,255,255,0.6); }
+input[type=range]{ background: rgba(255,255,255,0.25); border-radius: 999px; }
+input[type=range]::-webkit-slider-thumb{ background: #fff; border:none; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+input[type=range]::-moz-range-thumb{ background: #fff; border:none; }
+.seg { border: 1px solid rgba(255,255,255,0.25); border-radius: 999px; overflow: hidden; }
+.seg button.is-on { background: rgba(90,200,250,0.5); color:#fff; }
+.readout .v { color: #64d2ff; }
+.readout .v.amber { color: #5ac8fa; }
+.readout .row { border-bottom: 1px solid rgba(255,255,255,0.16); }
+
+.hero h1 .ghost { -webkit-text-stroke: 1.2px rgba(255,255,255,0.8); color: transparent; }
+
+/* the map: floating glass squircles, each with its own gloss */
+.map-grid { background: transparent; border: none; gap: 18px; }
+.node { background: var(--lg-fill); border: 1px solid rgba(255,255,255,0.2); border-radius: 24px;
+  box-shadow: var(--lg-shadow); overflow: hidden;
+  transition: transform .25s var(--ease), background .25s var(--ease); }
+.node:hover { background: rgba(255,255,255,0.16); transform: translateY(-4px); }
+.node__no { color: var(--ink-faint); }
+.node p { color: var(--ink-soft); }
+.node .go { color: #9ad6ff; }
+
+.subs, .facts { background: transparent; border: none; gap: 16px; }
+.sub, .fact { background: var(--lg-fill); border: 1px solid rgba(255,255,255,0.2); border-radius: 22px;
+  box-shadow: var(--lg-shadow); }
+.fact b { color: #5ac8fa; }
+.tabs { border-bottom: 1px solid rgba(255,255,255,0.18); }
+.tabs button.is-on { color: #fff; border-bottom-color: #5ac8fa; }
+.pager { border-top: 1px solid rgba(255,255,255,0.16); }
+.pager a b { color: var(--ink); }
+.foot { border-top: 1px solid rgba(255,255,255,0.16); color: var(--ink-faint); }
+.spectrum { border: 1px solid rgba(255,255,255,0.2); border-radius: 18px; }
+
+.theme-pick__label { color: var(--ink-faint); }
+.theme-pick__select { color: #cfeaff; background: var(--lg-fill); border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 999px; }
+.theme-pick__select:hover { color: #fff; border-color: rgba(255,255,255,0.55); }
+.theme-pick__select option { color: #0b1020; }   /* dropdown list is rendered by the OS */

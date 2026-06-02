@@ -1,0 +1,134 @@
+/* ============================================================
+   THEME: CLAYMORPHISM  (overlay — loaded after styles.css)
+   Soft inflated shapes molded from clay: pastel surfaces, very large
+   radii, and the signature triple shadow (inner light highlight +
+   inner dark emboss + soft outer drop). Friendly rounded type.
+   Recipe: Hype4/clay.css + taste-skill soft preset.
+   ============================================================ */
+@import url("https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap");
+
+:root {
+  --bg:        #eef1fb;   /* soft lavender-tinted paper */
+  --bg-2:      #f3f1fc;
+  --surface:   #f3f1fc;
+  --line:      transparent;       /* clay is defined by shadow, not outline */
+  --line-hot:  rgba(108,99,160,0.25);
+
+  --ink:       #4a456b;   /* soft dark, never pure black */
+  --ink-soft:  #6a6391;
+  --ink-faint: #948dbb;
+
+  --amber:     #a88beb;   /* lavender is the primary clay color */
+  --amber-hot: #9a78e8;
+  --cyan:      #4fc4b3;   /* mint as the second accent */
+  --cyan-deep: #2fa392;
+  --rose:      #f49ac0;
+  --violet:    #b07cff;
+
+  --grid-ink:  transparent;
+
+  --serif: "Quicksand", system-ui, sans-serif;
+  --sans:  "Nunito", system-ui, sans-serif;
+  --mono:  "Quicksand", ui-monospace, monospace;
+
+  --ease: cubic-bezier(0.34, 1.2, 0.64, 1);   /* a gentle squish */
+
+  /* reusable clay shadow recipes */
+  --clay-out:
+    inset 7px 7px 14px rgba(255,255,255,0.75),
+    inset -7px -7px 14px rgba(108,99,160,0.18),
+    14px 14px 32px rgba(108,99,160,0.20),
+    -8px -8px 22px rgba(255,255,255,0.60);
+  --clay-in:
+    inset 8px 8px 16px rgba(108,99,160,0.22),
+    inset -7px -7px 14px rgba(255,255,255,0.55);
+}
+
+/* soft pastel gradient page, no grid, no scanline */
+body {
+  background:
+    radial-gradient(60% 50% at 18% 12%, #f6e9ff 0%, transparent 60%),
+    radial-gradient(55% 45% at 85% 90%, #e3fbf4 0%, transparent 60%),
+    linear-gradient(135deg, #eef1fb, #f6eefb);
+  background-attachment: fixed;
+  font-weight: 600;
+}
+body::after { display: none; }
+::selection { background: #d9c9ff; color: #4a456b; }
+
+h1, h2, h3 { font-family: "Quicksand", sans-serif; font-weight: 700; letter-spacing: -0.01em;
+  text-transform: none; line-height: 1.05; color: var(--ink); }
+p { color: var(--ink-soft); }
+em { color: #8a63e0; font-style: normal; font-weight: 700; }
+a { color: #8a63e0; }
+.eyebrow { color: #8a63e0; letter-spacing: 0.16em; }
+
+/* nav: a floating soft bar */
+.nav { background: rgba(243,241,252,0.72); backdrop-filter: blur(12px) saturate(120%);
+  border-bottom: none; box-shadow: 0 8px 24px rgba(108,99,160,0.12); }
+.nav__brand { color: var(--ink); }
+.nav__brand b { color: #8a63e0; }
+.nav__links a { color: var(--ink-soft); }
+.nav__links a:hover { color: #8a63e0; }
+
+/* buttons: clay puffs; press = squish inward */
+.btn {
+  clip-path: none; border-radius: 22px; border: none;
+  background: #a88beb; color: #ffffff; font-weight: 700; padding: 14px 26px;
+  box-shadow:
+    inset 5px 5px 10px rgba(255,255,255,0.35),
+    inset -5px -5px 10px rgba(0,0,0,0.18),
+    9px 9px 22px rgba(108,99,160,0.30);
+  transition: transform .15s var(--ease), box-shadow .15s var(--ease);
+}
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: translateY(1px);
+  box-shadow: inset 7px 7px 14px rgba(0,0,0,0.22), inset -5px -5px 12px rgba(255,255,255,0.30); }
+.btn--ghost { background: #f3f1fc; color: #6a4fd0;
+  box-shadow: 7px 7px 18px rgba(108,99,160,0.22), -7px -7px 18px rgba(255,255,255,0.70); }
+.btn--ghost:hover { background: #f3f1fc; color: #8a63e0; border: none; }
+
+.chip { color: #2fa392; border: none; background: #e3fbf4; border-radius: 999px;
+  box-shadow: inset 2px 2px 5px rgba(0,0,0,0.06), inset -2px -2px 5px rgba(255,255,255,0.8); }
+
+/* panels / stages: pillowy clay slabs */
+.panel, .stage { background: #f3f1fc; border: none; border-radius: 30px; box-shadow: var(--clay-out); }
+.panel::before { display: none; }
+.corner { display: none; }   /* sharp HUD corners don't belong on clay */
+input[type=range]{ background: transparent; height: 12px; border-radius: 999px;
+  box-shadow: var(--clay-in); }
+input[type=range]::-webkit-slider-thumb{ width:22px; height:22px; background:#a88beb; border:none;
+  border-radius:50%; box-shadow: 3px 3px 7px rgba(108,99,160,0.4), -2px -2px 5px rgba(255,255,255,0.8); }
+input[type=range]::-moz-range-thumb{ width:22px; height:22px; background:#a88beb; border:none; border-radius:50%; }
+.seg { border: none; border-radius: 16px; box-shadow: var(--clay-in); overflow: hidden; }
+.seg button.is-on { background: #a88beb; color:#fff; }
+.readout .v { color: #2fa392; }
+.readout .v.amber { color: #8a63e0; }
+.readout .row { border-bottom: 2px dashed rgba(108,99,160,0.22); }
+
+/* hero ghost word: filled soft lavender (stroke looks wrong on clay) */
+.hero h1 .ghost { -webkit-text-stroke: 0; color: #c9b6f5; }
+
+/* the map: separated clay tiles */
+.map-grid { background: transparent; border: none; gap: 22px; }
+.node { background: #f3f1fc; border: none; border-radius: 28px; box-shadow: var(--clay-out);
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease); }
+.node:hover { background: #f3f1fc; transform: translateY(-4px); }
+.node__no { color: #948dbb; }
+.node p { color: #6a6391; }
+.node .go { color: #8a63e0; }
+
+.subs, .facts { background: transparent; border: none; gap: 18px; }
+.sub, .fact { background: #f3f1fc; border-radius: 26px; box-shadow: var(--clay-out); }
+.fact b { color: #8a63e0; font-family: "Quicksand", sans-serif; }
+.tabs { border-bottom: none; }
+.tabs button.is-on { color: #8a63e0; border-bottom-color: transparent; }
+.pager { border-top: 2px dashed rgba(108,99,160,0.22); }
+.pager a b { color: var(--ink); }
+.foot { border-top: 2px dashed rgba(108,99,160,0.22); color: var(--ink-faint); }
+.spectrum { border: none; border-radius: 24px; box-shadow: var(--clay-in); }
+
+.theme-pick__label { color: var(--ink-faint); }
+.theme-pick__select { color: #6a4fd0; background: #f3f1fc; border: none; border-radius: 14px;
+  box-shadow: inset 3px 3px 7px rgba(108,99,160,0.18), inset -3px -3px 7px rgba(255,255,255,0.75); }
+.theme-pick__select:hover { color: #8a63e0; }

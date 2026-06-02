@@ -1,0 +1,108 @@
+/* ============================================================
+   THEME: NEO-BRUTALISM  (overlay — loaded after styles.css)
+   Raw Swiss-industrial print: unbleached paper, carbon ink,
+   3px black outlines, hard offset shadows (zero blur), 90° corners,
+   loud yellow + hazard red on black. Type does the shouting.
+   Skill: taste-skill/industrial-brutalist-ui + impeccable contrast rules.
+   ============================================================ */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  /* unbleached documentation paper, carbon ink */
+  --bg:        #f4f4f0;
+  --bg-2:      #ffffff;
+  --surface:   #ffffff;
+  --line:      #050505;   /* every border is solid black */
+  --line-hot:  #050505;
+
+  --ink:       #050505;
+  --ink-soft:  #1a1a1a;
+  --ink-faint: #444444;
+
+  /* loud yellow is the primary fill (dark text reads on it); red is the alert */
+  --amber:     #ffdc58;
+  --amber-hot: #ffd000;
+  --cyan:      #e61919;   /* "second signal" slot → hazard red */
+  --cyan-deep: #b30f0f;
+  --rose:      #e61919;
+  --violet:    #0a0a0a;
+
+  --grid-ink:  rgba(0,0,0,0.06);
+
+  --serif: "Archivo", system-ui, sans-serif;       /* no serif here — all heavy grotesque */
+  --sans:  "Archivo", system-ui, sans-serif;
+  --mono:  "Space Mono", ui-monospace, monospace;
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* flat paper, keep a faint blueprint grid, kill the CRT scanline overlay */
+body { background-size: 32px 32px; font-weight: 500; }
+body::after { display: none; }
+::selection { background: #e61919; color: #fff; }
+
+/* headings: black weights, uppercase, tight, architectural */
+h1, h2, h3 { font-weight: 900; letter-spacing: -0.03em; text-transform: uppercase; color: var(--ink); }
+h3 { font-weight: 800; }
+em { color: #e61919; font-style: normal; background: #ffdc58; padding: 0 .15em; }
+a { color: #e61919; text-decoration: underline; text-underline-offset: 3px; }
+.eyebrow { color: #050505; background: #ffdc58; padding: 2px 8px; display: inline-block; }
+
+/* nav: solid white slab with a fat black underline, no blur */
+.nav { background: #ffffff; backdrop-filter: none; border-bottom: 3px solid #050505; }
+.nav__brand { color: #050505; font-weight: 700; }
+.nav__brand b { color: #e61919; }
+.nav__links a { color: #050505; font-weight: 700; }
+.nav__links a:hover { color: #e61919; }
+
+/* buttons: sticker pressed onto the page — square, black outline, hard shadow */
+.btn {
+  clip-path: none; border-radius: 0;
+  background: #ffdc58; color: #050505; font-weight: 800;
+  border: 3px solid #050505; box-shadow: 6px 6px 0 #050505;
+  transition: transform .1s var(--ease), box-shadow .1s var(--ease);
+}
+.btn:hover { background: #ffdc58; transform: translate(3px,3px); box-shadow: 3px 3px 0 #050505; }
+.btn:active { transform: translate(6px,6px); box-shadow: 0 0 0 #050505; }
+.btn--ghost { background: #ffffff; color: #050505; border: 3px solid #050505; box-shadow: 6px 6px 0 #050505; }
+.btn--ghost:hover { background: #e61919; color: #fff; border-color: #050505; }
+
+.chip { color: #050505; border: 2px solid #050505; border-radius: 0; background: #fff; }
+
+/* panels / stages: white boxes with thick outline + hard shadow */
+.panel, .stage { background: #ffffff; border: 3px solid #050505; box-shadow: 6px 6px 0 #050505; }
+.panel::before { background: #e61919; height: 6px; left: -3px; width: 60px; }
+.corner { border-color: #e61919; }
+input[type=range]{ background: #050505; }
+input[type=range]::-webkit-slider-thumb{ background: #ffdc58; border:3px solid #050505; border-radius:0; box-shadow:none; }
+input[type=range]::-moz-range-thumb{ background: #ffdc58; border:3px solid #050505; border-radius:0; }
+.seg { border: 2px solid #050505; }
+.seg button.is-on { background: #ffdc58; color:#050505; }
+.readout .v { color: #e61919; }
+.readout .row { border-bottom: 2px solid #050505; }
+
+/* hero ghost word: solid black stroke instead of a faint amber one */
+.hero h1 .ghost { -webkit-text-stroke: 2px #050505; color: transparent; }
+
+/* the map: real separated tiles, each a bordered sticker with its own shadow */
+.map-grid { background: transparent; border: none; gap: 22px; }
+.node { background: #ffffff; border: 3px solid #050505; box-shadow: 6px 6px 0 #050505;
+  transition: transform .12s var(--ease), box-shadow .12s var(--ease), background .12s var(--ease); }
+.node:hover { background: #ffdc58; transform: translate(3px,3px); box-shadow: 3px 3px 0 #050505; }
+.node__no, .node p { color: #050505; }
+.node .go { color: #e61919; }
+
+/* drill-in sections + fact strip: same bordered-block language */
+.subs, .facts { background: transparent; border: none; gap: 18px; }
+.sub, .fact { border: 3px solid #050505; background: #ffffff; }
+.fact b { color: #e61919; font-family: var(--sans); font-weight: 900; }
+.tabs button.is-on { color: #050505; border-bottom: 3px solid #e61919; }
+.pager { border-top: 3px solid #050505; }
+.pager a b { color: #050505; }
+.foot { border-top: 3px solid #050505; color: #050505; }
+.spectrum { border: 3px solid #050505; }
+
+/* theme picker matches the slab look */
+.theme-pick__label { color: #050505; }
+.theme-pick__select { color: #050505; background-color: #fff; border: 2px solid #050505; font-weight: 700; }
+.theme-pick__select:hover { color: #e61919; border-color: #050505; }

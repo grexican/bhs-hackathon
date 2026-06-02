@@ -28,6 +28,13 @@
 //   drums     — "full" | "soft" | "brush" | "none"  (the track's MAX drum feel)
 //   arpRate   — 8 plays the arp every 8th note (slow/dreamy), 16 every 16th (busy)
 //   gain      — per-track music level trim
+//   feel      — melodic CONTOUR for the arp so tracks don't all do the same up/down:
+//               "run" (canned shape, default), "climb" (steps up the chord),
+//               "pendulum" (zig-zags out from the middle), "stab" (mostly the
+//               root, jabbed — funky/DnB), "sparse" (only the downbeat note).
+//   steady    — true on a beat-locked track (Audiosurf): kills the per-bar volume
+//               swell and tames the fill bars so the kick + groove never wobble or
+//               slow down. The onBeat grid is unaffected either way.
 //
 // SONG STRUCTURE — each track has:
 //   prog        — { name: chordObj } dictionary of the chords the song draws from.
@@ -43,162 +50,177 @@
 // Fills, arp runs and dynamic swells are added in code, keyed off the song bar so
 // even repeated sections never feel identical bar-to-bar.
 const TRACKS = [
-  // 1) Dreamy, slow, major-key. Clean sine bass, lots of space, brushed drums.
-  //    Song (C major): airy intro (pad only) → introB → verse1 → verse2 →
-  //    pre-chorus → chorus1 → chorus2 → quiet bridge → verse3 (varied) →
-  //    chorus3 → final lifted chorus → outro. ~80 bars before it loops.
+  // 1) VELVET HORIZON — bright, dreamy LYDIAN anthem (warm major with a #4 lift).
+  //    Slow synth-ballad in C Lydian. Triangle/sine timbres, brushed kit, lots of
+  //    space. Arp "climbs" the chord like a sunrise rather than running up/down.
+  //    Song: airy pad intro → introB → verse ×2 → pre → big chorus ×2 → quiet
+  //    bridge → verse → pre → soaring final choruses → outro. ~80 bars.
+  //    What sets it apart: SLOW + MAJOR + brushed + climbing lead. The only major,
+  //    the only brushed kit, the brightest pads — feels like daylight.
   {
-    name: "Velvet Horizon", tempo: 84,
+    name: "Velvet Horizon", tempo: 82,
     bassWave: "sine", arpWave: "triangle", padWave: "triangle",
-    gritty: false, bassCut: 320, arpCut: 1600, detune: 9, space: 0.5,
-    swing: 0.25, drums: "brush", arpRate: 8, gain: 1.0,
+    gritty: false, bassCut: 300, arpCut: 1500, detune: 9, space: 0.5,
+    swing: 0.18, drums: "brush", arpRate: 8, gain: 1.0, feel: "climb",
+    // C Lydian: the F# (instead of F) is the signature bright/floating colour.
     prog: {
-      C:  { bass: 65.41, pad: [130.81, 164.81, 196.0], arp: [261.63, 329.63, 392.0, 329.63] },
-      F:  { bass: 87.31, pad: [174.61, 220.0, 261.63], arp: [349.23, 440.0, 523.25, 440.0] },
-      Dm: { bass: 73.42, pad: [146.83, 174.61, 220.0], arp: [293.66, 349.23, 440.0, 349.23] },
-      G:  { bass: 98.0,  pad: [196.0, 246.94, 293.66], arp: [392.0, 493.88, 587.33, 493.88] },
-      Am: { bass: 110.0, pad: [220.0, 261.63, 329.63], arp: [440.0, 523.25, 659.25, 523.25] },
-      Em: { bass: 82.41, pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] },
+      C:    { bass: 65.41, pad: [130.81, 164.81, 196.0],  arp: [261.63, 329.63, 392.0, 493.88] },
+      G:    { bass: 98.0,  pad: [196.0, 246.94, 293.66],  arp: [392.0, 493.88, 587.33, 739.99] },
+      "F#dim": { bass: 92.50, pad: [185.0, 220.0, 277.18], arp: [369.99, 440.0, 554.37, 659.25] }, // the #4 lift
+      Dm:   { bass: 73.42, pad: [146.83, 174.61, 220.0],  arp: [293.66, 349.23, 440.0, 523.25] },
+      Am:   { bass: 110.0, pad: [220.0, 261.63, 329.63],  arp: [440.0, 523.25, 659.25, 783.99] },
+      Em:   { bass: 82.41, pad: [164.81, 196.0, 246.94],  arp: [329.63, 392.0, 493.88, 587.33] },
     },
     arrangement: [
-      { name: "intro",  chords: ["C", "Am"],            layers: { bass: false, arp: false, drums: false } },
-      { name: "introB", chords: ["F", "G", "C", "Em"],  layers: { drums: false } },
-      { name: "verse",  chords: ["C", "Am", "Dm", "G"] },
-      { name: "verse",  chords: ["C", "Am", "F", "G"] },
-      { name: "pre",    chords: ["Dm", "Em", "F", "G"] },
-      { name: "chorus", chords: ["F", "G", "C", "Am"],  lift: 0.35 },
-      { name: "chorus", chords: ["F", "G", "Em", "Am"], lift: 0.35 },
-      { name: "verse",  chords: ["Am", "Em", "F", "C"] },
+      { name: "intro",  chords: ["C", "Am"],              layers: { bass: false, arp: false, drums: false } },
+      { name: "introB", chords: ["G", "C", "Em", "Am"],   layers: { drums: false } },
+      { name: "verse",  chords: ["C", "G", "Am", "Em"] },
+      { name: "verse",  chords: ["C", "G", "F#dim", "G"] },
+      { name: "pre",    chords: ["Dm", "Em", "C", "G"] },
+      { name: "chorus", chords: ["C", "G", "Am", "F#dim"], lift: 0.35 },
+      { name: "chorus", chords: ["C", "G", "Em", "Am"],    lift: 0.35 },
+      { name: "verse",  chords: ["Am", "Em", "C", "G"] },
       { name: "verse",  chords: ["C", "G", "Dm", "G"] },
-      { name: "pre",    chords: ["F", "Em", "Dm", "G"] },
-      { name: "bridge", chords: ["Dm", "Am", "Em", "G"], layers: { drums: false } },
-      { name: "bridge", chords: ["F", "C", "Dm", "G"],   layers: { drums: false } },
-      { name: "chorus", chords: ["F", "G", "C", "Am"],  lift: 0.35 },
-      { name: "chorus", chords: ["C", "Em", "F", "G"],  lift: 0.4 },
-      { name: "chorus", chords: ["F", "G", "Am", "Em"], lift: 0.45 },
-      { name: "chorus", chords: ["F", "G", "C", "G"],   lift: 0.45 },
-      { name: "outro",  chords: ["C", "Am", "F", "C"],  layers: { drums: false } },
+      { name: "pre",    chords: ["Em", "Dm", "C", "G"] },
+      { name: "bridge", chords: ["Dm", "Am", "Em", "G"],   layers: { drums: false } },
+      { name: "bridge", chords: ["C", "G", "Dm", "G"],     layers: { drums: false } },
+      { name: "chorus", chords: ["C", "G", "Am", "F#dim"], lift: 0.4 },
+      { name: "chorus", chords: ["C", "Em", "F#dim", "G"], lift: 0.45 },
+      { name: "chorus", chords: ["C", "G", "Am", "Em"],    lift: 0.5 },
+      { name: "outro",  chords: ["C", "Am", "G", "C"],     layers: { drums: false } },
     ],
   },
 
-  // 2) Late-night cruise. Warm triangle bass, gentle swing, soft drums, minor 7ths.
-  //    Song (A minor / jazzy): intro → verse1 → verse2 → pre → hook1 → hook2 →
-  //    verse3 (varied) → pre2 → drum-drop bridge → bridge2 → hook3 → hook4 →
-  //    final lifted hook → outro. ~60 bars.
+  // 2) MIDNIGHT CRUISE — LO-FI JAZZ. The slowest track with a beat; lazy heavy
+  //    swing, soft brush-ish kit, all sine/triangle, jazzy 7th/9th chords moving
+  //    in ii–V–I turnarounds (D minor home). Bass walks (every-8th feel) and the
+  //    lead is "sparse" — it lays back, plays mostly the downbeat, leaves space.
+  //    What sets it apart: 70bpm + huge swing + extended jazz chords + sparse,
+  //    behind-the-beat melody. No other track is this slow or this jazzy/swung.
   {
-    name: "Midnight Cruise", tempo: 96,
-    bassWave: "triangle", arpWave: "sine", padWave: "triangle",
-    gritty: false, bassCut: 380, arpCut: 1900, detune: 7, space: 0.4,
-    swing: 0.3, drums: "soft", arpRate: 8, gain: 1.0,
+    name: "Midnight Cruise", tempo: 70,
+    bassWave: "triangle", arpWave: "sine", padWave: "sine",
+    gritty: false, bassCut: 340, arpCut: 1700, detune: 6, space: 0.45,
+    swing: 0.55, drums: "soft", arpRate: 8, gain: 1.0, feel: "sparse",
+    // Dm home with ii–V–I colour: Em7b5 → A7 → Dm, plus Gm9 / Cmaj9 / Bbmaj7.
     prog: {
-      Am7: { bass: 110.0,  pad: [220.0, 261.63, 329.63], arp: [220.0, 261.63, 329.63, 392.0] },
-      Dm:  { bass: 73.42,  pad: [146.83, 174.61, 220.0], arp: [293.66, 349.23, 440.0, 349.23] },
-      G:   { bass: 98.0,   pad: [196.0, 246.94, 293.66], arp: [392.0, 440.0, 493.88, 440.0] },
-      C:   { bass: 130.81, pad: [261.63, 329.63, 392.0], arp: [523.25, 392.0, 329.63, 392.0] },
-      Fmaj7: { bass: 87.31, pad: [174.61, 220.0, 277.18], arp: [349.23, 440.0, 554.37, 440.0] },
-      Em7: { bass: 82.41,  pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] },
+      Dm9:   { bass: 73.42,  pad: [174.61, 220.0, 261.63],  arp: [293.66, 349.23, 440.0, 523.25] },
+      Gm9:   { bass: 98.0,   pad: [233.08, 293.66, 349.23],  arp: [392.0, 466.16, 587.33, 698.46] },
+      A7:    { bass: 110.0,  pad: [220.0, 277.18, 329.63],   arp: [440.0, 554.37, 659.25, 830.61] },
+      Cmaj9: { bass: 130.81, pad: [261.63, 329.63, 392.0],   arp: [523.25, 587.33, 659.25, 783.99] },
+      Bbmaj7:{ bass: 116.54, pad: [233.08, 293.66, 349.23],  arp: [466.16, 587.33, 698.46, 880.0] },
+      "Em7b5": { bass: 82.41, pad: [196.0, 233.08, 293.66],  arp: [329.63, 392.0, 466.16, 587.33] },
     },
     arrangement: [
-      { name: "intro", chords: ["Am7", "Fmaj7"],          layers: { arp: false, drums: false } },
-      { name: "intro", chords: ["Dm", "G"],               layers: { drums: false } },
-      { name: "verse", chords: ["Am7", "Dm", "G", "C"] },
-      { name: "verse", chords: ["Am7", "Dm", "Fmaj7", "G"] },
-      { name: "pre",   chords: ["Dm", "Em7", "Fmaj7", "G"] },
-      { name: "hook",  chords: ["C", "G", "Am7", "Fmaj7"], lift: 0.35 },
-      { name: "hook",  chords: ["C", "G", "Dm", "G"],      lift: 0.35 },
-      { name: "verse", chords: ["Fmaj7", "Em7", "Am7", "Dm"] },
-      { name: "verse", chords: ["Am7", "C", "Dm", "G"] },
-      { name: "pre",   chords: ["Fmaj7", "G", "Em7", "Am7"] },
-      { name: "bridge", chords: ["Fmaj7", "Em7", "Dm", "Am7"], layers: { drums: false } },
-      { name: "bridge", chords: ["Dm", "Em7", "Fmaj7", "G"],   layers: { drums: false } },
-      { name: "hook",  chords: ["C", "G", "Am7", "Fmaj7"], lift: 0.35 },
-      { name: "hook",  chords: ["Fmaj7", "C", "Dm", "G"],  lift: 0.4 },
-      { name: "hook",  chords: ["C", "G", "Am7", "G"],     lift: 0.45 },
-      { name: "outro", chords: ["Am7", "Fmaj7", "Dm", "Am7"], layers: { drums: false } },
+      { name: "intro", chords: ["Dm9", "Gm9"],               layers: { arp: false, drums: false } },
+      { name: "intro", chords: ["Em7b5", "A7"],              layers: { drums: false } },
+      { name: "verse", chords: ["Dm9", "Gm9", "Em7b5", "A7"] },
+      { name: "verse", chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"] },
+      { name: "pre",   chords: ["Gm9", "Cmaj9", "Em7b5", "A7"] },
+      { name: "hook",  chords: ["Dm9", "Bbmaj7", "Gm9", "A7"], lift: 0.3 },
+      { name: "hook",  chords: ["Cmaj9", "Bbmaj7", "Gm9", "A7"], lift: 0.3 },
+      { name: "verse", chords: ["Dm9", "Gm9", "Cmaj9", "Bbmaj7"] },
+      { name: "verse", chords: ["Dm9", "Em7b5", "Gm9", "A7"] },
+      { name: "bridge",chords: ["Bbmaj7", "Cmaj9", "Gm9", "Dm9"], layers: { drums: false } },
+      { name: "bridge",chords: ["Gm9", "A7", "Dm9", "Dm9"],   layers: { drums: false } },
+      { name: "hook",  chords: ["Dm9", "Bbmaj7", "Gm9", "A7"], lift: 0.35 },
+      { name: "hook",  chords: ["Cmaj9", "Gm9", "Em7b5", "A7"], lift: 0.4 },
+      { name: "outro", chords: ["Dm9", "Gm9", "Em7b5", "Dm9"], layers: { drums: false } },
     ],
   },
 
-  // 3) Surreal ambient drift. No drums, very wide detune, max space, floating arp.
-  //    Song (E minor): layers fade IN one at a time, swell through two rises to a
-  //    fuller middle, breathe back with an ebb, swell again, then thin all the way
-  //    back out — a long slow tide rather than a beat. ~52 bars.
+  // 3) LUCID DRIFT — surreal AMBIENT, no beat at all. The slowest of everything,
+  //    widest detune, max space. Sine everywhere, F# minor / Lydian shimmer, the
+  //    lead "pendulums" gently out from a center note (never the same up/down).
+  //    Long swelling tide: layers fade in, two rises to a fuller middle, ebb back,
+  //    rise again, thin all the way out. ~52 bars.
+  //    What sets it apart: NO drums, slowest tempo, widest stereo-ish detune and
+  //    longest echoes — pure floating wash, unmistakable next to anything else.
   {
-    name: "Lucid Drift", tempo: 80,
+    name: "Lucid Drift", tempo: 62,
     bassWave: "sine", arpWave: "sine", padWave: "sine",
-    gritty: false, bassCut: 260, arpCut: 1300, detune: 13, space: 0.62,
-    swing: 0, drums: "none", arpRate: 8, gain: 1.05,
+    gritty: false, bassCut: 240, arpCut: 1200, detune: 16, space: 0.68,
+    swing: 0, drums: "none", arpRate: 8, gain: 1.05, feel: "pendulum",
+    // F#m / A Lydian family — wide, open, unresolved.
     prog: {
-      Em:  { bass: 82.41,  pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] },
-      A:   { bass: 110.0,  pad: [220.0, 277.18, 329.63], arp: [440.0, 554.37, 659.25, 554.37] },
-      "F#m": { bass: 92.50, pad: [185.0, 220.0, 277.18], arp: [369.99, 440.0, 554.37, 440.0] },
-      B:   { bass: 123.47, pad: [246.94, 293.66, 369.99], arp: [493.88, 587.33, 739.99, 587.33] },
-      Cmaj7: { bass: 65.41, pad: [196.0, 246.94, 329.63], arp: [392.0, 493.88, 659.25, 493.88] },
-      G:   { bass: 98.0,   pad: [196.0, 246.94, 293.66], arp: [392.0, 493.88, 587.33, 493.88] },
+      "F#m":   { bass: 92.50,  pad: [185.0, 220.0, 277.18],  arp: [369.99, 440.0, 554.37, 440.0] },
+      A:       { bass: 110.0,  pad: [220.0, 277.18, 329.63], arp: [440.0, 554.37, 659.25, 554.37] },
+      E:       { bass: 82.41,  pad: [164.81, 207.65, 246.94], arp: [329.63, 415.30, 493.88, 415.30] },
+      Bsus:    { bass: 61.74,  pad: [185.0, 246.94, 277.18], arp: [369.99, 493.88, 554.37, 493.88] },
+      "Dmaj7": { bass: 73.42,  pad: [220.0, 277.18, 329.63], arp: [440.0, 554.37, 659.25, 554.37] },
+      "C#m":   { bass: 69.30,  pad: [207.65, 246.94, 311.13], arp: [415.30, 493.88, 622.25, 493.88] },
     },
     arrangement: [
-      { name: "wash",  chords: ["Em", "Cmaj7"],            layers: { bass: false, arp: false } },
-      { name: "wash",  chords: ["G", "A"],                 layers: { arp: false } },
-      { name: "drift", chords: ["Em", "A", "F#m", "B"],    layers: { arp: false } },
-      { name: "drift", chords: ["Em", "G", "A", "B"] },
-      { name: "drift", chords: ["Cmaj7", "G", "F#m", "B"] },
-      { name: "rise",  chords: ["Cmaj7", "G", "A", "B"],   lift: 0.3 },
-      { name: "rise",  chords: ["Em", "A", "Cmaj7", "B"],  lift: 0.3 },
-      { name: "rise",  chords: ["G", "A", "Cmaj7", "B"],   lift: 0.4 },
-      { name: "ebb",   chords: ["F#m", "Em", "A", "G"],    layers: { arp: false } },
-      { name: "ebb",   chords: ["Cmaj7", "G", "Em", "A"],  layers: { arp: false } },
-      { name: "rise",  chords: ["Em", "Cmaj7", "A", "B"],  lift: 0.35 },
-      { name: "rise",  chords: ["Cmaj7", "A", "G", "B"],   lift: 0.4 },
-      { name: "ebb",   chords: ["F#m", "Em", "G", "A"],    layers: { arp: false } },
-      { name: "wash",  chords: ["G", "A"],                 layers: { arp: false } },
-      { name: "wash",  chords: ["Em", "Cmaj7"],            layers: { bass: false, arp: false } },
+      { name: "wash",  chords: ["F#m", "Dmaj7"],            layers: { bass: false, arp: false } },
+      { name: "wash",  chords: ["A", "E"],                  layers: { arp: false } },
+      { name: "drift", chords: ["F#m", "A", "Dmaj7", "E"],  layers: { arp: false } },
+      { name: "drift", chords: ["F#m", "C#m", "A", "E"] },
+      { name: "drift", chords: ["Dmaj7", "A", "Bsus", "E"] },
+      { name: "rise",  chords: ["Dmaj7", "A", "E", "Bsus"], lift: 0.3 },
+      { name: "rise",  chords: ["F#m", "A", "Dmaj7", "E"],  lift: 0.3 },
+      { name: "rise",  chords: ["A", "E", "Dmaj7", "Bsus"], lift: 0.4 },
+      { name: "ebb",   chords: ["C#m", "F#m", "A", "E"],    layers: { arp: false } },
+      { name: "ebb",   chords: ["Dmaj7", "A", "F#m", "E"],  layers: { arp: false } },
+      { name: "rise",  chords: ["F#m", "Dmaj7", "A", "Bsus"], lift: 0.35 },
+      { name: "rise",  chords: ["Dmaj7", "A", "E", "Bsus"], lift: 0.4 },
+      { name: "ebb",   chords: ["C#m", "F#m", "A", "E"],    layers: { arp: false } },
+      { name: "wash",  chords: ["A", "E"],                  layers: { arp: false } },
+      { name: "wash",  chords: ["F#m", "Dmaj7"],            layers: { bass: false, arp: false } },
     ],
   },
 
-  // 4) Energetic but smooth. Filtered-saw lead, soft grit on bass, full drums, brighter.
-  //    Song (A minor): 2-bar kick intro → A → A (var) → A2 → build → DROP → DROP2 →
-  //    breakdown (drums drop) → A3 (var) → build2 → DROP3 → DROP4 → outro.
-  //    Steady kick throughout the drum sections. ~58 bars.
+  // 4) NEON HIGHWAY — DRUM & BASS / breakbeat energy. Fast (150bpm) and dark,
+  //    A PHRYGIAN (the flat-2 Bb gives the tense, driving edge). Gritty saw bass,
+  //    full kit, "stab"-feel lead that jabs the root for a syncopated, funky pulse
+  //    rather than a smooth run. Builds & drops with breakdowns.
+  //    What sets it apart: fastest with-drums track, dark Phrygian colour, stabby
+  //    syncopated lead — aggressive and rhythmic where Pulse Runner is steady.
   {
-    name: "Neon Highway", tempo: 124,
-    bassWave: "sawtooth", arpWave: "sawtooth", padWave: "triangle",
-    gritty: true, bassCut: 520, arpCut: 2400, detune: 8, space: 0.28,
-    swing: 0.12, drums: "full", arpRate: 16, gain: 0.95,
+    name: "Neon Highway", tempo: 150,
+    bassWave: "sawtooth", arpWave: "square", padWave: "sawtooth",
+    gritty: true, bassCut: 480, arpCut: 2200, detune: 11, space: 0.3,
+    swing: 0.16, drums: "full", arpRate: 16, gain: 0.95, feel: "stab",
+    // A Phrygian: A Bb C D E F G — the Bb (b2) is the signature dark tension.
     prog: {
-      Am: { bass: 110.0,  pad: [220.0, 261.63, 329.63], arp: [220.0, 261.63, 329.63, 440.0] },
-      F:  { bass: 87.31,  pad: [174.61, 220.0, 261.63], arp: [174.61, 220.0, 261.63, 349.23] },
-      G:  { bass: 98.0,   pad: [196.0, 246.94, 293.66], arp: [196.0, 246.94, 293.66, 392.0] },
-      C:  { bass: 130.81, pad: [261.63, 329.63, 392.0], arp: [261.63, 329.63, 392.0, 329.63] },
-      Dm: { bass: 73.42,  pad: [146.83, 174.61, 220.0], arp: [146.83, 174.61, 220.0, 293.66] },
-      Em: { bass: 82.41,  pad: [164.81, 196.0, 246.94], arp: [164.81, 196.0, 246.94, 329.63] },
+      Am:  { bass: 110.0,  pad: [220.0, 261.63, 329.63],  arp: [220.0, 220.0, 261.63, 329.63] },
+      Bb:  { bass: 116.54, pad: [233.08, 293.66, 349.23], arp: [233.08, 233.08, 293.66, 349.23] }, // bII — the Phrygian colour
+      Dm:  { bass: 73.42,  pad: [146.83, 174.61, 220.0],  arp: [146.83, 146.83, 220.0, 293.66] },
+      Em:  { bass: 82.41,  pad: [164.81, 196.0, 246.94],  arp: [164.81, 164.81, 246.94, 329.63] },
+      F:   { bass: 87.31,  pad: [174.61, 220.0, 261.63],  arp: [174.61, 174.61, 261.63, 349.23] },
+      Gm:  { bass: 98.0,   pad: [196.0, 233.08, 293.66],  arp: [196.0, 196.0, 293.66, 392.0] },
     },
     arrangement: [
-      { name: "intro", chords: ["Am", "Am"],         layers: { arp: false, pad: false } },
-      { name: "A",     chords: ["Am", "F", "G", "C"] },
-      { name: "A",     chords: ["Am", "F", "Dm", "G"] },
-      { name: "A2",    chords: ["Am", "Em", "F", "G"] },
-      { name: "build", chords: ["Dm", "Em", "F", "G"] },
-      { name: "drop",  chords: ["Am", "F", "G", "C"], lift: 0.5 },
-      { name: "drop",  chords: ["Am", "F", "C", "G"], lift: 0.5 },
-      { name: "break", chords: ["F", "C", "Dm", "G"], layers: { drums: false } },
-      { name: "break", chords: ["Dm", "Am", "Em", "G"], layers: { drums: false } },
-      { name: "A2",    chords: ["Am", "C", "Em", "G"] },
-      { name: "build", chords: ["F", "G", "Em", "G"] },
-      { name: "drop",  chords: ["Am", "F", "G", "C"], lift: 0.55 },
-      { name: "drop",  chords: ["Am", "Em", "F", "G"], lift: 0.55 },
-      { name: "drop",  chords: ["Am", "F", "G", "G"], lift: 0.6 },
-      { name: "outro", chords: ["Am", "G", "F", "Em"] },
+      { name: "intro", chords: ["Am", "Am"],          layers: { arp: false, pad: false } },
+      { name: "A",     chords: ["Am", "Bb", "Am", "Em"] },
+      { name: "A",     chords: ["Am", "Bb", "Dm", "Em"] },
+      { name: "A2",    chords: ["Am", "F", "Gm", "Em"] },
+      { name: "build", chords: ["Dm", "Em", "F", "Gm"] },
+      { name: "drop",  chords: ["Am", "Bb", "Am", "Em"], lift: 0.5 },
+      { name: "drop",  chords: ["Am", "Bb", "F", "Em"],  lift: 0.5 },
+      { name: "break", chords: ["Dm", "Am", "Bb", "Em"], layers: { drums: false } },
+      { name: "break", chords: ["F", "Gm", "Dm", "Em"],  layers: { drums: false } },
+      { name: "A2",    chords: ["Am", "Em", "Bb", "Am"] },
+      { name: "build", chords: ["F", "Gm", "Dm", "Em"] },
+      { name: "drop",  chords: ["Am", "Bb", "Am", "Em"], lift: 0.55 },
+      { name: "drop",  chords: ["Am", "F", "Bb", "Em"],  lift: 0.55 },
+      { name: "drop",  chords: ["Am", "Bb", "Am", "Am"], lift: 0.6 },
+      { name: "outro", chords: ["Am", "Gm", "F", "Em"] },
     ],
   },
 
-  // 5) The one hyper track. Driving but warmed-up: softer drums, capped lead brightness.
-  //    Song (E minor): 2-bar kick intro → A → A (var) → A2 → build → DROP → DROP2 →
-  //    tension break → A3 (var) → build2 → DROP3 → DROP4 → outro. Index 4: Audiosurf
-  //    forces this one, so the kick stays rock-steady. ~54 bars.
+  // 5) PULSE RUNNER — driving OUTRUN SYNTHWAVE. *** AUDIOSURF track (index 4). ***
+  //    Rock-steady FOUR-ON-THE-FLOOR at 128bpm — classic outrun tempo. NO swing
+  //    (swing:0) and `steady:true` so there is ZERO per-bar volume swell and the
+  //    fill bars are tamed: the kick lands dead on every quarter and never wobbles
+  //    or slows, because the on-screen pulses ride this beat. E minor, bright saw
+  //    lead that "runs" the chord (the one melodic, anthemic synthwave lead).
+  //    What sets it apart: the only metronome-steady track, classic 128 outrun
+  //    pulse, clean unswung groove — purpose-built for the world to pulse on.
   {
-    name: "Pulse Runner", tempo: 134,
-    bassWave: "sawtooth", arpWave: "triangle", padWave: "sawtooth",
-    gritty: true, bassCut: 560, arpCut: 2600, detune: 10, space: 0.22,
-    swing: 0.08, drums: "full", arpRate: 16, gain: 0.92,
+    name: "Pulse Runner", tempo: 128,
+    bassWave: "sawtooth", arpWave: "sawtooth", padWave: "sawtooth",
+    gritty: true, bassCut: 560, arpCut: 2600, detune: 8, space: 0.2,
+    swing: 0, drums: "full", arpRate: 16, gain: 0.92, feel: "run", steady: true,
     prog: {
       Em: { bass: 82.41,  pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] },
       C:  { bass: 130.81, pad: [261.63, 329.63, 392.0], arp: [523.25, 392.0, 329.63, 392.0] },
@@ -439,46 +461,90 @@ export class Sound {
     const swung = s % 2 === 1 ? t + this._sec16 * swing * 0.5 : t;
 
     // Intensity = base lift of the section + a gentle 4-bar swell so even a held
-    // section breathes louder→softer instead of sitting flat.
+    // section breathes louder→softer instead of sitting flat. STEADY tracks
+    // (Audiosurf) skip the swell entirely so the beat never rises/falls in level.
     const phraseBar = loc.barInSection;
-    const swell = 0.12 * Math.sin((songBar % 4) / 4 * Math.PI); // 0..0.12 across 4 bars
+    const swell = track.steady ? 0 : 0.12 * Math.sin((songBar % 4) / 4 * Math.PI); // 0..0.12 across 4 bars
     const lift = loc.lift + swell;
 
     // Last bar of a 4+ bar section = a "fill" bar: a busier drum turnaround and an
     // arp run that signals the change coming. Cheap, keyed off the bar so it's
-    // deterministic (no per-frame work).
+    // deterministic (no per-frame work). STEADY tracks don't churn the bass/arp on
+    // fills (that read as a "slowdown/stutter" against the locked pulse); their
+    // drums still add a light snare turnaround via _drums, but the groove holds.
     const isFillBar = loc.secLen >= 4 && phraseBar === loc.secLen - 1;
+    const churnFill = isFillBar && !track.steady; // bass-double + arp-run only when not steady
 
     // Pad chord: lay the whole chord down once at the top of each bar so a warm
     // bed hums under everything. This is the biggest "vibey" win.
     if (s === 0 && loc.pad) this._pad(t, chord.pad, track, lift);
 
-    // 8th-note bass pulse. On a fill bar's back half, double up to 16ths for a
-    // little driving run into the next section.
+    // 8th-note bass pulse. On a (non-steady) fill bar's back half, double up to
+    // 16ths for a little driving run into the next section.
     if (loc.bass) {
-      // Normal: every 8th. Fill bar's last beat (s 12-15): every 16th for a driving run.
-      const bassHit = (s % 2 === 0) || (isFillBar && s >= 12);
+      const bassHit = (s % 2 === 0) || (churnFill && s >= 12);
       if (bassHit) this._bass(t, chord.bass, track, lift);
     }
 
     // Arp: dreamy tracks pluck every 8th note (arpRate 8); busier ones every 16th.
+    // The melodic CONTOUR is per-track (`feel`) so no two leads trace the same
+    // up/down — see _arpNote.
     if (loc.arp) {
       const arpEvery = track.arpRate === 16 ? 1 : 2;
-      // On a fill bar, run the arp at double rate for a fast lead flourish.
-      const every = isFillBar ? Math.max(1, arpEvery / 2) : arpEvery;
-      if (s % every === 0) {
-        const seq = chord.arp;
-        // Variation: every other phrase the lead climbs through the chord instead
-        // of following the canned shape, so repeats don't sound identical.
-        const vary = (songBar % 8) >= 4;
-        let note = seq[s % seq.length];
-        if (vary) note = seq[(Math.floor(s / 2) + phraseBar) % seq.length];
-        if (isFillBar && s >= 12) note = note * 2; // octave-up tail on the run
+      // On a churn fill, run the arp at double rate for a fast lead flourish.
+      const every = churnFill ? Math.max(1, arpEvery / 2) : arpEvery;
+      const feel = track.feel || "run";
+      // "stab"/"sparse" leads sit out most slots so they read as syncopated jabs /
+      // laid-back downbeats instead of a constant stream.
+      const playSlot =
+        feel === "sparse" ? s % 4 === 0 :
+        feel === "stab"    ? (s % 4 === 0 || s % 8 === 3) : // downbeat + an off-the-beat jab
+        s % every === 0;
+      if (playSlot) {
+        let note = this._arpNote(chord.arp, s, phraseBar, songBar, feel);
+        if (churnFill && s >= 12) note = note * 2; // octave-up tail on the run
         this._arp(swung, note, track, lift);
       }
     }
 
-    if (loc.drums) this._drums(s, swung, track, lift, isFillBar);
+    // Steady tracks (Audiosurf) get the plain four-on-the-floor groove with no
+    // fill churn, so the pulse the world rides never stutters.
+    if (loc.drums) this._drums(s, swung, track, lift, churnFill);
+  }
+
+  // Pick the arp note for this 16th step given the track's melodic `feel`. Keeping
+  // the contour per-track is what stops every lead from tracing the same up/down.
+  //   run      — the canned 4-note shape, with a mid-phrase reshuffle for variety.
+  //   climb    — steps up through the chord across the bar (a rising, hopeful line).
+  //   pendulum — zig-zags out from the middle note (in/out, never a straight run).
+  //   stab     — leans on the root with the occasional higher jab (funky/DnB).
+  //   sparse   — just the downbeat tone, alternating low/high across phrases (lo-fi).
+  _arpNote(seq, s, phraseBar, songBar, feel) {
+    const n = seq.length;
+    const eighth = Math.floor(s / 2); // 0..7 within the bar
+    if (feel === "climb") {
+      // Walk upward through the chord as the bar progresses; nudge the start each
+      // bar so successive bars don't all begin on the same note.
+      return seq[(eighth + phraseBar) % n];
+    }
+    if (feel === "pendulum") {
+      // Bounce outward from the center: middle → up → middle → down → ...
+      const order = [1, 2, 1, 0, 2, 3, 1, 0];
+      return seq[order[eighth % order.length] % n];
+    }
+    if (feel === "stab") {
+      // Mostly the root (index 0); the off-beat jab grabs a higher chord tone.
+      return s % 4 === 0 ? seq[0] : seq[2 % n];
+    }
+    if (feel === "sparse") {
+      // One note per beat, alternating a low and a high chord tone per phrase so the
+      // sparse line still drifts instead of repeating one pitch.
+      return seq[(phraseBar % 2 === 0 ? 0 : 2) % n];
+    }
+    // "run" (default): canned shape, but every other phrase reshuffle so repeats
+    // don't sound identical bar-to-bar.
+    const vary = (songBar % 8) >= 4;
+    return vary ? seq[(eighth + phraseBar) % n] : seq[s % n];
   }
 
   // --- Music voices ---------------------------------------------------------

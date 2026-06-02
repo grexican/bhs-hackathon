@@ -1,0 +1,104 @@
+/* ============================================================
+   THEME: MINIMALISM  (overlay — loaded after styles.css)
+   Editorial / Swiss restraint: warm off-white, near-black ink, ONE
+   accent (signal red), hairline dividers, whitespace as the design.
+   No gradients, no heavy shadows, almost no radius.
+   Skill: taste-skill/minimalist-ui + impeccable type/contrast rules.
+   ============================================================ */
+
+:root {
+  --bg:        #fbfbfa;   /* warm off-white canvas */
+  --bg-2:      #ffffff;
+  --surface:   #ffffff;
+  --line:      #e7e6e3;   /* hairline only */
+  --line-hot:  #d8d6d2;
+
+  --ink:       #18181b;   /* near-black, never #000 */
+  --ink-soft:  #46464b;
+  --ink-faint: #8a8a85;
+
+  --amber:     #e4002b;   /* the single accent — signal red */
+  --amber-hot: #c20025;
+  --cyan:      #18181b;   /* "second signal" collapses to ink: one accent only */
+  --cyan-deep: #46464b;
+  --rose:      #e4002b;
+  --violet:    #18181b;
+
+  --grid-ink:  transparent;
+
+  /* Fraunces (editorial serif) for display, Space Grotesk for text — already loaded */
+  --serif: "Fraunces", Georgia, serif;
+  --sans:  "Space Grotesk", system-ui, sans-serif;
+  --mono:  "IBM Plex Mono", ui-monospace, monospace;
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* flat warm paper, no engineering grid, no scanline */
+body { background-image: none; }
+body::after { display: none; }
+::selection { background: #e4002b; color: #fff; }
+
+h1, h2, h3 { color: var(--ink); }
+p { color: var(--ink-soft); }
+em { color: #e4002b; }
+a { color: var(--ink); border-bottom: 1px solid var(--ink); }
+a:hover { color: #e4002b; border-color: #e4002b; }
+.eyebrow { color: var(--ink-faint); letter-spacing: 0.2em; }
+
+/* nav: white with a single hairline rule and a faint blur */
+.nav { background: rgba(251,251,250,0.85); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line); }
+.nav__brand { color: var(--ink); }
+.nav__brand b { color: #e4002b; }
+.nav__links a { color: var(--ink-soft); }
+.nav__links a:hover { color: #e4002b; }
+
+/* buttons: solid ink block, type-driven, almost no chrome */
+.btn { clip-path: none; border-radius: 3px; background: var(--ink); color: #fff;
+  border: 1px solid var(--ink); box-shadow: none; font-weight: 500; }
+.btn:hover { background: #e4002b; border-color: #e4002b; transform: none; }
+.btn:active { transform: scale(0.985); }
+.btn--ghost { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+.btn--ghost:hover { background: transparent; color: #e4002b; border-color: #e4002b; }
+
+.chip { color: var(--ink-soft); border: 1px solid var(--line-hot); border-radius: 3px; }
+
+/* panels / stages: hairline frame, flat, no glow */
+.panel, .stage { background: #fff; border: 1px solid var(--line); box-shadow: none; }
+.panel::before { display: none; }
+.corner { display: none; }
+input[type=range]{ background: var(--line); }
+input[type=range]::-webkit-slider-thumb{ background: var(--ink); border:2px solid #fff; box-shadow:none; }
+input[type=range]::-moz-range-thumb{ background: var(--ink); border:2px solid #fff; }
+.seg { border: 1px solid var(--line-hot); }
+.seg button.is-on { background: var(--ink); color:#fff; }
+.readout .v { color: var(--ink); }
+.readout .v.amber { color: #e4002b; }
+.readout .row { border-bottom: 1px solid var(--line); }
+
+/* hero ghost word: quiet — outline in ink, not a colored stroke */
+.hero h1 .ghost { -webkit-text-stroke: 1px var(--ink); color: transparent; }
+
+/* the map: flat editorial grid, hairline borders, whisper-shadow on hover */
+.map-grid { background: transparent; border: none; gap: 20px; }
+.node { background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: none;
+  transition: box-shadow .2s var(--ease), border-color .2s var(--ease); }
+.node:hover { background: #fff; border-color: var(--line-hot); box-shadow: 0 2px 14px rgba(0,0,0,0.04); }
+.node__no { color: var(--ink-faint); }
+.node p { color: var(--ink-soft); }
+.node .go { color: #e4002b; }
+
+.subs, .facts { background: transparent; border: none; gap: 20px; }
+.sub, .fact { background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.fact b { color: var(--ink); font-family: var(--serif); }
+.tabs { border-bottom: 1px solid var(--line); }
+.tabs button.is-on { color: var(--ink); border-bottom-color: #e4002b; }
+.pager { border-top: 1px solid var(--line); }
+.pager a b { color: var(--ink); }
+.foot { border-top: 1px solid var(--line); color: var(--ink-faint); }
+.spectrum { border: 1px solid var(--line); }
+
+.theme-pick__label { color: var(--ink-faint); }
+.theme-pick__select { color: var(--ink-soft); background: #fff; border: 1px solid var(--line-hot); border-radius: 3px; }
+.theme-pick__select:hover { color: #e4002b; border-color: #e4002b; }

@@ -1,0 +1,122 @@
+/* ============================================================
+   THEME: GLASSMORPHISM  (overlay — loaded after styles.css)
+   Frosted translucent panes over a colorful gradient: strong
+   backdrop-blur + saturate, one hairline white rim, a single soft
+   drop shadow, moderate radius. Frost, not a lens (cf. liquid-glass).
+   Recipe: backdrop-filter blur(14px) saturate(180%) + 1px rim.
+   ============================================================ */
+
+:root {
+  --bg:        #161226;
+  --bg-2:      rgba(255,255,255,0.10);
+  --surface:   rgba(255,255,255,0.12);
+  --line:      rgba(255,255,255,0.20);
+  --line-hot:  rgba(255,255,255,0.32);
+
+  --ink:       #ffffff;
+  --ink-soft:  rgba(255,255,255,0.82);
+  --ink-faint: rgba(255,255,255,0.62);
+
+  --amber:     #ffd479;   /* warm pops still read on the vivid bg */
+  --amber-hot: #ffc24d;
+  --cyan:      #5eead4;
+  --cyan-deep: #2dd4bf;
+  --rose:      #fb7faf;
+  --violet:    #c4a3ff;
+
+  --grid-ink:  transparent;
+
+  --serif: "Fraunces", Georgia, serif;
+  --sans:  "Space Grotesk", system-ui, sans-serif;
+  --mono:  "IBM Plex Mono", ui-monospace, monospace;
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* the frost kit: heavier blur than liquid-glass, one thin rim, one drop */
+  --gl-blur: blur(14px) saturate(180%);
+  --gl-fill: rgba(255,255,255,0.12);
+  --gl-shadow: 0 8px 32px rgba(20,12,50,0.40), inset 0 1px 0 rgba(255,255,255,0.30);
+}
+
+/* a flatter, vivid color field for the frost to blur */
+body {
+  background:
+    radial-gradient(50% 50% at 12% 10%, #7b2ff7 0%, transparent 58%),
+    radial-gradient(48% 48% at 88% 16%, #2ce8f5 0%, transparent 58%),
+    radial-gradient(55% 50% at 80% 88%, #ff2e93 0%, transparent 60%),
+    radial-gradient(48% 48% at 22% 86%, #2f6bff 0%, transparent 58%),
+    linear-gradient(135deg, #221049, #0e1430);
+  background-attachment: fixed;
+}
+body::after { display: none; }
+::selection { background: rgba(255,255,255,0.35); color: #161226; }
+
+h1, h2, h3 { color: #fff; }
+p { color: var(--ink-soft); }
+em { color: #ffd479; font-style: normal; }
+a { color: #5eead4; }
+.eyebrow { color: #ffd479; }
+
+/* every glass surface gets the same frost + rim */
+.nav, .btn, .btn--ghost, .panel, .stage, .node, .sub, .fact, .chip, .theme-pick__select, .spectrum, .seg {
+  backdrop-filter: var(--gl-blur);
+  -webkit-backdrop-filter: var(--gl-blur);
+}
+
+.nav { background: rgba(255,255,255,0.10); border-bottom: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 8px 32px rgba(20,12,50,0.35); }
+.nav__brand { color: #fff; }
+.nav__brand b { color: #ffd479; }
+.nav__links a { color: var(--ink-soft); }
+.nav__links a:hover { color: #fff; }
+
+/* buttons: frosted pills, gentle, no heavy gloss */
+.btn { clip-path: none; border-radius: 14px; border: 1px solid rgba(255,255,255,0.30);
+  background: rgba(255,255,255,0.16); color: #fff; font-weight: 600; box-shadow: var(--gl-shadow);
+  transition: transform .25s var(--ease), background .25s var(--ease); }
+.btn:hover { transform: translateY(-2px); background: rgba(255,255,255,0.24); }
+.btn:active { transform: translateY(0); }
+.btn--ghost { background: rgba(255,255,255,0.06); color: #fff; border: 1px solid rgba(255,255,255,0.28); }
+.btn--ghost:hover { background: rgba(255,255,255,0.14); color: #fff; border-color: rgba(255,255,255,0.45); }
+
+.chip { color: #d6fff6; border: 1px solid rgba(255,255,255,0.3); background: var(--gl-fill); }
+
+/* panels / stages: frosted cards, moderate radius, single soft shadow */
+.panel, .stage { background: var(--gl-fill); border: 1px solid rgba(255,255,255,0.20);
+  border-radius: 18px; box-shadow: var(--gl-shadow); }
+.panel::before { background: #ffd479; }
+.corner { border-color: rgba(255,255,255,0.65); }
+input[type=range]{ background: rgba(255,255,255,0.25); border-radius: 999px; }
+input[type=range]::-webkit-slider-thumb{ background: #fff; border:none; box-shadow:0 2px 6px rgba(0,0,0,0.3); }
+input[type=range]::-moz-range-thumb{ background: #fff; border:none; }
+.seg { border: 1px solid rgba(255,255,255,0.25); border-radius: 12px; overflow: hidden; }
+.seg button.is-on { background: rgba(255,255,255,0.28); color:#fff; }
+.readout .v { color: #5eead4; }
+.readout .v.amber { color: #ffd479; }
+.readout .row { border-bottom: 1px dashed rgba(255,255,255,0.22); }
+
+.hero h1 .ghost { -webkit-text-stroke: 1.2px rgba(255,255,255,0.75); color: transparent; }
+
+/* the map: frosted tiles floating on the color field */
+.map-grid { background: transparent; border: none; gap: 16px; }
+.node { background: var(--gl-fill); border: 1px solid rgba(255,255,255,0.18); border-radius: 16px;
+  box-shadow: var(--gl-shadow); transition: transform .2s var(--ease), background .2s var(--ease); }
+.node:hover { background: rgba(255,255,255,0.20); transform: translateY(-3px); }
+.node__no { color: var(--ink-faint); }
+.node p { color: var(--ink-soft); }
+.node .go { color: #ffd479; }
+
+.subs, .facts { background: transparent; border: none; gap: 16px; }
+.sub, .fact { background: var(--gl-fill); border: 1px solid rgba(255,255,255,0.18); border-radius: 16px; }
+.fact b { color: #ffd479; }
+.tabs { border-bottom: 1px solid rgba(255,255,255,0.2); }
+.tabs button.is-on { color: #fff; border-bottom-color: #ffd479; }
+.pager { border-top: 1px solid rgba(255,255,255,0.18); }
+.pager a b { color: #fff; }
+.foot { border-top: 1px solid rgba(255,255,255,0.18); color: var(--ink-faint); }
+.spectrum { border: 1px solid rgba(255,255,255,0.2); border-radius: 14px; }
+
+.theme-pick__label { color: var(--ink-faint); }
+.theme-pick__select { color: #fff; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.3); border-radius: 10px; }
+.theme-pick__select:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+.theme-pick__select option { color: #161226; }   /* dropdown list is rendered by the OS */

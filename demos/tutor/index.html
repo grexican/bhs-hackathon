@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MathTutor &amp; Nexus — BHS Hackathon Demo</title>
+    <meta
+      name="description"
+      content="An AI tutoring suite: MathTutor answers and explains math (routing each question to the right model, with answers re-checked before you trust them), and Nexus pulls a student's assignments, grades, and announcements into one dashboard."
+    />
+    <!-- Self-contained gallery page for the AI tutor demo. Inline CSS, no build
+         step, no external deps — it gets copied as-is and served statically. -->
+    <style>
+      :root {
+        --bg: #0b0d17;
+        --bg-soft: #151829;
+        --card: #1b1f33;
+        --card-hover: #232844;
+        --text: #eef0fb;
+        --muted: #9aa0bd;
+        --accent: #7c5cff;
+        --accent-2: #28d9c7;
+        --border: #2a2f4a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: radial-gradient(1200px 600px at 70% -10%, #1d2142 0%, var(--bg) 55%);
+        color: var(--text);
+        min-height: 100vh;
+        line-height: 1.5;
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 40px 24px 80px;
+      }
+      .back {
+        display: inline-block;
+        color: var(--accent-2);
+        text-decoration: none;
+        font-size: 14px;
+        margin-bottom: 28px;
+      }
+      .back:hover {
+        text-decoration: underline;
+      }
+      .eyebrow {
+        display: inline-block;
+        font-size: 13px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent-2);
+        font-weight: 600;
+        margin-bottom: 12px;
+      }
+      h1 {
+        font-size: clamp(32px, 6vw, 52px);
+        line-height: 1.1;
+        margin: 0 0 16px;
+        background: linear-gradient(90deg, var(--text), var(--accent));
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      header p {
+        color: var(--muted);
+        font-size: 18px;
+        max-width: 720px;
+        margin: 0;
+      }
+      .section-label {
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 600;
+        margin: 44px 0 16px;
+      }
+      .gallery {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      }
+      .shot {
+        border: 0;
+        padding: 0;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden;
+        cursor: zoom-in;
+        transition: transform 0.15s ease, border-color 0.15s ease;
+      }
+      .shot:hover {
+        border-color: var(--accent);
+        transform: translateY(-3px);
+      }
+      .shot img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      footer {
+        margin-top: 64px;
+        padding-top: 24px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 14px;
+      }
+      footer a {
+        color: var(--accent-2);
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
+      /* Lightbox: hidden until a thumbnail is clicked. */
+      .lightbox {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(7, 8, 16, 0.92);
+        z-index: 10;
+        cursor: zoom-out;
+        padding: 32px;
+      }
+      .lightbox.open {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .lightbox img {
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 12px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <a class="back" href="/">&larr; back to demo gallery</a>
+      <header>
+        <span class="eyebrow">Barcelona High School · AI Builder Hackathon</span>
+        <h1>AI Tutor</h1>
+        <p>
+          An AI tutoring suite. <strong>MathTutor</strong> answers any math question —
+          explaining the <em>why</em>, working examples, and graphing when it helps —
+          routing each question to the right model (Haiku &rarr; Sonnet &rarr; Opus) and
+          re-checking computational answers before you trust them. <strong>Nexus</strong>
+          pulls a student's assignments, due dates, grades, and announcements into one
+          dashboard with a built-in study assistant.
+        </p>
+      </header>
+
+      <div class="section-label">Screenshots</div>
+      <div class="gallery">
+        <button class="shot" onclick="openLightbox(this)">
+          <img src="Screenshot_20260531_234459.png" alt="MathTutor subject landing page with topic guides" loading="lazy" />
+        </button>
+        <button class="shot" onclick="openLightbox(this)">
+          <img src="Screenshot_20260531_234437.png" alt="MathTutor Ask the tutor chat screen" loading="lazy" />
+        </button>
+        <button class="shot" onclick="openLightbox(this)">
+          <img src="Screenshot_20260531_234830.png" alt="MathTutor explaining a proof in chat" loading="lazy" />
+        </button>
+        <button class="shot" onclick="openLightbox(this)">
+          <img src="Screenshot_20260531_234947.png" alt="MathTutor account page with saved, shareable chats" loading="lazy" />
+        </button>
+        <button class="shot" onclick="openLightbox(this)">
+          <img src="Screenshot_20260531_233915.png" alt="Nexus calendar of upcoming coursework" loading="lazy" />
+        </button>
+        <button class="shot" onclick="openLightbox(this)">
+          <img src="Screenshot_20260531_234007.png" alt="Nexus chat assistant with quick prompts" loading="lazy" />
+        </button>
+        <button class="shot" onclick="openLightbox(this)">
+          <img src="Screenshot_20260531_233940.png" alt="Nexus announcements feed" loading="lazy" />
+        </button>
+        <button class="shot" onclick="openLightbox(this)">
+          <img src="Screenshot_20260531_233950.png" alt="Nexus completed assignments list" loading="lazy" />
+        </button>
+      </div>
+
+      <footer>
+        Built at the
+        <a href="https://github.com/grexican/bhs-hackathon">BHS AI Builder Hackathon</a>.
+      </footer>
+    </div>
+
+    <!-- Full-size image overlay. Click anywhere to close. -->
+    <div class="lightbox" id="lightbox" onclick="this.classList.remove('open')">
+      <img id="lightbox-img" src="" alt="" />
+    </div>
+
+    <script>
+      // Show the clicked screenshot full-size in the overlay.
+      function openLightbox(btn) {
+        const src = btn.querySelector("img").src;
+        document.getElementById("lightbox-img").src = src;
+        document.getElementById("lightbox").classList.add("open");
+      }
+      // Esc also closes the overlay.
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") document.getElementById("lightbox").classList.remove("open");
+      });
+    </script>
+  </body>
+</html>

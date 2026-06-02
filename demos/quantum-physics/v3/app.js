@@ -35,6 +35,102 @@ const TOPICS = [
   ["measurement", "Measurement", "The cloud of maybe becomes one fact."],
 ];
 
+/* ============================================================
+   THEME SWAP — pick a look, swap one CSS file, remember it.
+   Each theme is an override stylesheet loaded AFTER styles.css.
+   "default" means no overlay (the original instrument-room look).
+   The choice lives in localStorage so it survives page changes.
+   ============================================================ */
+const THEMES = [
+  ["default",       "Default"],
+  ["neo-brutalism", "Neo-Brutalism"],
+  ["claymorphism",  "Claymorphism"],
+  ["minimalism",    "Minimalism"],
+  ["liquid-glass",  "Liquid Glass"],
+  ["glassmorphism", "Glassmorphism"],
+  ["skeuomorphism", "Skeuomorphism"],
+];
+const THEME_KEY = "quantum-theme";
+
+// One theme for the whole /v3/ site. We can't rely on localStorage alone:
+// when these pages are opened as files (file://), the browser gives each
+// .html its OWN localStorage bucket, so a choice on index.html never reaches
+// pages/spin.html. Fix: carry the theme in the URL (?theme=) across every
+// internal link, and keep localStorage as a same-page backup. URL wins on
+// boot because it reflects the click that brought you here.
+function readBootTheme() {
+  try { const u = new URLSearchParams(location.search).get("theme"); if (u) return u; } catch (e) {}
+  try { return localStorage.getItem(THEME_KEY) || "default"; } catch (e) {}
+  return "default";
+}
+let activeTheme = readBootTheme();   // the single source of truth after load
+function currentTheme() { return activeTheme; }
+
+function rememberTheme(slug) { try { localStorage.setItem(THEME_KEY, slug); } catch (e) {} }
+
+// topic pages live in /pages/, so they reach the themes folder via ../
+function themeHref(slug) {
+  const prefix = location.pathname.includes("/pages/") ? "../" : "";
+  return prefix + "themes/" + slug + ".css";
+}
+
+// swap the overlay <link>; remove it entirely for the default look
+function applyTheme(slug) {
+  let link = document.getElementById("theme-css");
+  if (slug === "default") { if (link) link.remove(); return; }
+  if (!link) {
+    link = document.createElement("link");
+    link.id = "theme-css";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+  }
+  link.href = themeHref(slug);
+}
+
+// add/replace ?theme= on a (possibly relative) href, keeping its path + hash
+function withTheme(href, slug) {
+  const hashAt = href.indexOf("#");
+  const hash = hashAt >= 0 ? href.slice(hashAt) : "";
+  const beforeHash = hashAt >= 0 ? href.slice(0, hashAt) : href;
+  const qAt = beforeHash.indexOf("?");
+  const path = qAt >= 0 ? beforeHash.slice(0, qAt) : beforeHash;
+  const query = qAt >= 0 ? beforeHash.slice(qAt + 1) : "";
+  const params = query.split("&").filter(p => p && !p.startsWith("theme="));
+  params.push("theme=" + encodeURIComponent(slug));
+  return path + "?" + params.join("&") + hash;
+}
+
+// links we should stamp: real navigations to other pages, not anchors/externals
+function isInternalNav(a) {
+  const href = a.getAttribute("href");
+  if (!href || href.startsWith("#")) return false;
+  if (/^(https?:|mailto:|tel:)/i.test(href)) return false;
+  if (a.target && a.target !== "_self") return false;
+  return true;
+}
+
+// right before any internal link is followed, stamp the live theme onto it
+function carryThemeOnClick(e) {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target.closest && e.target.closest("a[href]");
+  if (!a || !isInternalNav(a)) return;
+  a.setAttribute("href", withTheme(a.getAttribute("href"), activeTheme));
+}
+
+// change the theme: update memory, the <link>, storage, and this page's URL
+// (replaceState so a refresh — and any onward link — keeps the new choice)
+function setTheme(slug) {
+  activeTheme = slug;
+  applyTheme(slug);
+  rememberTheme(slug);
+  try { const url = new URL(location.href); url.searchParams.set("theme", slug); history.replaceState(null, "", url); } catch (e) {}
+}
+
+// boot: apply the theme immediately, cache it, and start carrying it on clicks
+applyTheme(activeTheme);
+rememberTheme(activeTheme);
+document.addEventListener("click", carryThemeOnClick, true);
+
 // inject the shared top nav into any page that has <div id="nav-mount">
 function mountNav(active) {
   const el = document.getElementById("nav-mount");
@@ -42,6 +138,7 @@ function mountNav(active) {
   const onIndex = !location.pathname.includes("/pages/");
   const home = onIndex ? "index.html" : "../index.html";
   const link = (slug) => (onIndex ? "pages/" + slug + ".html" : slug + ".html");
+  const themeOptions = THEMES.map(t => `<option value="${t[0]}">${t[1]}</option>`).join("");
   // show ALL nine topics so the nav matches the nine sections on the map
   el.innerHTML = `
     <nav class="nav">
@@ -51,8 +148,19 @@ function mountNav(active) {
           `<a href="${link(t[0])}"${active===t[0]?' style="color:var(--amber)"':''}>${t[1]}</a>`
         ).join("")}
         <a class="nav__home" href="${home}">Map</a>
+        <label class="theme-pick">
+          <span class="theme-pick__label">Theme</span>
+          <select class="theme-pick__select" aria-label="Color theme">${themeOptions}</select>
+        </label>
       </div>
     </nav>`;
+
+  // sync the dropdown to the active theme, then swap + remember on change
+  const sel = el.querySelector(".theme-pick__select");
+  if (sel) {
+    sel.value = currentTheme();
+    sel.addEventListener("change", () => setTheme(sel.value));
+  }
 }
 
 // build the prev/next pager at the bottom of a topic page

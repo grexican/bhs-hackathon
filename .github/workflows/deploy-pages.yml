@@ -4,7 +4,7 @@
 # committed back to the repo, so there are no artifacts to merge:
 #   /                      -> site/index.html       (the demo-gallery landing page)
 #   /g-roller/             -> g-roller/dist          (the Vite game, built here)
-#   /demos/quantum-physics -> demos/quantum-physics  (static demo folders, copied as-is)
+#   /demos/<name>          -> demos/<name>           (every static demo folder, copied as-is)
 #
 # Triggers on the main branch (the release branch).
 #
@@ -55,7 +55,11 @@ jobs:
           mkdir -p _site/g-roller _site/demos
           cp site/index.html _site/index.html
           cp -r g-roller/dist/* _site/g-roller/
-          cp -r demos/quantum-physics _site/demos/quantum-physics
+          # Copy every static demo folder (quantum-physics, studybot, tutor, …).
+          # Quote the glob target so paths with spaces survive.
+          for demo in demos/*/; do
+            cp -r "$demo" "_site/demos/"
+          done
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
