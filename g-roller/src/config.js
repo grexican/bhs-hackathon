@@ -387,22 +387,6 @@ export const CONFIG = {
 //   skylineStyle — the SHAPE of the side buildings: "towers" (city) | "mesas" (dunes
 //                 buttes+pyramids) | "spires" (ice crystals) | "monoliths" (void
 //                 slabs). background.js regenerates the flanking walls on crossing.
-//   audio       — per-zone SOUNDTRACK tone {lowpass(Hz), air(dB high-shelf)} morphed
-//                 on the music bus (sound.setBiomeAudio): open city, warm/muffled
-//                 dunes, bright airy ice, deep dark void. Same idea as the powerup
-//                 music morph, but per zone. SFX bypass it (stay crisp).
-//   weather     — the AMBIENT PARTICLE field that fills the air for the whole zone, and
-//                 the single biggest "this is a different world" cue. It's the MOTION
-//                 that reads, not the colour: embers RISE, desert dust BLOWS sideways,
-//                 snow FALLS, void-stars HANG and drift. Background.js integrates one
-//                 shared pool against these params. Fields:
-//                   color    — particle tint
-//                   count    — how many are live (density)
-//                   size     — point size
-//                   vx,vy,vz — base drift velocity (units/s; vy<0 falls, vy>0 rises)
-//                   sway     — lateral sine-sway amplitude; swaySpeed its rate
-//                   twinkle  — 1 = per-particle opacity flicker (sparks/stars)
-//                   opacity  — base material opacity
 //   boardMat    — the SURFACE FEEL of the zone's normal decks, so boards aren't all
 //                 the same slab: {tint(hex albedo — recolours the whole track),
 //                 roughness, metalness, emissive(hex), emissiveIntensity}. Matte tan
@@ -432,10 +416,6 @@ export const BIOMES = [
     accent: 0xff4bd6,
     tagline: "where the climb begins",
     skylineStyle: "towers", // tall city towers
-    audio: { lowpass: 20000, air: 0 }, // open + neutral (the baseline soundtrack)
-
-    // Neon embers/sparks drifting UP off the city — electric, alive.
-    weather: { color: 0xff6bd6, count: 55, size: 2.2, vx: 0, vy: 9, vz: -2, sway: 7, swaySpeed: 1.3, twinkle: 1, opacity: 0.5 },
     // Glossy steel-blue city deck (tint recolours the whole track so the ground reads
     // as THIS zone, not just a grey slab — the texture detail rides on top).
     boardMat: { tint: 0x8fa0c8, roughness: 0.36, metalness: 0.16, emissive: 0x101830, emissiveIntensity: 0.12 },
@@ -458,10 +438,6 @@ export const BIOMES = [
     accent: 0xffb04a,
     tagline: "into the warm horizon",
     skylineStyle: "mesas", // low desert buttes + pyramids
-    audio: { lowpass: 4500, air: -2 }, // warm + muffled, like heat haze
-
-    // Sand & dust BLOWING sideways on a hot wind — the desert reads instantly.
-    weather: { color: 0xffd29a, count: 140, size: 1.9, vx: 28, vy: -3, vz: -7, sway: 3, swaySpeed: 2.0, twinkle: 0, opacity: 0.34 },
     // Matte, sun-baked sandstone — warm tan tint, no sheen (opposite of the glossy
     // city deck). A faint warm bake so the ground glows like hot sand at dusk.
     boardMat: { tint: 0xff9a4d, roughness: 0.96, metalness: 0.0, emissive: 0x3a1500, emissiveIntensity: 0.16 },
@@ -484,10 +460,6 @@ export const BIOMES = [
     accent: 0x9af0ff,
     tagline: "the frozen deep",
     skylineStyle: "spires", // jagged ice crystal spires
-    audio: { lowpass: 20000, air: 6 }, // bright + airy, crystalline top end
-
-    // Snow FALLING with a gentle drift — cold and quiet.
-    weather: { color: 0xeaffff, count: 150, size: 2.7, vx: 2, vy: -15, vz: -3, sway: 9, swaySpeed: 0.9, twinkle: 0, opacity: 0.6 },
     // Glassy, polished ice — icy-cyan tint, high gloss + a cold inner glow.
     boardMat: { tint: 0x86d3ff, roughness: 0.1, metalness: 0.45, emissive: 0x123a52, emissiveIntensity: 0.28 },
     // ICE CAVERNS: tunnels (ice tubes) + curved half-pipe boards; fewer ramps.
@@ -509,10 +481,6 @@ export const BIOMES = [
     accent: 0xa05bff,
     tagline: "beyond the edge",
     skylineStyle: "monoliths", // sparse floating monoliths
-    audio: { lowpass: 2200, air: -3 }, // deep + dark, cavernous and distant
-
-    // Stars / void-motes HANGING in space, drifting up slowly and twinkling — eerie, weightless.
-    weather: { color: 0xd9c2ff, count: 95, size: 2.3, vx: 0, vy: 4, vz: 0, sway: 4, swaySpeed: 0.35, twinkle: 1, opacity: 0.72 },
     // Dark void rock, violet tint, GLOWING from within — boards read as lit floating slabs.
     boardMat: { tint: 0x9a5cff, roughness: 0.55, metalness: 0.18, emissive: 0x3a1f7a, emissiveIntensity: 0.45 },
     // THE VOID: disorienting twists — lots of yaw + some tunnels; few ramps (nothing to roll up).
