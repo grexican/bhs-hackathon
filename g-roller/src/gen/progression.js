@@ -32,7 +32,9 @@ export function hazardChance(pair, d, profile) {
 }
 
 // A drama element's chance (spline/ramp/curve/yaw/tunnel): ramp by whichever value
-// drives it, scaled by the tier's `drama` knob, capped at `cap` (default 1).
-export function dramaChance(pair, t, profile, cap = 1) {
-  return Math.min(ramp(pair, t) * profile.drama, cap);
+// drives it, scaled by the tier's `drama` knob AND an optional per-biome `bias`
+// (so a zone can favour its signature element — ramps in the dunes, tunnels in the
+// ice — without changing difficulty), capped at `cap` (default 1).
+export function dramaChance(pair, t, profile, cap = 1, bias = 1) {
+  return Math.min(ramp(pair, t) * profile.drama * bias, cap);
 }

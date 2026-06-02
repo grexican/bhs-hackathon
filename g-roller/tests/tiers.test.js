@@ -108,3 +108,31 @@ describe("pace rises with difficulty", () => {
     expect(MED.pace).toBeLessThan(HARD.pace);
   });
 });
+
+// Count how many tunnels appear over a long run for a given per-biome bias — the
+// metric behind "each zone has a signature shape" (Ice favours tunnels, etc.).
+function tunnelCount(bias, seed = 4242, steps = 2000) {
+  const rng = seededRng(seed);
+  const state = freshState();
+  let tunnels = 0;
+  for (let i = 0; i < steps; i++) {
+    const z = state.cursor.z;
+    const plan = planStep(state, makeCtx(MED, z, speedAt(z, MED), rng, 1, bias));
+    if (plan.kind === "tunnel") tunnels++;
+  }
+  return tunnels;
+}
+
+describe("per-biome genBias shapes the run (the 'each zone plays different' lever)", () => {
+  it("a higher tunnel bias yields more tunnels than neutral", () => {
+    const neutral = tunnelCount({ tunnel: 1, ramp: 1, curve: 1, yaw: 1 });
+    const icey = tunnelCount({ tunnel: 2.5, ramp: 1, curve: 1, yaw: 1 });
+    expect(icey).toBeGreaterThan(neutral);
+  });
+
+  it("undefined bias behaves as neutral (the generator's default — tests/zen path)", () => {
+    const withNeutral = tunnelCount({ tunnel: 1, ramp: 1, curve: 1, yaw: 1 });
+    const withUndefined = tunnelCount(undefined);
+    expect(withUndefined).toBe(withNeutral);
+  });
+});

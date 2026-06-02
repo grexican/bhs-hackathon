@@ -122,6 +122,7 @@ export class PlatformField {
     this.enabledPowerups = new Set(Object.keys(POWERUP_DEFS));
     this._biomeTextures = BIOMES[0].textures;
     this._biomeBoardMat = BIOMES[0].boardMat;
+    this._biomeGenBias = BIOMES[0].genBias;
 
     // The generator's walking state — a cursor plus a few counters. Bundled so it can
     // be handed straight to planStep(). Initialized in reset().
@@ -608,6 +609,7 @@ export class PlatformField {
       budgets: budgets(forwardSpeed),
       rng: this._rng,
       itemMultiplier: this.itemMultiplier,
+      bias: this._biomeGenBias, // per-biome drama weighting (signature run-shape)
     };
   }
 
@@ -684,6 +686,7 @@ export class PlatformField {
     const _bi = BIOMES[biomeAt(playerZ)];
     this._biomeTextures = _bi.textures;   // platforms re-skin per biome
     this._biomeBoardMat = _bi.boardMat;   // …and take on the zone's surface feel (matte/glossy/glowing)
+    this._biomeGenBias = _bi.genBias;     // …and the zone's signature run-shape (ramps/tunnels/curves/yaw)
 
     // Light/extinguish every board's edge outline when blackout flips on/off.
     if (this.blackout !== this._edgeVis) {

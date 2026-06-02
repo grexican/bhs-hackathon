@@ -14,7 +14,7 @@ export const seededRng = (seed) => makeRng(mulberry32(seed));
 
 // The per-step context the planners read. `z` is how far into the run we are;
 // `forwardSpeed` sets the jump-reach budgets (faster = bigger reachable gaps).
-export function makeCtx(profile, z, forwardSpeed, rng, itemMultiplier = 1) {
+export function makeCtx(profile, z, forwardSpeed, rng, itemMultiplier = 1, bias = undefined) {
   return {
     profile,
     O: openness(z, profile),
@@ -22,6 +22,7 @@ export function makeCtx(profile, z, forwardSpeed, rng, itemMultiplier = 1) {
     budgets: budgets(forwardSpeed),
     rng,
     itemMultiplier,
+    bias, // per-biome drama weighting; undefined → generator uses its neutral default
   };
 }
 

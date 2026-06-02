@@ -401,6 +401,12 @@ export const CONFIG = {
 //                 inner-glowing void rock. {roughness, metalness, emissive(hex),
 //                 emissiveIntensity}. Only normal boards take it — bouncy/boost/
 //                 flipper keep their identity glow. (Applied in platforms.js _addBoard.)
+//   genBias     — how the zone PLAYS: per-biome multipliers on the drama elements
+//                 {tunnel, ramp, curve, yaw} so each zone has a signature SHAPE —
+//                 rolling ramps in the dunes, tunnels + half-pipe curves in the ice,
+//                 twisting yaw in the void. Multiplies the chance (capped at 1), so it
+//                 never breaks reachability — it only changes the MIX, not difficulty
+//                 (that's the tier knobs). Default 1× = neutral. (See gen/planPath.js.)
 export const BIOMES = [
   // Neon City — cool blue dusk, teal + magenta window glow (the baseline city).
   {
@@ -421,6 +427,8 @@ export const BIOMES = [
     weather: { color: 0xff6bd6, count: 55, size: 2.2, vx: 0, vy: 9, vz: -2, sway: 7, swaySpeed: 1.3, twinkle: 1, opacity: 0.5 },
     // Baseline deck: glossy neon-grid that catches the sun + neon as highlights.
     boardMat: { roughness: 0.36, metalness: 0.16, emissive: 0x000000, emissiveIntensity: 0 },
+    // Balanced — the city is the reference shape every other zone bends away from.
+    genBias: { tunnel: 1, ramp: 1, curve: 1, yaw: 1 },
   },
   // Sunset Dunes — warm rose-amber haze, golden windows, an amber moon.
   {
@@ -442,6 +450,8 @@ export const BIOMES = [
     // Matte, sun-baked sandstone — no sheen (the opposite of the glossy city deck).
     // emissive 0 keeps the audiosurf tile-pulse working here (it skips self-lit decks).
     boardMat: { roughness: 0.96, metalness: 0.0, emissive: 0x000000, emissiveIntensity: 0 },
+    // Rolling DUNES: lots of ramps to roll over + winding yaw; few tunnels (it's open desert).
+    genBias: { tunnel: 0.5, ramp: 1.8, curve: 0.8, yaw: 1.4 },
   },
   // Ice Caverns — cold cyan + white, frozen window light, a pale-blue moon.
   {
@@ -462,6 +472,8 @@ export const BIOMES = [
     weather: { color: 0xeaffff, count: 150, size: 2.7, vx: 2, vy: -15, vz: -3, sway: 9, swaySpeed: 0.9, twinkle: 0, opacity: 0.6 },
     // Glassy, polished ice — high gloss + a faint cold inner glow.
     boardMat: { roughness: 0.1, metalness: 0.45, emissive: 0x0e3247, emissiveIntensity: 0.18 },
+    // ICE CAVERNS: tunnels (ice tubes) + curved half-pipe boards; fewer ramps.
+    genBias: { tunnel: 2.0, ramp: 0.8, curve: 1.8, yaw: 0.9 },
   },
   // The Void — deep violet + blue, eerie violet glow, dim flare.
   {
@@ -482,6 +494,8 @@ export const BIOMES = [
     weather: { color: 0xd9c2ff, count: 95, size: 2.3, vx: 0, vy: 4, vz: 0, sway: 4, swaySpeed: 0.35, twinkle: 1, opacity: 0.72 },
     // Dark void rock that GLOWS violet from within — boards read as lit, floating slabs.
     boardMat: { roughness: 0.55, metalness: 0.18, emissive: 0x3a1f7a, emissiveIntensity: 0.4 },
+    // THE VOID: disorienting twists — lots of yaw + some tunnels; few ramps (nothing to roll up).
+    genBias: { tunnel: 1.4, ramp: 0.7, curve: 1.2, yaw: 1.6 },
   },
 ];
 

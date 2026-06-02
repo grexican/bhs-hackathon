@@ -43,6 +43,10 @@ import { makeSplineSampler } from "./spline.js";
 
 const G = () => CONFIG.gen; // shorthand; re-read each call so config edits take effect
 
+// Neutral per-biome drama weighting (all 1×) — used when ctx carries no `bias`, e.g.
+// the reachability tests, which exercise the pure tier system without a biome.
+const EMPTY_BIAS = { tunnel: 1, ramp: 1, curve: 1, yaw: 1 };
+
 // How far the flipper "cannon" throws you (units of z). It launches you UP at
 // jumpSpeed*vertical and FORWARD up to maxSpeed, so the airborne arc covers a long
 // stretch — the straight landing runway must span at least this far or you fly off
@@ -171,7 +175,8 @@ export function planStep(state, ctx) {
 
   // Occasionally the next stretch is a structure (tunnel / spline ribbon), gated +
   // cooled-down so they never cluster, and never mid-launch-runway.
-  if (!safe && !onRunway && state.stepsSinceTunnel >= g.tunnel.cooldown && chance(dramaChance(g.tunnel.chance, ctx.D, profile))) {
+  const bias = ctx.bias || EMPTY_BIAS; // per-biome signature-element weighting (default = neutral)
+  if (!safe && !onRunway && state.stepsSinceTunnel >= g.tunnel.cooldown && chance(dramaChance(g.tunnel.chance, ctx.D, profile, 1, bias.tunnel))) {
     return planTunnel(state, ctx);
   }
   state.stepsSinceTunnel++;
@@ -248,15 +253,15 @@ export function planStep(state, ctx) {
   // Yaw is rolled FIRST and EXCLUSIVE: a yawed board stays a clean turned plank.
   let slopeZ = 0, curve = 0, leanX = 0, yaw = 0;
   if (!safe && type !== "flipper") {
-    if (!round && chance(dramaChance(g.yaw.chance, o, profile))) {
+    if (!round && chance(dramaChance(g.yaw.chance, o, profile, 1, bias.yaw))) {
       yaw = (chance(0.5) ? 1 : -1) * rand(g.yaw.amount[0], ramp(g.yaw.amount, o));
       len *= g.yaw.lenBoost;
     } else {
-      if (chance(dramaChance(g.ramp.chance, o, profile))) {
+      if (chance(dramaChance(g.ramp.chance, o, profile, 1, bias.ramp))) {
         slopeZ = (chance(0.5) ? 1 : -1) * rand(g.ramp.slope[0], g.ramp.slope[1]);
         if (!round) len *= ramp(g.ramp.lenBoost, o);
       }
-      if (!round && chance(dramaChance(g.curve.chance, o, profile))) {
+      if (!round && chance(dramaChance(g.curve.chance, o, profile, 1, bias.curve))) {
         curve = (chance(0.7) ? 1 : -1) * rand(g.curve.amount[0], g.curve.amount[1]);
       }
       // Lean FREQUENCY rides danger (a hazard); its MAGNITUDE upper bound grows with
