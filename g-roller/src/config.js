@@ -484,9 +484,49 @@ export const BIOMES = [
     accent: 0xb060ff,
     tagline: "beyond the edge",
     skylineStyle: "monoliths",
-    skin: { pattern: "veins", neon: 0xb060ff, neon2: 0xff5fd0, panel: 0x0a0614 },
+    skin: { pattern: "pebbles", neon: 0xb060ff, neon2: 0xff5fd0, panel: 0x0a0614 }, // scattered glowing void-rubble
     boardMat: { roughness: 0.5, metalness: 0.2, emissive: 0x3a1f7a, emissiveIntensity: 0.42 },
     genBias: { tunnel: 1.4, ramp: 0.7, curve: 1.2, yaw: 1.6 },
+  },
+  // 5 — COBALT GROOVE (after the track): deep electric cobalt-blue, a tiled plaza that
+  // reads like a lit dancefloor. Distinct from the icy white-cyan by being saturated +
+  // deep, with a checkerboard rhythm.
+  {
+    name: "Cobalt Groove",
+    fog: 0x081230,
+    sun: 0xaecbff,
+    skylineHue: 0.62,
+    skylineSpread: 0.07,
+    skyline: 0x3a7bff,
+    moon: 0xbcd0ff,
+    nebula: 0x3050d0,
+    bloom: 0.1,
+    accent: 0x3a7bff,
+    tagline: "deep in the groove",
+    skylineStyle: "towers",
+    skin: { pattern: "plaza", neon: 0x2f6bff, neon2: 0x00d0ff, panel: 0x060c22 },
+    boardMat: { roughness: 0.28, metalness: 0.3, emissive: 0x0a1a44, emissiveIntensity: 0.2 },
+    genBias: { tunnel: 1.1, ramp: 1.0, curve: 1.5, yaw: 1.1 },
+  },
+  // 6 — VELVET HORIZON (after the track): lush magenta-rose twilight, brick-lit walls.
+  // Magenta-PRIMARY (vs Neon City's cyan-primary with a magenta accent), so the two
+  // never read the same.
+  {
+    name: "Velvet Horizon",
+    fog: 0x270a24,
+    sun: 0xffb0e0,
+    skylineHue: 0.9,
+    skylineSpread: 0.08,
+    skyline: 0xff5fb0,
+    moon: 0xffc0e6,
+    nebula: 0xc04ba0,
+    bloom: 0.12,
+    accent: 0xff4fa0,
+    tagline: "the velvet hour",
+    skylineStyle: "mesas",
+    skin: { pattern: "brick", neon: 0xff4fa0, neon2: 0xffa0d6, panel: 0x1c0816 },
+    boardMat: { roughness: 0.4, metalness: 0.18, emissive: 0x2e0a22, emissiveIntensity: 0.2 },
+    genBias: { tunnel: 0.8, ramp: 1.3, curve: 1.4, yaw: 1.0 },
   },
 ];
 
