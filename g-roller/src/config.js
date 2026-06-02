@@ -373,11 +373,10 @@ export const CONFIG = {
   },
 };
 
-// The zones the run passes through. Zone 0 is the NEUTRAL baseline — a calm grey
-// "blueprint" world. The themed zones are bold splashes of a single identity colour
-// that ARRIVE out of that grey, so crossing in actually reads as entering somewhere.
-// Each zone drives every surface at once (ground skin, side buildings, sky, run-shape)
-// so it feels like a different world, not a re-tint.
+// The zones the run passes through. Every entry is a real, equal zone (no special
+// baseline) — a run STARTS in a random one (ZoneSeq below) and flows zone→zone, each
+// an announced arrival. Each zone drives every surface at once (ground skin, side
+// buildings, sky, run-shape) so it feels like a different world, not a re-tint.
 //   fog / sun     — scene fog colour + key-light tint (the overall wash)
 //   skylineHue/Spread/skyline — the side-building window-glow colour + how it cycles
 //   moon / nebula — far backdrop body tints
@@ -396,23 +395,25 @@ export const CONFIG = {
 //                 so each zone has a signature SHAPE (ramps in dunes, tunnels+curves in
 //                 ice, twists in void). Capped at 1 → never breaks reachability.
 export const BIOMES = [
-  // 0 — NEUTRAL: the grey "blueprint" baseline. Calm, monochrome, restrained. It opens
-  // the run and (optionally) returns between themed zones so colour ARRIVES out of grey.
+  // 0 — THE CONSTRUCT: a stark chrome/blueprint world — crisp white circuitry on near-
+  // black. The ACHROMATIC zone (its identity is the absence of colour), so it still
+  // reads distinct among the saturated zones, but it's a real, announced zone like any
+  // other — it can be where a run starts.
   {
-    name: "Calibration",
-    fog: 0x161a22,
-    sun: 0xdfe6f0,
-    skylineHue: 0.6,
-    skylineSpread: 0.04,
-    skyline: 0xc8d2e0,
-    moon: 0xccd6e2,
-    nebula: 0x95a0b6,
-    bloom: 0.0,
-    accent: 0xc8d2e0,
-    tagline: "the proving ground",
+    name: "The Construct",
+    fog: 0x141821,
+    sun: 0xe6edf6,
+    skylineHue: 0.58,
+    skylineSpread: 0.05,
+    skyline: 0xd6e2f2,
+    moon: 0xdce6f2,
+    nebula: 0x8aa0c0,
+    bloom: 0.04,
+    accent: 0xd6e6f6,
+    tagline: "inside the machine",
     skylineStyle: "towers",
-    skin: { pattern: "grid", neon: 0xaeb8cc }, // grey blueprint grid — no colour identity
-    boardMat: { roughness: 0.55, metalness: 0.08, emissive: 0x000000, emissiveIntensity: 0 },
+    skin: { pattern: "circuit", neon: 0xd6e2f2, neon2: 0x9fb8d8, panel: 0x0b0f18 },
+    boardMat: { roughness: 0.3, metalness: 0.35, emissive: 0x0c141f, emissiveIntensity: 0.1 },
     genBias: { tunnel: 1, ramp: 1, curve: 1, yaw: 1 },
   },
   // 1 — NEON CITY: the vivid home zone. Cyan circuitry shot through with hot magenta —
@@ -536,50 +537,34 @@ export const BIOMES = [
 // Test hooks: `enabled` limits which themed zones can appear (cheat toggles, like the
 // powerup picker); `forced` pins the WHOLE run to one zone so you can study it.
 export const ZoneSeq = {
-  themeLen: 720,         // metres a THEMED zone fills
-  baseLen: 260,          // metres a NEUTRAL breather fills (short — grey is a palette-cleanser)
-  baseIndex: 0,          // the neutral baseline zone
-  interleaveBase: true,  // neutral breather between each themed zone (grey → colour → grey)
-  enabled: null,         // Set of themed-zone indices allowed (null = all themed)
-  forced: null,          // pin the whole run to this zone index (testing)
-  _schedule: [],         // one full cycle: [{ zone, end }] with cumulative end-distances
+  zoneLen: 1250,  // metres each zone fills — long enough to settle in and vibe
+  enabled: null,  // Set of zone indices allowed in the random rotation (null = all)
+  forced: null,   // pin the whole run to this zone index (testing, cheat key C)
+  _seq: [],       // this run's zone order (every zone, shuffled)
   _cycleLen: 0,
 
-  themedPool() {
-    return BIOMES.map((_, i) => i).filter((i) => i !== this.baseIndex);
-  },
-
-  // Build this run's zone schedule: open on a grey breather, then the themed zones in a
-  // RANDOM order, each (optionally) followed by another short grey breather. The cycle
-  // repeats seamlessly (it ends on grey, the next cycle opens on grey). Math.random is
-  // fine here — per-run only, never on the unit-tested generator path.
+  // Reshuffle every zone into a fresh random order for this run (call from game reset).
+  // No special baseline — the run STARTS in whatever lands first (_seq[0]), and zones
+  // flow zone→zone, each an announced arrival. Math.random is fine here (per-run only,
+  // never on the unit-tested generator path).
   build() {
-    let pool = this.themedPool();
+    let pool = BIOMES.map((_, i) => i);
     if (this.enabled && this.enabled.size) pool = pool.filter((i) => this.enabled.has(i));
-    if (!pool.length) pool = this.themedPool(); // never strand the run in endless grey
+    if (!pool.length) pool = BIOMES.map((_, i) => i);
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    const sched = [];
-    let z = 0;
-    const push = (zone, len) => { z += len; sched.push({ zone, end: z }); };
-    push(this.baseIndex, this.baseLen); // opening breather
-    for (const t of pool) {
-      push(t, this.themeLen);
-      if (this.interleaveBase) push(this.baseIndex, this.baseLen);
-    }
-    this._schedule = sched;
-    this._cycleLen = z;
+    this._seq = pool;
+    this._cycleLen = pool.length * this.zoneLen;
   },
 
   zoneAt(z) {
     if (this.forced != null) return this.forced;
-    if (!this._schedule.length) this.build();
+    if (!this._seq.length) this.build();
     let p = z % this._cycleLen;
     if (p < 0) p += this._cycleLen;
-    for (const s of this._schedule) if (p < s.end) return s.zone;
-    return this.baseIndex;
+    return this._seq[Math.floor(p / this.zoneLen) % this._seq.length];
   },
 };
 

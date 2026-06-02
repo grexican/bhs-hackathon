@@ -1007,7 +1007,7 @@ export class Game {
     const i = biomeAt(z);
     if (i !== this._biome) {
       this._biome = i;
-      this._biomeEntry(BIOMES[i], i);
+      this._biomeEntry(BIOMES[i]);
     }
     const b = BIOMES[i];
     // Stronger lerp than before so the fog/sun shift is actually FELT (a ~2s mood
@@ -1027,12 +1027,8 @@ export class Game {
   //   3) a bloom + camera FOV punch on the 3D scene,
   //   4) a musical "portal" sting that arrives on the zone's chord.
   // Everything here is presentation — no gameplay/physics changes.
-  _biomeEntry(b, idx) {
+  _biomeEntry(b) {
     this.background.setBiome(b); // backdrop tints ease toward this zone (the slow ~2s mood shift)
-    // The neutral baseline is a quiet palette-cleanser between zones — let it grey the
-    // world out, but DON'T announce it (no card/flash/punch). Only themed zones are an
-    // "arrival." This is what makes each colour zone POP out of the grey.
-    if (idx === ZoneSeq.baseIndex) return;
     const css = hexCss(b.accent ?? b.skyline ?? 0x9fe0ff);
 
     // 1) Cinematic title card. Restart the animation by toggling the class off/on
