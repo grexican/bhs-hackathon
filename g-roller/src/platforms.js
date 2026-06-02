@@ -234,6 +234,7 @@ export class PlatformField {
       const bm = this._biomeBoardMat;
       mat.roughness = bm ? bm.roughness : 0.36;
       mat.metalness = bm ? bm.metalness : 0.16;
+      if (bm && bm.tint != null) mat.color.setHex(bm.tint); // recolour the whole deck per zone
       if (bm && bm.emissiveIntensity > 0) {
         mat.emissive.setHex(bm.emissive);
         mat.emissiveIntensity = bm.emissiveIntensity;
@@ -617,6 +618,16 @@ export class PlatformField {
   // render it, then render its scatter cloud (planScatter returns [] for safe/
   // structure steps, so this is a no-op there).
   _step(forwardSpeed) {
+    // Key the zone's look + run-shape to WHERE THIS PIECE GOES (the generation
+    // frontier), not the player — pieces are built ~800m ahead, so playerZ-keying
+    // landed a zone's boards/shape ~800m late, usually in the next zone. Now a board
+    // built in the dunes region looks + plays like the dunes, lining up with the
+    // fog/sky/weather you cross into (those stay player-keyed in game.js).
+    const bi = BIOMES[biomeAt(this._state.cursor.z)];
+    this._biomeTextures = bi.textures;
+    this._biomeBoardMat = bi.boardMat;
+    this._biomeGenBias = bi.genBias;
+
     const ctx = this._ctx(forwardSpeed);
     const plan = planStep(this._state, ctx);
     this._renderBoardPlan(plan);
@@ -683,10 +694,12 @@ export class PlatformField {
     // threat SLOWLY (or is pinned by zen). Everything the generator does reads these.
     this._O = openness(playerZ, this.profile);
     this._D = this.fixedDanger != null ? this.fixedDanger : danger(playerZ, this.profile);
-    const _bi = BIOMES[biomeAt(playerZ)];
-    this._biomeTextures = _bi.textures;   // platforms re-skin per biome
-    this._biomeBoardMat = _bi.boardMat;   // …and take on the zone's surface feel (matte/glossy/glowing)
-    this._biomeGenBias = _bi.genBias;     // …and the zone's signature run-shape (ramps/tunnels/curves/yaw)
+    // NOTE: the biome a piece is built FOR (textures/boardMat/genBias) is keyed to the
+    // GENERATION FRONTIER, not playerZ — see _step(). Pieces are generated up to
+    // keepAheadDistance (~800m) ahead, so keying them to playerZ made a zone's shape +
+    // material land ~800m late (often in the NEXT zone, since zones are 600-900m long).
+    // The fog/sky/weather stay playerZ-keyed in game.js (they're the air around YOU), so
+    // keying boards to the frontier is what makes the ground match the air you cross into.
 
     // Light/extinguish every board's edge outline when blackout flips on/off.
     if (this.blackout !== this._edgeVis) {

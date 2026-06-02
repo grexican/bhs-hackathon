@@ -5,36 +5,80 @@ import { Emitter } from "./emitter.js";
 // and two parallax skyline ranges on either side. Everything ignores fog and
 // follows the player down the track so it never scrolls out of view.
 
-function skylineTexture(hue) {
+// The SIDE BUILDINGS silhouette. Each biome gets a genuinely different skyline SHAPE
+// (not just a recoloured tower) so the walls flanking the track read as a different
+// world: city = tall towers, dunes = low mesas + pyramids, ice = jagged crystal
+// spires, void = sparse floating monoliths. Bodies stay near-black; only the bright
+// WHITE windows take the cycling biome colour (keeps the tint ON the lit windows, not
+// washing the whole scene). `style` picks the silhouette.
+function skylineTexture(style = "towers") {
   const c = document.createElement("canvas");
   c.width = 512;
   c.height = 256;
   const ctx = c.getContext("2d");
   ctx.clearRect(0, 0, 512, 256);
-  // Near-black tower bodies (NOT hue-tinted) so the cycling material colour barely
-  // touches them — only the bright WHITE windows take the tint and glow the cycle
-  // colour. That keeps the colour ON the skyline (lit windows) instead of washing
-  // the whole scene a flat purple.
   const body = "#0b0b13";
-  ctx.fillStyle = body;
-  // A jagged silhouette of towers/peaks along the bottom.
-  let x = 0;
-  while (x < 512) {
-    const w = 18 + Math.random() * 46;
-    const h = 40 + Math.random() * 170;
-    ctx.fillRect(x, 256 - h, w, h);
-    // Bright white windows — these are what the cycling colour lights up.
-    ctx.fillStyle = "rgba(255,252,255,0.92)";
-    for (let i = 0; i < 8; i++) {
-      if (Math.random() < 0.5)
-        ctx.fillRect(x + 4 + (i % 3) * (w / 3), 256 - h + 8 + Math.floor(i / 3) * 14, 5, 7);
-    }
+  const R = Math.random;
+  const win = "rgba(255,252,255,0.92)";
+  // Scatter `n` bright windows across a rectangular building footprint.
+  const windows = (x, top, w, h, density) => {
+    ctx.fillStyle = win;
+    const cols = Math.max(1, Math.floor(w / 9)), rows = Math.max(1, Math.floor(h / 16));
+    for (let cc = 0; cc < cols; cc++)
+      for (let rr = 0; rr < rows; rr++)
+        if (R() < density) ctx.fillRect(x + 4 + cc * 9, top + 8 + rr * 14, 5, 7);
     ctx.fillStyle = body;
-    x += w + 4;
+  };
+
+  let x = 0;
+  ctx.fillStyle = body;
+  if (style === "mesas") {
+    // DUNES: low, wide flat-topped buttes + the occasional pyramid. Short, sparse warm windows.
+    while (x < 512) {
+      if (R() < 0.32) { // pyramid / dune
+        const w = 44 + R() * 86, h = 28 + R() * 64;
+        ctx.beginPath(); ctx.moveTo(x, 256); ctx.lineTo(x + w / 2, 256 - h); ctx.lineTo(x + w, 256); ctx.closePath(); ctx.fill();
+        x += w + 6 + R() * 18;
+      } else { // wide flat mesa, sometimes stepped
+        const w = 52 + R() * 96, h = 22 + R() * 52;
+        ctx.fillRect(x, 256 - h, w, h);
+        if (R() < 0.5) ctx.fillRect(x + w * 0.2, 256 - h - (10 + R() * 20), w * 0.55, 10 + R() * 20);
+        windows(x, 256 - h, w, h, 0.16);
+        x += w + 8 + R() * 16;
+      }
+    }
+  } else if (style === "spires") {
+    // ICE: jagged crystal spires — tall sharp triangles, overlapping into a ridge. Few glints.
+    while (x < 512) {
+      const w = 16 + R() * 32, h = 70 + R() * 155;
+      ctx.beginPath(); ctx.moveTo(x, 256); ctx.lineTo(x + w / 2, 256 - h); ctx.lineTo(x + w, 256); ctx.closePath(); ctx.fill();
+      // a couple of bright glints up the spine
+      ctx.fillStyle = win;
+      for (let i = 0; i < 3; i++) if (R() < 0.4) ctx.fillRect(x + w / 2 - 1, 256 - h * (0.3 + i * 0.2), 3, 5);
+      ctx.fillStyle = body;
+      x += w * (0.55 + R() * 0.35); // overlap → a serrated ridge
+    }
+  } else if (style === "monoliths") {
+    // VOID: sparse, very tall thin slabs with big gaps — floating monoliths in the dark.
+    while (x < 512) {
+      x += 36 + R() * 86; // big gap before each
+      const w = 10 + R() * 26, h = 120 + R() * 125;
+      ctx.fillRect(x, 256 - h, w, h);
+      windows(x, 256 - h, w, h, 0.1); // a few cold window dots
+      x += w;
+    }
+  } else {
+    // CITY (default): tall rectangular towers, dense windows.
+    while (x < 512) {
+      const w = 18 + R() * 46, h = 40 + R() * 170;
+      ctx.fillRect(x, 256 - h, w, h);
+      windows(x, 256 - h, w, h, 0.5);
+      x += w + 4;
+    }
   }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
-  tex.repeat.set(8, 0.8); // more repeats: the skyline planes are much longer now, this keeps buildings the same size (not stretched)
+  tex.repeat.set(8, 0.8); // many repeats so buildings stay their size across the long wall
   return tex;
 }
 
@@ -208,8 +252,9 @@ export class Background {
     // rises — so the city descends to meet the ground far away instead of running flat.
     const WORLD_X = new THREE.Vector3(1, 0, 0);
     const CITY_TILT = 0.1; // ~10° downward pitch of the far end
+    this._skylineStyle = "towers"; // current silhouette; setBiome swaps it per zone
     const make = (dist, height, hue, opacity, yaw) => {
-      const tex = skylineTexture(hue);
+      const tex = skylineTexture(this._skylineStyle);
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
         transparent: true,
@@ -393,7 +438,21 @@ export class Background {
   // Drive the backdrop mood from the active biome. The game calls this once on a
   // zone change with that biome's palette; update() then EASES toward these targets
   // (no snap). All tints are stored as THREE.Color targets / scalar hue targets.
-  setBiome({ skylineHue, skylineSpread, moon, nebula, skyline, weather }) {
+  setBiome({ skylineHue, skylineSpread, moon, nebula, skyline, weather, skylineStyle }) {
+    // Side buildings: swap the silhouette SHAPE per zone (towers → mesas → spires →
+    // monoliths). Regenerate each range plane's texture; the window-glow colour keeps
+    // easing via the material colour in update(). Only when the style actually changes.
+    if (skylineStyle && skylineStyle !== this._skylineStyle) {
+      this._skylineStyle = skylineStyle;
+      for (const p of this.ranges) {
+        const old = p.userData.tex;
+        const tex = skylineTexture(skylineStyle);
+        p.material.map = tex;
+        p.userData.tex = tex;
+        p.material.needsUpdate = true;
+        if (old) old.dispose();
+      }
+    }
     if (skylineHue != null) this._hueTarget = skylineHue;
     if (skylineSpread != null) this._spreadTarget = skylineSpread;
     if (moon != null) {

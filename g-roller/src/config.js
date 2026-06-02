@@ -384,6 +384,9 @@ export const CONFIG = {
 //   accent      — the zone's signature colour, used for the entry title card + the
 //                 full-screen colour shockwave when you cross in (its identity colour)
 //   tagline     — the line under the big name on the entry card (sets the mood)
+//   skylineStyle — the SHAPE of the side buildings: "towers" (city) | "mesas" (dunes
+//                 buttes+pyramids) | "spires" (ice crystals) | "monoliths" (void
+//                 slabs). background.js regenerates the flanking walls on crossing.
 //   weather     — the AMBIENT PARTICLE field that fills the air for the whole zone, and
 //                 the single biggest "this is a different world" cue. It's the MOTION
 //                 that reads, not the colour: embers RISE, desert dust BLOWS sideways,
@@ -397,10 +400,11 @@ export const CONFIG = {
 //                   twinkle  — 1 = per-particle opacity flicker (sparks/stars)
 //                   opacity  — base material opacity
 //   boardMat    — the SURFACE FEEL of the zone's normal decks, so boards aren't all
-//                 the same slab in a different tint: matte sandstone vs glossy ice vs
-//                 inner-glowing void rock. {roughness, metalness, emissive(hex),
-//                 emissiveIntensity}. Only normal boards take it — bouncy/boost/
-//                 flipper keep their identity glow. (Applied in platforms.js _addBoard.)
+//                 the same slab: {tint(hex albedo — recolours the whole track),
+//                 roughness, metalness, emissive(hex), emissiveIntensity}. Matte tan
+//                 sandstone vs glossy cyan ice vs inner-glowing violet void. Only
+//                 normal boards take it — bouncy/boost/flipper keep their identity
+//                 glow. (Applied in platforms.js _addBoard.)
 //   genBias     — how the zone PLAYS: per-biome multipliers on the drama elements
 //                 {tunnel, ramp, curve, yaw} so each zone has a signature SHAPE —
 //                 rolling ramps in the dunes, tunnels + half-pipe curves in the ice,
@@ -423,10 +427,13 @@ export const BIOMES = [
     bloom: 0.0,
     accent: 0xff4bd6,
     tagline: "where the climb begins",
+    skylineStyle: "towers", // tall city towers
+
     // Neon embers/sparks drifting UP off the city — electric, alive.
     weather: { color: 0xff6bd6, count: 55, size: 2.2, vx: 0, vy: 9, vz: -2, sway: 7, swaySpeed: 1.3, twinkle: 1, opacity: 0.5 },
-    // Baseline deck: glossy neon-grid that catches the sun + neon as highlights.
-    boardMat: { roughness: 0.36, metalness: 0.16, emissive: 0x000000, emissiveIntensity: 0 },
+    // Glossy steel-blue city deck (tint recolours the whole track so the ground reads
+    // as THIS zone, not just a grey slab — the texture detail rides on top).
+    boardMat: { tint: 0x8fa0c8, roughness: 0.36, metalness: 0.16, emissive: 0x101830, emissiveIntensity: 0.12 },
     // Balanced — the city is the reference shape every other zone bends away from.
     genBias: { tunnel: 1, ramp: 1, curve: 1, yaw: 1 },
   },
@@ -445,11 +452,13 @@ export const BIOMES = [
     bloom: 0.08,
     accent: 0xffb04a,
     tagline: "into the warm horizon",
+    skylineStyle: "mesas", // low desert buttes + pyramids
+
     // Sand & dust BLOWING sideways on a hot wind — the desert reads instantly.
     weather: { color: 0xffd29a, count: 140, size: 1.9, vx: 28, vy: -3, vz: -7, sway: 3, swaySpeed: 2.0, twinkle: 0, opacity: 0.34 },
-    // Matte, sun-baked sandstone — no sheen (the opposite of the glossy city deck).
-    // emissive 0 keeps the audiosurf tile-pulse working here (it skips self-lit decks).
-    boardMat: { roughness: 0.96, metalness: 0.0, emissive: 0x000000, emissiveIntensity: 0 },
+    // Matte, sun-baked sandstone — warm tan tint, no sheen (opposite of the glossy
+    // city deck). A faint warm bake so the ground glows like hot sand at dusk.
+    boardMat: { tint: 0xff9a4d, roughness: 0.96, metalness: 0.0, emissive: 0x3a1500, emissiveIntensity: 0.16 },
     // Rolling DUNES: lots of ramps to roll over + winding yaw; few tunnels (it's open desert).
     genBias: { tunnel: 0.5, ramp: 1.8, curve: 0.8, yaw: 1.4 },
   },
@@ -468,10 +477,12 @@ export const BIOMES = [
     bloom: 0.12,
     accent: 0x9af0ff,
     tagline: "the frozen deep",
+    skylineStyle: "spires", // jagged ice crystal spires
+
     // Snow FALLING with a gentle drift — cold and quiet.
     weather: { color: 0xeaffff, count: 150, size: 2.7, vx: 2, vy: -15, vz: -3, sway: 9, swaySpeed: 0.9, twinkle: 0, opacity: 0.6 },
-    // Glassy, polished ice — high gloss + a faint cold inner glow.
-    boardMat: { roughness: 0.1, metalness: 0.45, emissive: 0x0e3247, emissiveIntensity: 0.18 },
+    // Glassy, polished ice — icy-cyan tint, high gloss + a cold inner glow.
+    boardMat: { tint: 0x86d3ff, roughness: 0.1, metalness: 0.45, emissive: 0x123a52, emissiveIntensity: 0.28 },
     // ICE CAVERNS: tunnels (ice tubes) + curved half-pipe boards; fewer ramps.
     genBias: { tunnel: 2.0, ramp: 0.8, curve: 1.8, yaw: 0.9 },
   },
@@ -490,10 +501,12 @@ export const BIOMES = [
     bloom: 0.18,
     accent: 0xa05bff,
     tagline: "beyond the edge",
+    skylineStyle: "monoliths", // sparse floating monoliths
+
     // Stars / void-motes HANGING in space, drifting up slowly and twinkling — eerie, weightless.
     weather: { color: 0xd9c2ff, count: 95, size: 2.3, vx: 0, vy: 4, vz: 0, sway: 4, swaySpeed: 0.35, twinkle: 1, opacity: 0.72 },
-    // Dark void rock that GLOWS violet from within — boards read as lit, floating slabs.
-    boardMat: { roughness: 0.55, metalness: 0.18, emissive: 0x3a1f7a, emissiveIntensity: 0.4 },
+    // Dark void rock, violet tint, GLOWING from within — boards read as lit floating slabs.
+    boardMat: { tint: 0x9a5cff, roughness: 0.55, metalness: 0.18, emissive: 0x3a1f7a, emissiveIntensity: 0.45 },
     // THE VOID: disorienting twists — lots of yaw + some tunnels; few ramps (nothing to roll up).
     genBias: { tunnel: 1.4, ramp: 0.7, curve: 1.2, yaw: 1.6 },
   },
