@@ -339,12 +339,24 @@ export function planScatter(pathPlan, state, ctx) {
     const z = cz + rng.rand(-g.scatter.zSpread * 0.55, g.scatter.zSpread);
     const geo = randGeo(0, rng); // scatter never uses round geo (matches original)
     const round = geo.geoType !== "box";
-    const w = rng.rand(ramp(g.pad.widthLo, ctx.D) * 0.7, ramp(g.pad.widthHi, ctx.D));
+    let w = rng.rand(ramp(g.pad.widthLo, ctx.D) * 0.7, ramp(g.pad.widthHi, ctx.D));
     let len = rng.rand(8, ramp(g.pad.lenHi, ctx.D));
     if (round) len = Math.min(len, rng.rand(8, 14));
 
-    const bouncy = rng.chance(g.scatter.bouncyChance);
+    // Trampoline chance climbs the DEEPER this branch sits below the path — so the
+    // lowest pieces (the "depths") are most likely red bouncers, your bounce back into
+    // play if you fall way under everything. depth 0 at path height → 1 at the bottom.
+    const depth = ry > 0 ? Math.max(0, Math.min(1, (cy - y) / ry)) : 0;
+    const bouncy = rng.chance(g.scatter.bouncyChance + depth * g.scatter.bouncyDepthBoost);
     const hy = bouncy ? 0.5 : geo.hy;
+    // Penalty for the rescue: a depth-spawned bouncer is a smaller target the deeper it
+    // is (shorter + thinner, with jitter) — the catch takes some aim. Clamped to a
+    // landable minimum so it's never impossible to hit.
+    if (bouncy && depth > 0.15) {
+      const shrink = 1 - depth * g.scatter.bouncyDepthPenalty * rng.rand(0.6, 1);
+      w = Math.max(7, w * shrink);
+      len = Math.max(8, len * shrink);
+    }
     // Items carry their FINAL surface height (top = board center y + hy), the same
     // convention as path gems, so the renderer never has to special-case scatter.
     const gems = [], powerups = [];

@@ -767,11 +767,14 @@ export class Game {
       `blur(${(this._rainLevel * 1.2).toFixed(2)}px)`;
     // Spawn fat drops at RANDOM positions/sizes/timing while it rains — each is a div
     // that slides down + fades then self-removes (no synced loop = real randomness).
-    if (this._rainLevel > 0.25) {
+    // Each drop carries its OWN backdrop-filter blur (a full-screen pass), so the count
+    // must stay bounded or it tanks the framerate. Cap concurrent drops + a calmer spawn
+    // rate: still reads as dense rain, but ~16 lens-passes instead of ~80.
+    if (this._rainLevel > 0.25 && this._rainLensEl.childElementCount < 16) {
       this._rainDropT = (this._rainDropT || 0) + dt;
       if (this._rainDropT >= (this._rainDropNext || 0)) {
         this._rainDropT = 0;
-        this._rainDropNext = 0.025 + Math.random() * 0.1; // next drop 25–125ms out — dense + irregular, so lenses cover the screen
+        this._rainDropNext = 0.05 + Math.random() * 0.13; // next drop 50–180ms out
         const d = document.createElement("div");
         d.className = "raindrop";
         const sr = Math.random();

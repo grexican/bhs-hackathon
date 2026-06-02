@@ -684,6 +684,9 @@ export class Player {
     // a satisfying drop on the way down. gravityScale (low-grav powerup) still applies.
     const g = v.y > 0 ? CONFIG.player.riseGravity : CONFIG.player.gravity;
     v.y -= g * (ctx.gravityScale || 1) * dt;
+    // Cap the fall so a huge bounce can't build up enough speed to clip through a board
+    // between frames. Only the downward direction — launches (v.y > 0) are untouched.
+    if (v.y < -CONFIG.player.terminalVelocity) v.y = -CONFIG.player.terminalVelocity;
 
     const prevBottom = p.y - this.radius;
     p.x += v.x * dt;

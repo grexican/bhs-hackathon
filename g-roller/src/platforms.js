@@ -112,6 +112,10 @@ export class PlatformField {
     this._O = 0;             // openness(playerZ, profile), recomputed each frame
     this._D = 0;             // danger(playerZ) (or fixedDanger), recomputed each frame
 
+    // Beyond this far ahead, pieces are lost in the fog anyway — so we keep GENERATING
+    // out to keepAheadDistance (the emitter rides that frontier) but skip RENDERING the
+    // far ones. Big win now that the lead is long. Tightened further when fog closes in.
+    this.drawDistance = 350;
     this.itemMultiplier = 1; // cheat code bumps this to spawn extra gems/powerups
     this.activeEffects = 0;  // count of currently-active powerups (pushed in from game.js; reserved for rune gating)
     // Cheat-mode test tool: which powerup types are allowed to spawn. Default = all.
@@ -218,18 +222,13 @@ export class PlatformField {
       emissiveIntensity: type === "rune" ? 0.6 : type === "bouncy" ? 0.5 : type === "boost" ? 0.32 : type === "flipper" ? 0.55 : 0,
     });
 
-    // GLASS ground tiles: the standard "normal" boards go semi-transparent so the
-    // glowing city-lights floor (far below) reads through them. The neon grid baked
-    // into the texture stays bright, and an alphaMap keeps that lattice near-solid
-    // while the cells turn to glass — so the tile's shape stays crystal-clear.
-    let alphaTex = null;
+    // Opaque, lightly-reflective deck: the neon grid texture stays solid (reads clearly,
+    // esp. on mobile — the old glass was too low-contrast) with a glossy sheen that catches
+    // the sun + neon as highlights. Light reflective, not a mirror.
+    const alphaTex = null;
     if (type === "normal") {
-      const alpha = this.tex[`${texName}Alpha`];
-      if (alpha) { alphaTex = this._texFor(texName, w, len, alpha); mat.alphaMap = alphaTex; }
-      mat.transparent = true;
-      mat.opacity = 0.5;          // glass body; the grid carries readability
-      mat.side = THREE.DoubleSide; // so the underside doesn't vanish
-      mat.depthWrite = true;       // keep depth so balls/obstacles sort correctly
+      mat.roughness = 0.36;
+      mat.metalness = 0.16;
     }
 
     let visual, ownGeo = null;
@@ -643,20 +642,18 @@ export class PlatformField {
   }
 
   // Render a branch (scatter) candidate. The generator can't see the placed world, so
-  // overlap resolution happens here: nudge the candidate UP out of any static overlap,
-  // or skip it if it can't clear.
+  // overlap resolution happens here: if the candidate overlaps an existing static board,
+  // SKIP it. (We used to nudge it upward instead, which piled overlapping branches into
+  // unreachable vertical towers — the "3 pieces stacked, no way to reach any" bug. With
+  // the wide spread, overlaps are rare, so skipping just thins the odd collision.)
   _renderScatterPlan(b) {
-    let y = b.y, tries = 0;
-    while (this._overlaps(b.x, y, b.z, b.w / 2, b.hy, b.len / 2) && tries < 7) { y += b.hy * 2 + 2.5; tries++; }
-    if (this._overlaps(b.x, y, b.z, b.w / 2, b.hy, b.len / 2)) return; // couldn't clear it → skip
-    const lift = y - b.y; // how far we nudged (its gems/powerups ride along)
-
+    if (this._overlaps(b.x, b.y, b.z, b.w / 2, b.hy, b.len / 2)) return;
     this._addBoard({
-      x: b.x, y, z: b.z, w: b.w, len: b.len, hy: b.hy,
+      x: b.x, y: b.y, z: b.z, w: b.w, len: b.len, hy: b.hy,
       geoType: b.geoType, type: b.type, texName: this._texForRole(b.texRole),
     });
-    for (const g of b.gems) this._addGem(g.x, g.top + lift, g.z);
-    for (const u of b.powerups) this._addPowerup(u.x, u.top + lift, u.z, this._D);
+    for (const g of b.gems) this._addGem(g.x, g.top, g.z);
+    for (const u of b.powerups) this._addPowerup(u.x, u.top, u.z, this._D);
   }
 
   _disposePlatform(p) {
@@ -758,16 +755,26 @@ export class PlatformField {
       u.mesh.position.y = u.baseY + Math.sin(this._time * 2 + u.phase) * (u.grounded ? 0.12 : 0.4);
     }
 
-    // Cull everything left behind.
+    // Cull behind; HIDE (don't render) far-ahead pieces lost in the fog. The draw
+    // horizon tightens when the fog closes in (fog powerdown) so we stop rendering murk.
     const cullZ = playerZ - CONFIG.world.cullBehindDistance;
+    const fogFar = (this.scene.fog && this.scene.fog.far) || 1e9;
+    const drawZ = playerZ + Math.min(this.drawDistance, fogFar + 120);
     for (let i = this.platforms.length - 1; i >= 0; i--) {
       const p = this.platforms[i];
-      if (p.pos.z + p.hz < cullZ) { this._disposePlatform(p); this.platforms.splice(i, 1); }
+      if (p.pos.z + p.hz < cullZ) { this._disposePlatform(p); this.platforms.splice(i, 1); continue; }
+      p.mesh.visible = p.pos.z - p.hz < drawZ;
     }
-    for (let i = this.gems.length - 1; i >= 0; i--)
-      if (this.gems[i].mesh.position.z < cullZ) { this.scene.remove(this.gems[i].mesh); this.gems.splice(i, 1); }
-    for (let i = this.powerups.length - 1; i >= 0; i--)
-      if (this.powerups[i].mesh.position.z < cullZ) { this.scene.remove(this.powerups[i].mesh); this.powerups.splice(i, 1); }
+    for (let i = this.gems.length - 1; i >= 0; i--) {
+      const g = this.gems[i];
+      if (g.mesh.position.z < cullZ) { this.scene.remove(g.mesh); this.gems.splice(i, 1); continue; }
+      if (!g.collected) g.mesh.visible = g.mesh.position.z < drawZ;
+    }
+    for (let i = this.powerups.length - 1; i >= 0; i--) {
+      const u = this.powerups[i];
+      if (u.mesh.position.z < cullZ) { this.scene.remove(u.mesh); this.powerups.splice(i, 1); continue; }
+      if (!u.collected) u.mesh.visible = u.mesh.position.z < drawZ;
+    }
   }
 
   // Lowest platform top among the floors currently drawn around the player. Death is

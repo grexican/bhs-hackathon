@@ -34,6 +34,9 @@ export const CONFIG = {
     jumpSpeed: 42, // launch velocity — trimmed from 50 so take-off is less "springy"
     gravity: 39, // FALL gravity (the drop the player likes — full strength)
     riseGravity: 23, // ASCENT gravity — weaker, so the jump floats UP slowly (Spider-Man swing feel). Asymmetric on purpose.
+    terminalVelocity: 130, // cap on DOWNWARD fall speed. A big moon-bounce could otherwise build up
+    //                        enough speed to skip past a board between frames (clip through the ground).
+    //                        High enough that the drop still feels fast + dramatic. Launches (upward) are unaffected.
     quickDescentDivisor: 1.7, // releasing jump while rising chops upward speed by this for a fast drop
     playerRadius: 0.9,
 
@@ -228,10 +231,12 @@ export const CONFIG = {
       lateralFrac: [0.35, 0.85], // how much of the reachable strafe a step may use
       riseFrac: [0.35, 0.85], // how much of the reachable rise a step may use
       dropDepth: [-4, -10], // how far a step may drop
-      bandX: [24, 90], // how far the path may wander left/right (× tier sprawl)
-      bandY: [-38, 64], // vertical corridor the wander target stays within (× tier sprawl)
+      // Spread is wide even at the START (high low-ends) so the field reads as "go
+      // anywhere" from the first jump, not a tight cluster that slowly opens up.
+      bandX: [55, 120], // how far the path may wander left/right (× tier sprawl)
+      bandY: [-50, 85], // vertical corridor the wander target stays within (× tier sprawl)
       driftEvery: [2, 12], // steps between picking a new wander target
-      driftY: [24, 80], // vertical reach of each wander target (× tier sprawl)
+      driftY: [38, 100], // vertical reach of each wander target (× tier sprawl) — more climb/movement
     },
 
     // Branch/decor platforms strewn around the path — the parallax "free-floating"
@@ -239,11 +244,17 @@ export const CONFIG = {
     // forgiveness lever). SPREAD (radius) rides openness × tier `openness`, kept
     // tight enough that branches stay relevant/reachable, not flung off-screen.
     scatter: {
-      count: [2, 3], // base extra platforms per step (× tier density → Easy ~3-4, Hard ~1-2)
-      radiusX: [16, 56], // how wide the cloud scatters (× tier sprawl; was 110 base — too far to reach)
-      radiusY: [12, 42], // how tall the cloud scatters (× tier sprawl; parallax layers)
+      count: [2, 3], // base extra platforms per step (× tier density → Easy many, Hard few)
+      radiusX: [40, 110], // how wide the cloud scatters (× tier sprawl) — wide from the start so it reads "go anywhere"
+      radiusY: [24, 68], // how tall the cloud scatters (× tier sprawl; parallax layers)
       zSpread: 54, // depth jitter around the front
-      bouncyChance: 0.16, // chance a branch platform is a trampoline
+      bouncyChance: 0.16, // chance a branch platform is a trampoline (at/above path height)
+      bouncyDepthBoost: 0.55, // EXTRA trampoline chance for branches at the DEPTHS (lowest scatter):
+      //                         a piece at the very bottom gets bouncyChance + this. If you fall
+      //                         way under everything, these red pads are the bounce back into play.
+      bouncyDepthPenalty: 0.45, // …but a depth-spawned bouncer is a SMALLER target the deeper it is
+      //                           (w & len shrink by up to this fraction × depth, with jitter): the
+      //                           rescue is there, but you have to aim for it. Clamped to a min size.
       gemChance: 0.5, // chance a branch carries a gem (reward exploring)
       powerupChance: 0.2, // chance a branch carries a powerup
     },
@@ -339,9 +350,9 @@ export const CONFIG = {
     // Easy / Medium / Hard — five knobs each. See the big note above for what they
     // mean. The whole difficulty system is THESE THREE LINES.
     tiers: [
-      { name: "Easy", pace: 0.92, hazard: 0.8, openness: 0.9, sprawl: 1.0, density: 1.4, drama: 0.7 },
+      { name: "Easy", pace: 0.92, hazard: 0.8, openness: 0.9, sprawl: 1.0, density: 1.6, drama: 0.7 },
       { name: "Medium", pace: 1.0, hazard: 1.0, openness: 1.0, sprawl: 1.45, density: 1.0, drama: 1.0 },
-      { name: "Hard", pace: 1.15, hazard: 1.5, openness: 1.2, sprawl: 2.1, density: 0.6, drama: 1.4 },
+      { name: "Hard", pace: 1.15, hazard: 1.5, openness: 1.2, sprawl: 2.1, density: 0.45, drama: 1.4 },
     ],
     defaultDifficulty: 1, // index into tiers (Medium)
   },

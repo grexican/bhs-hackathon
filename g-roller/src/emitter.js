@@ -49,7 +49,7 @@ export class Emitter {
     // Kept in WORLD space (not children of the scaled portal) so their flight isn't warped.
     this._shards = [];
     const shardGeo = new THREE.PlaneGeometry(2.6, 2.6);
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 10; i++) {
       const m = new THREE.Mesh(shardGeo, new THREE.MeshBasicMaterial({
         color: 0x9fe0ff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide,
       }));

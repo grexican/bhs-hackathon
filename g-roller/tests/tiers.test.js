@@ -81,6 +81,27 @@ describe("drama (spectacle) rises with difficulty", () => {
   });
 });
 
+describe("trampolines cluster at the depths (the bounce-back-into-play safety net)", () => {
+  it("branch pieces below the path are bouncy more often than ones at/above it", () => {
+    const rng = seededRng(2025);
+    const state = freshState();
+    let deepBouncy = 0, deepTotal = 0, highBouncy = 0, highTotal = 0;
+    for (let i = 0; i < 3000; i++) {
+      const z = state.cursor.z;
+      const ctx = makeCtx(EASY, z, speedAt(z, EASY), rng);
+      const plan = planStep(state, ctx);
+      if (plan.kind !== "path") continue;
+      for (const b of planScatter(plan, state, ctx)) {
+        if (b.y < plan.exitY) { deepTotal++; if (b.type === "bouncy") deepBouncy++; }
+        else { highTotal++; if (b.type === "bouncy") highBouncy++; }
+      }
+    }
+    expect(deepTotal).toBeGreaterThan(50);
+    expect(highTotal).toBeGreaterThan(50);
+    expect(deepBouncy / deepTotal).toBeGreaterThan(highBouncy / highTotal);
+  });
+});
+
 describe("pace rises with difficulty", () => {
   it("Easy < Medium < Hard", () => {
     expect(EASY.pace).toBeLessThan(MED.pace);
