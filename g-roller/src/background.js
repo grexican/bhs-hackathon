@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { Emitter } from "./emitter.js";
 
 // The far scenery behind the action: a glowing moon, drifting nebula clouds,
 // and two parallax skyline ranges on either side. Everything ignores fog and
@@ -151,6 +152,9 @@ export class Background {
     // it — it stays a fixed, distant moon beyond the city. Bigger so it reads at range.
     this.moonOffset = new THREE.Vector3(120, 165, 960);
     this.group.add(this.moon);
+    // HIDDEN: the distant emitter (below) is now the focal point in the sky. Kept, not
+    // deleted — flip back to true to bring the moon back.
+    this.moon.visible = false;
 
     this.dim = 0; // 0 = normal sky, 1 = blacked out (driven by the blackout powerdown)
 
@@ -178,18 +182,24 @@ export class Background {
       fog: false,
     });
     this._cloudMat = cloudMat;
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 8; i++) {
       const s = new THREE.Sprite(cloudMat);
-      const scale = 60 + Math.random() * 90;
+      const scale = 130 + Math.random() * 170; // bigger — they now form a soft back wall
       s.scale.set(scale, scale, 1);
+      // Moved OUT of the sky and BACK behind the scene (around the emitter's distance),
+      // low and wide, so they cover the deep backdrop instead of floating overhead.
       s.userData.offset = new THREE.Vector3(
-        (Math.random() - 0.5) * 360,
-        60 + Math.random() * 120,
-        180 + Math.random() * 160
+        (Math.random() - 0.5) * 900,   // wide spread across the back
+        -50 + Math.random() * 150,     // low band (was 60..180 high up)
+        520 + Math.random() * 420      // far back, behind the city (was 180..340)
       );
       this.clouds.push(s);
       this.group.add(s);
     }
+
+    // The emitter (the spawn-frontier "mouth") is its own object — see src/emitter.js.
+    // Background just owns an instance and feeds it the frontier each frame.
+    this.emitter = new Emitter(scene);
 
     // Two skyline ranges (near + far) on each side for parallax depth.
     this.ranges = [];
@@ -336,12 +346,15 @@ export class Background {
     // Mist decks stay hidden (too busy with the jump cam-tilt). Motes kept but very
     // faint (opacity set in update) — just a hint of rising specks.
     for (const m of this.mistDecks) m.visible = false;
+    // The rising "ground" motes are off for now — the only flow we want is the stream
+    // coming AT us from the emitter (kept, not deleted).
+    this.motes.visible = false;
   }
 
   // Drive the backdrop mood from the active biome. The game calls this once on a
   // zone change with that biome's palette; update() then EASES toward these targets
   // (no snap). All tints are stored as THREE.Color targets / scalar hue targets.
-  setBiome({ skylineHue, skylineSpread, moon, nebula }) {
+  setBiome({ skylineHue, skylineSpread, moon, nebula, skyline }) {
     if (skylineHue != null) this._hueTarget = skylineHue;
     if (skylineSpread != null) this._spreadTarget = skylineSpread;
     if (moon != null) {
@@ -350,9 +363,10 @@ export class Background {
       this._haloTarget.copy(this._moonTarget).multiplyScalar(0.92).offsetHSL(0.0, 0.05, -0.04);
     }
     if (nebula != null) this._nebTarget.setHex(nebula);
+    this.emitter.setTint(skyline); // the mouth glows the zone's neon window-accent
   }
 
-  update(playerZ, dt = 0, playing = false, playerX = 0, playerY = 0) {
+  update(playerZ, dt = 0, playing = false, playerX = 0, playerY = 0, emit = null) {
     this._t += dt;
     if (playing) this._driftT += dt; // city only moves while you're actually rolling
     const t = this._t;
@@ -389,6 +403,23 @@ export class Background {
     for (const c of this.clouds) {
       c.position.set(c.userData.offset.x, c.userData.offset.y, playerZ + c.userData.offset.z);
     }
+
+    // Emitter: sit at the live spawn frontier (the generator's cursor) so the mouth IS
+    // where the next piece comes from, and pieces stream from it toward the player. It
+    // only moves when the frontier moves (it holds mid-spline). See src/emitter.js.
+    // Only RIDE the live frontier while playing; on the title/game-over screen the
+    // generator is idle (cursor still parked at the start gate), so hold the emitter out
+    // at its normal far depth instead of letting it sit in the player's face.
+    const live = playing && emit;
+    this.emitter.update(dt, t, {
+      x: live ? emit.cursorX : playerX,
+      y: live ? emit.cursorY : playerY,
+      z: live ? emit.cursorZ : playerZ + 800,
+      playerZ,
+      mouth: emit ? 0.8 + emit.sprawl * 0.3 + emit.drama * 0.15 : 1,
+      beat: this.beat || 0,
+      dim: this.dim,
+    });
 
     // Distant city-lights floor far below: huge, lazily rotating. TRACKS the player in
     // z (the old 0.6 lag made it fall behind and vanish after ~3000m). Kept dim so it's

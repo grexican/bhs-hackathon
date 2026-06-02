@@ -43,6 +43,18 @@ import { makeSplineSampler } from "./spline.js";
 
 const G = () => CONFIG.gen; // shorthand; re-read each call so config edits take effect
 
+// How far the flipper "cannon" throws you (units of z). It launches you UP at
+// jumpSpeed*vertical and FORWARD up to maxSpeed, so the airborne arc covers a long
+// stretch — the straight landing runway must span at least this far or you fly off
+// the end of it into a gap. Generous on purpose (a too-short runway = impossible jump;
+// a too-long one is just a harmless flat strip you sail over).
+function flipperFlightDistance() {
+  const P = CONFIG.player, fp = CONFIG.plates.flipper;
+  const vy = P.jumpSpeed * fp.vertical;
+  const airtime = vy / P.riseGravity + vy / Math.sqrt(P.riseGravity * P.gravity); // rise + fall
+  return fp.maxSpeed * airtime + 60; // full-blast distance + a margin
+}
+
 // --- small pure pickers ------------------------------------------------------
 
 // Pad shape: hex/round pads are rare early and common later; otherwise a box with
@@ -152,14 +164,18 @@ export function planStep(state, ctx) {
   const g = G();
   const { rand, randInt, chance, clamp } = rng;
   const safe = state.stepIndex < g.safeStraight;
+  // Launch runway: every board laid until the cursor passes the cannon's landing zone
+  // stays straight + flat (computed below). Tunnels/splines are suppressed here too, so
+  // nothing interrupts the flight path and jumps the cursor past the runway.
+  const onRunway = !safe && state.cursor.z < state.launchRunwayUntilZ;
 
   // Occasionally the next stretch is a structure (tunnel / spline ribbon), gated +
-  // cooled-down so they never cluster. Frequency rides danger × the tier's drama.
-  if (!safe && state.stepsSinceTunnel >= g.tunnel.cooldown && chance(dramaChance(g.tunnel.chance, ctx.D, profile))) {
+  // cooled-down so they never cluster, and never mid-launch-runway.
+  if (!safe && !onRunway && state.stepsSinceTunnel >= g.tunnel.cooldown && chance(dramaChance(g.tunnel.chance, ctx.D, profile))) {
     return planTunnel(state, ctx);
   }
   state.stepsSinceTunnel++;
-  if (!safe && state.stepsSinceSpline >= g.spline.cooldown && chance(dramaChance(g.spline.chance, ctx.D, profile))) {
+  if (!safe && !onRunway && state.stepsSinceSpline >= g.spline.cooldown && chance(dramaChance(g.spline.chance, ctx.D, profile))) {
     return planSpline(state, ctx);
   }
   state.stepsSinceSpline++;
@@ -173,13 +189,6 @@ export function planStep(state, ctx) {
   // the sweep even after openness saturates — that's what separates Hard from Medium
   // deep in a run). Per-step deltas below stay clamped to jump reach regardless.
   const band = ramp(g.path.bandX, o) * profile.sprawl;
-
-  // Launch runway: a flipper flings you STRAIGHT forward at up to plates.flipper.maxSpeed.
-  // For the next few steps we keep the path straight + flat so that fling always has
-  // ground to come down on — without this, a wide-sprawl/sparse Hard route can veer off
-  // sideways while you sail straight ahead into empty space. Consumed one step at a time.
-  const onRunway = !safe && state.launchRunway > 0;
-  if (onRunway) state.launchRunway--;
 
   // Roaming target: every few steps pick a new far-off (x,y) to head toward — this is
   // what turns a straight line into a sweeping, free-floating journey. Frozen on a
@@ -232,10 +241,7 @@ export function planStep(state, ctx) {
     else if (chance(g.items.boostChance)) type = "boost";
   }
   let texRole = type === "boost" ? "boost" : type === "flipper" ? "flipper" : "ground";
-  if (type === "flipper") {
-    len = rand(9, 14); // small launch panels — a full-length flipper looks wrong
-    state.launchRunway = 4; // the next few boards form a straight, flat landing strip for the fling
-  }
+  if (type === "flipper") len = rand(9, 14); // small launch panels — a full-length flipper looks wrong
 
   // Board-tilt properties (display + physics): any board can yaw / slope / curve /
   // lean. Frequency & magnitude ride openness × the tier's drama. Flippers stay flat.
@@ -296,6 +302,9 @@ export function planStep(state, ctx) {
 
   // Advance the cursor to the board's far end (along its heading) for the next step.
   state.cursor = { x: clamp(nearX + fdx * len, -band - 4, band + 4), y: exitY, z: nearZ + fdz * len };
+  // After a flipper, hold a straight + flat runway out to the cannon's full landing zone
+  // (distance-based, set from the just-advanced far edge) so the long arc always lands.
+  if (type === "flipper") state.launchRunwayUntilZ = state.cursor.z + flipperFlightDistance();
   state.stepIndex++;
 
   return board("path", {

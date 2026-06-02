@@ -49,7 +49,188 @@
 //                  "drop" sections). Defaults to 0.
 // Fills, arp runs and dynamic swells are added in code, keyed off the song bar so
 // even repeated sections never feel identical bar-to-bar.
-const TRACKS = [
+
+// --- Note + melody notation -------------------------------------------------
+// The lead used to be an algorithmic arpeggio (chord tones picked by step index),
+// which is WHY the songs never "built and resolved" — a per-beat shape has no
+// phrase. Now each section carries a `mel`: a real composed topline written in
+// readable note tokens, so it can rise to a peak and resolve to the tonic at the
+// cadence like a melody you could hum.
+//   `mel` is an array of bar-strings, ONE per bar of that section.
+//   A bar-string is 8 or 16 space-separated tokens (8 = eighth-note grid, the
+//   common case for these calm tracks; 16 = sixteenth grid for busier leads):
+//     "C4" / "F#5" / "Bb3" — strike that note at this slot
+//     "E5+G5"              — a DYAD: strike both notes at once (harmonised lead, for
+//                            drama / to break the "one instrument, one note" feel)
+//     "-"                  — sustain the previous note one more slot (long notes/ties)
+//     "."                  — rest (silence — melodies need breath)
+//   e.g. (8 slots)  "E4 - F#4 - G4 - A4 -"  = E F# G A, each held a quarter note.
+const _NOTE_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+export function noteFreq(name) {
+  const m = /^([A-G])([#b]?)(-?\d)$/.exec(name);
+  if (!m) return 0; // "." / "-" / anything unparseable → no pitch
+  let semi = _NOTE_SEMI[m[1]];
+  if (m[2] === "#") semi += 1;
+  else if (m[2] === "b") semi -= 1;
+  const midi = 12 * (parseInt(m[3], 10) + 1) + semi; // C4 = MIDI 60, A4 = 69
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+// Parse one bar-string into note events {step, dur, freq} (step + dur in 16ths).
+// Cached by string content so a recurring phrase is only parsed once.
+const _barCache = new Map();
+export function parseBar(barStr) {
+  let parsed = _barCache.get(barStr);
+  if (parsed) return parsed;
+  const toks = barStr.trim().split(/\s+/);
+  const span = 16 / toks.length; // sixteenths per token (2 for 8-grid, 1 for 16)
+  parsed = [];
+  let cur = null;
+  for (let i = 0; i < toks.length; i++) {
+    const tk = toks[i];
+    if (tk === "-") { if (cur) cur.dur += span; continue; } // tie/sustain
+    if (tk === ".") { cur = null; continue; }               // rest
+    // a token may be a single note or a "+"-joined dyad (e.g. "E5+G5")
+    cur = { step: Math.round(i * span), dur: span, freqs: tk.split("+").map(noteFreq) };
+    parsed.push(cur);
+  }
+  _barCache.set(barStr, parsed);
+  return parsed;
+}
+
+// === MELODIES ===============================================================
+// Composed toplines, written as phrases and reused by section name (the recurring
+// theme = the hook = what makes a long song feel composed instead of looped). Each
+// line was hand-composed, then adversarially critiqued bar-by-bar for chord-tones-
+// on-strong-beats, stepwise motion, a build-to-peak/resolve-home contour, motif
+// development, and a tonic-landing loop seam. Every track's line is deliberately
+// distinct in contour + rhythm + register so the six never blur together.
+
+// 1) VELVET HORIZON (C Lydian, 82bpm) — bright Lydian colour (F#). Rebuilt for
+//    RHYTHMIC VARIETY: long dreamy rings traded with quick bursts, syncopated late
+//    entries that tie over the barline, a rest before the chorus peak, and an E5+G5
+//    DYAD climax. Bridge thins to held breath; outro dissolves onto C for the loop.
+// v3 (ear feedback): intro now ENTERS on the beat so it flows in (was random); verse/pre
+// pulled back onto the beat (the forced/over-dramatic off-beats are gone).
+const VH_INTRO  = ["A4 - - - C4 - - -", "E4 - - - G4 - B4 -", "G4 - - - D4 - B4 -", "C5 - - - E4 - - -"];
+const VH_VERSE  = ["F#4 - - - E4 - - -", "E4 - G4 - F#4 - A4 - G4 - - - E4 - - -", "B4 - A4 - G4 - E4 - D4 - - - E4 - - -", "G4 - - - D4 - - -"];
+const VH_PRE    = ["C5 - - - B4 - - -", "A4 - G4 - E4 - - -", "F#4 - A4 - F#4 - A4 - F#4 - A4 - F#4 - A4 -", "B4 - D5 - A4 - G4 - G4 - - - - - - -"];
+const VH_CHORUS = [". . C5 - - - - -", ". B4 - C5 - E5 - - - - D5 - C5 - - .", ". . . . E5+G5 - - - C5 - A4 - . . . .", ". G4 - - A4 - B4 - G4 - - - - - . ."];
+const VH_BRIDGE = ["E4 - - - - - - .", ". . . C4 - - - -", "G4 - - - - . B4 -", ". . E4 - - - - -"];
+const VH_OUTRO  = ["E4 - - . C4 - . .", "A3 - - - . . . .", ". . F#4 - D4 - . .", "C4 - - - - - - -"];
+// Cadence variety (research-backed): the "question" chorus — same as VH_CHORUS but bar 4
+// hangs UP on D5 (open, unresolved) instead of settling on G4. Used on an inner chorus of a
+// run so the run still RESOLVES home at its end (loop point stays clean).
+const VH_CHORUS_Q = [". . C5 - - - - -", ". B4 - C5 - E5 - - - - D5 - C5 - - .", ". . . . E5+G5 - - - C5 - A4 - . . . .", ". G4 - - A4 - B4 - D5 - - - - - . ."];
+
+// 2) MIDNIGHT CRUISE (D minor jazz, 70bpm) — a bluesy "sigh" (b3-2-root) that enters
+//    LATE after a downbeat rest, laying back behind the heavy swing like a sax. The
+//    borrowed C# leading tone resolves C#->D over the A7. Hook lifts an octave (16-
+//    grid pickup); bridge thins to bare long tones; outro walks the ii-V-i home.
+const MC_VERSE  = ["F4 - - . E4 - D4 -", "D4 - - . Bb3 - - -", "G3 - - . Bb3 - C4 -", "C#4 - D4 - E4 - - ."];
+const MC_PRE    = ["Bb3 - - . D4 - F4 -", "E4 - G4 - B4 - - .", "G4 - - . Bb4 - A4 -", "C#5 - B4 - A4 - - ."];
+const MC_HOOK   = [". . F5 - E5 - D5 - . - - - C5 - - -", "D5 - - - C5 - D5 - F5 - - - D5 - - .", "Bb4 - - - D5 - C5 - Bb4 - - - G4 - - .", "C#5 - - - E5 - D5 - C#5 - A4 - . - - ."];
+const MC_BRIDGE = ["D4 - - - . - - -", "Bb3 - - - D4 - - -", "G3 - - - Bb3 - - -", "C#4 - - - E4 - - ."];
+const MC_OUTRO  = ["Bb3 - D4 - . - F4 -", "E4 - G4 - F4 - D4 -", "C#4 - E4 - . - A3 -", "D4 - - - . - . ."];
+
+// 3) LUCID DRIFT (A major ambient, 62bpm, NO drums) — slow wide arcs, one or two
+//    strikes per bar over long ties so there is no pulse, just floating tones. The
+//    rising drift gesture (E F# A) builds to the A5 peak in `rise`, then ebbs down
+//    to a single held A3 into the loop. The widest register span of the set.
+const LD_WASH   = ["E4 - - - - - - -", "A4 - - - - - E4 -"];
+const LD_DRIFT  = ["C#4 - - - E4 - - -", "A4 - - - - - - -", "B4 - - - G#4 - - -", "A4 - - - - - - -"];
+const LD_RISE   = ["F#4 - - - A4 - - -", "B4 - - - E5 - - -", "F#5 - - - A5 - - -", "E5 - - - C#4 - - -"];
+const LD_EBB    = ["A4 - - - - - G#4 -", "F#4 - - - A4 - - -", "E4 - - - B3 - - -", "A3 - - - - - . ."];
+// Cadence variety across the repeated rises/ebbs — the arch: home -> opposite -> sharp -> home.
+// OPP resolves UP into the tonic (vs the home descent); SHARP climbs to the G# leading tone
+// and HANGS unresolved (the "question") just before the section returns home. Only bar 4 (the
+// resolution gesture) differs from the home version.
+const LD_RISE_OPP   = ["F#4 - - - A4 - - -", "B4 - - - E5 - - -", "F#5 - - - A5 - - -", "E5 - - - F#5 - A5 -"];
+const LD_RISE_SHARP = ["F#4 - - - A4 - - -", "B4 - - - E5 - - -", "F#5 - - - A5 - - -", "E5 - - - F#5 - G#5 -"];
+const LD_EBB_OPP    = ["A4 - - - - - G#4 -", "F#4 - - - A4 - - -", "E4 - - - B3 - - -", "E4 - - - F#4 - A4 -"];
+
+// 4) NEON HIGHWAY (A Phrygian, 150bpm, D&B) — the "Phrygian jab" (Bb->A b2 menace).
+//    Rebuilt for VARIETY: every bar a different shape, held rings traded with 16th
+//    bursts, off-beat anticipations tied over downbeats, A4+E5 / A5+E5 / A5+C5 dyad
+//    stabs for weight. Drop rests then SLAMS a high dyad; break breathes; outro on A.
+// v3 (ear feedback: was "jazz and puke / random + tappy") — fully ON-BEAT now: stabs land
+// only on beats (0,4,8,12) + strong-& (2,10), outlining each chord, leaning on Bb->A.
+const NH_A     = ["A4 . C4 . . . . . E4 . C4 . . . . .", "A4 . A4 . . . . . C4 . A4 . . . . .", "G4 . Bb4 . . . . . D4 . Bb4 . . . . .", "Bb4 . D4 . . . . . Bb4 . A4 . . . . ."];
+const NH_A2    = ["A4 . C4 . . . . . E4 . C4 . . . . .", "G4 . Bb4 . . . . . D4 . Bb4 . . . . .", "F4 . A4 . . . . . C4 . A4 . . . . .", "Bb4 . D4 . . . . . Bb4 . A4 . . . . ."];
+const NH_BUILD = ["D4 . F4 . A4 . . . D5 - - - . . . .", "G4 . Bb4 . D5 . . . Bb4 . G4 . . . . .", "F4 . A4 . C5 . . . F5 - - - . . . .", "Bb4 . D5 . F5 . . . Bb5 - - - . . . ."];
+const NH_DROP  = ["A5 . C5 . E5 . . . A5 - - - . . . .", "G5 . Bb5 . D5 . . . Bb5 . A5 . . . . .", "Bb5 . D5 . F5 . . . Bb5 - - - . . . .", "A5 . C5 . E5 . . . Bb5 . A5 - - - . ."];
+const NH_DROP_B = ["A5 . C5 . E5 . . . A5 - - - . . . .", "G5 . Bb5 . D5 . . . Bb5 . A5 . . . . .", "Bb5 . D5 . F5 . . . Bb5 - - - . . . .", "E5 . F5 . G5 . . . G5 . A5 - - - . ."]; // "opposite": rises INTO A from below
+// "question": bar 4 HANGS on the b2 (Bb5) unresolved — the Phrygian pull that wants A.
+const NH_DROP_Q = ["A5 . C5 . E5 . . . A5 - - - . . . .", "G5 . Bb5 . D5 . . . Bb5 . A5 . . . . .", "Bb5 . D5 . F5 . . . Bb5 - - - . . . .", "A5 . C5 . E5 . . . A5 . Bb5 - - - . ."];
+const NH_BREAK = ["D4 - - - - - - - A4 - - - . . . .", "A4 - - - - - - - C4 - - - . . . .", "G4 - - - - - - - Bb4 - - - . . . .", "F4 - - - - - - - A4 - - - . . . ."];
+const NH_OUTRO = ["G4 . Bb4 . D4 . . . Bb4 - - - . . . .", "F4 . A4 . C4 . . . A4 - - - . . . .", "Bb4 . D4 . F4 . . . Bb4 . A4 . . . . .", "A4 - - - - - - - . . . . . . . ."];
+
+// 5) PULSE RUNNER (E minor outrun synthwave, 128bpm, steady) — the soaring, SINGABLE
+//    anthem. Rising engine motif (E F# G) with pickup eighths slamming the downbeat,
+//    then long sustained tails so it sings over the four-on-the-floor. Drop sustains
+//    a high E5 (legato — its lane vs Solar's staccato); outro descends home to E.
+// Pulse Runner LEAD — rewritten for RHYTHMIC DRAMA (was a one-note-per-beat scale).
+// Every bar mixes a long held tone with a quick burst; phrases anticipate the next
+// chord by hitting its tone an 8th early and tying over the bar; the drop lands a
+// soaring held hero note + a harmonised dyad. Lands chord tones at each cadence.
+// A: a held, moody statement (B rings) answered by a syncopated bap-bap run that
+//    leaps up the octave. Resolves home to E over the D→Em pull. Works over the
+//    Em-Am-C-D variant too (G/E/D are all common to those chords).
+const PR_A     = ["B4 - - - . G4 A4 -", "E4 - . E4 - C5 - .", ". B4 - D5 - - G4 -", "F#4 - - A4 . D4 E4 -"];
+// A2: starts OFF the beat with a held entry, answered by a tight 16th burst that
+//     climbs to D5; bar 3 holds high then drops; cadence anticipates D and rings.
+const PR_A2    = [". E4 - - B4 - - .", "G4 D5 - . B4 - G4 -", "C5 - - - . G4 B4 -", "A4 - F#4 - . D4 - -"];
+// build: ACCELERATES — bar1 sparse & held, then rhythm gets busier each bar (8ths →
+//        16th bursts) climbing C→G→Am→Bm, ending HANGING unresolved on a held F#5
+//        over Bm (the v) so the drop can detonate.
+// v3 (ear feedback: the faster middle was "whack/off-beat"): build + drop now lock ON the beat.
+const PR_BUILD = ["G4 - E4 - G4 - C5 -", "D5 - B4 - D5 - G4 -", "E5 - C5 - A4 - C5 -", "F#5 - - - B4 - D5 -"];
+// drop: THE PEAK. Bar1 = a dramatic REST then a soaring HERO note E5 rings 5 slots;
+//       bar2 octave-LEAP burst lands a HARMONISED DYAD G5+B4; bar3 holds high D5 and
+//       dances down; bar4 cadence dyad F#5+A4 resolves toward home. (16-grid for the
+//       hero ring + leap.) Works over Em-G-C / Em-Am-C variants (E,G,B,D,A all fit).
+const PR_DROP  = ["E5 - - - - - - - - - - - B4 - D5 -", "G5+B4 - - - - - G5 - E5 - - - C5 - - -", "D5 - - - G5 - - - B4 - D5 - G5 - - -", "F#5+A4 - - - - - - - E5 - - - D5 - F#5 -"];
+const PR_DROP_B = ["E5 - - - - - - - - - - - B4 - D5 -", "G5+B4 - - - - - G5 - E5 - - - C5 - - -", "D5 - - - G5 - - - B4 - D5 - G5 - - -", "F#5+A4 - - - - - - - B4 - - - D5 - E5 -"]; // final drop: steps UP into the E tonic
+// break: drums out — BREATHE. Sparse, mostly held single tones with big rests, low
+//        register. Each bar one long tone + one late answer. Resolves toward Em via
+//        Bm. (Works over the C-G-Am-Bm variant — A/G/B/F# are shared.)
+const PR_BREAK = ["A3 - - - . . E4 -", ". G3 - - - . B3 -", "B3 - - - . D4 - .", "F#4 - - . D4 - - ."];
+// outro: thin out and DESCEND to the tonic. Held notes step down C→G→D→E with rests
+//        between phrases; final bar lands E and rings into the loop seam.
+const PR_OUTRO = ["G4 - - - . E4 C4 -", ". D4 - - B3 - - .", "F#4 - - A3 . - D4 -", "E4 - - - . B3 E3 -"];
+
+// 6) SOLAR DRIVE (C major pop/house, 124bpm, steady) — sunny pop hook, now on a SAW
+//    lead (was clowny square). Rebuilt for GROOVE: syncopated off-beat plucks and
+//    anticipations that push against the four-on-the-floor, held phrases traded with
+//    bursts, a rest-then-ring E5 + an E5+G5 dyad at the drop. Not a recital piano.
+// v3 (ear feedback: "a little more on beat"): scattered weak-slot attacks nudged onto the beat.
+const SD_A     = ["G4 - - - . . C4 -", "E4 - - - E4 - G4 - - - - - - - . .", "A4 - - - C4 - - .", "G4 - . . A4 - C4 ."];
+const SD_A2    = ["E4 - - - C5 - A4 .", "A4 - - - C5 - A4 - F4 - - - - - . .", "G4 - - - C5 - - .", "B4 - - - D4 - - ."];
+const SD_BUILD = ["A4 - - - - - C5 -", "B4 - - - D5 - B4 -", "C5 - - - E5 - G5 - A5 - - - G5 - - .", "D5 - D5 - D5 - . ."];
+const SD_DROP  = ["E5 - - - - - - - - - . . C5 - - .", "C5 - - - E4 - G4 - A4 - - - C5 - - .", "E5+G5 - - - - - E5 - D5 - C5 - G4 - - .", "E5 - - - C5 - E4 - - - - - C4 - - ."];
+const SD_DROP_B = ["E5 - - - - - - - - - . . C5 - - .", "C5 - - - E4 - G4 - A4 - - - C5 - - .", "E5+G5 - - - - - G4 - A4 - - - B4 - - .", "G4 - - - A4 - - - B4 - - - C5 - - -"]; // final drop: climbs B4->C5 into the tonic
+const SD_BREAK = [". . A4 - - - - .", ". . . . F4 - - -", "E4 - - - . . G4 -", ". . D4 - - . . ."];
+const SD_OUTRO = [". A4 - - C4 - . .", ". F4 - - A4 - . .", "B3 - . D4 - . G4 .", "C4 - - - - - - -"];
+
+// 7) AMBER STATIC (F major lo-fi, 94bpm) — a cozy descending "sigh" (C5-A4-G4-F4)
+//    that enters off the downbeat and tails across the bar for the lazy lo-fi feel.
+//    Hook lifts to D5/E5; bridge drops low; outro thins onto F for the loop.
+const AS_VERSE  = [". . C5 - A4 - G4 -", "E4 - - . A4 - C5 -", ". . D4 - F4 - A4 -", "G4 - F4 - D4 - - ."];
+const AS_PRE    = [". G4 - Bb4 - A4 - .", "A4 - C5 - . - A4 -", "Bb4 - C5 - D5 - C5 -", "Bb4 - A4 - G4 - - ."];
+const AS_HOOK   = [". . C5 - A4 - F4 -", "D5 - C5 - A4 - F4 -", "G4 - Bb4 - D5 - C5 -", "E5 - D5 - C5 - A4 ."];
+const AS_BRIDGE = [". . Bb3 - D4 - F4 -", "E4 - C4 - A3 - . .", ". . G3 - Bb3 - D4 -", "C4 - Bb3 - G3 - - ."];
+const AS_OUTRO  = [". . G4 - Bb4 - F4 -", "E4 - G4 - . - C4 -", "A4 - G4 - F4 - - .", "C4 - A3 - F3 - - -"];
+
+// 8) COBALT GROOVE (A Dorian, 110bpm) — a gliding E-F#-E-D motif that leans on the
+//    F# (Dorian 6) on every D (IV) chord so it never reads as plain E-minor. Build
+//    climbs to A5; drop is the peak (Am-D vamp, F#5 apex); outro descends home to A.
+const CG_A     = ["E4 - F#4 - E4 - D4 -", "F#4 - A4 - F#4 - D4 -", "B4 - - G4 E4 - D4 -", "C4 - B3 - A3 - - -"];
+const CG_A2    = ["A4 - G4 - E4 - D4 -", "G4 - B4 - G4 - D4 -", "F#4 - A4 - F#4 - E4 -", "E4 - D4 - C4 - A3 -"];
+const CG_BUILD = ["E4 - G4 - C5 - B4 -", "B4 - D5 - B4 - G4 -", "A4 - D5 - F#5 - A5 -", "B4 - - E5 D5 - B4 -"];
+const CG_DROP  = ["A5 - - - E5 - F#5 -", "F#5 - A5 - F#5 - E5 -", "E5 - - - C5 - B4 -", "F#5 - E5 - D5 - A4 -"];
+const CG_BREAK = ["E4 - F#4 - . - D4 -", "G3 - B3 - . - E4 -", "G3 - B3 - D4 - . -", "F#3 - A3 - D4 - . ."];
+const CG_OUTRO = ["G4 - F#4 - D4 - B3 -", "F#4 - A4 - D4 - . -", "B3 - D4 - G3 - . -", "E4 - C4 - A3 - - -"];
+
+export const TRACKS = [
   // 1) VELVET HORIZON — bright, dreamy LYDIAN anthem (warm major with a #4 lift).
   //    Slow synth-ballad in C Lydian. Triangle/sine timbres, brushed kit, lots of
   //    space. Arp "climbs" the chord like a sunrise rather than running up/down.
@@ -62,6 +243,7 @@ const TRACKS = [
     bassWave: "sine", arpWave: "triangle", padWave: "triangle",
     gritty: false, bassCut: 300, arpCut: 1500, detune: 9, space: 0.5,
     swing: 0.18, drums: "brush", arpRate: 8, gain: 1.0, feel: "climb",
+    leadWave: "triangle", leadCut: 2000, pump: 0.15, // gentle breathing only — keep it dreamy, no hard drama
     // C Lydian: C D E F# G A B. The F# (instead of F) is the signature bright,
     // floating colour. Diatonic chords only — Cmaj7 (I), D major (II, the bright
     // Lydian II), Em7 (iii), F#m7b5 (vii°, the #4 chord — root F#, b3 A, b5 C nat),
@@ -78,21 +260,21 @@ const TRACKS = [
     // #4 colour (F#m7b5) are used as passing/pre-dominant lifts that fall back to G→C.
     arrangement: [
       { name: "intro",  chords: ["C", "Am"],              layers: { bass: false, arp: false, drums: false } },
-      { name: "introB", chords: ["Am", "Em", "G", "C"],   layers: { drums: false } }, // vi-iii-V-I lands on tonic
-      { name: "verse",  chords: ["C", "Am", "Em", "G"] },                              // I-vi-iii-V
-      { name: "verse",  chords: ["C", "Am", "D", "G"] },                               // I-vi-II-V (bright II)
-      { name: "pre",    chords: ["Am", "Em", "D", "G"] },                              // builds to V (half cadence)
-      { name: "chorus", chords: ["C", "G", "Am", "G"],    lift: 0.35 },                // I-V-vi-V
-      { name: "chorus", chords: ["C", "Am", "F#m7b5", "G"], lift: 0.35 },              // vii°-V lift, resolves V
-      { name: "verse",  chords: ["Am", "Em", "G", "C"] },                              // resolves to I
-      { name: "verse",  chords: ["C", "Em", "Am", "G"] },
-      { name: "pre",    chords: ["Em", "Am", "D", "G"] },                              // half cadence on V
-      { name: "bridge", chords: ["Am", "Em", "G", "C"],   layers: { drums: false } },  // settles on I
-      { name: "bridge", chords: ["C", "Am", "D", "G"],    layers: { drums: false } },
-      { name: "chorus", chords: ["C", "G", "Am", "G"],    lift: 0.4 },
-      { name: "chorus", chords: ["C", "Em", "F#m7b5", "G"], lift: 0.45 },
-      { name: "chorus", chords: ["C", "Am", "G", "C"],    lift: 0.5 },                 // big authentic cadence V-I
-      { name: "outro",  chords: ["Am", "F#m7b5", "G", "C"], layers: { drums: false } },// final V-I home
+      { name: "introB", chords: ["Am", "Em", "G", "C"],   layers: { drums: false }, mel: VH_INTRO }, // vi-iii-V-I lands on tonic
+      { name: "verse",  chords: ["C", "Am", "Em", "G"], mel: VH_VERSE },              // I-vi-iii-V
+      { name: "verse",  chords: ["C", "Am", "D", "G"], mel: VH_VERSE },               // I-vi-II-V (bright II)
+      { name: "pre",    chords: ["Am", "Em", "D", "G"], mel: VH_PRE },                // builds to V (half cadence)
+      { name: "chorus", chords: ["C", "G", "Am", "G"],    lift: 0.35, mel: VH_CHORUS }, // I-V-vi-V
+      { name: "chorus", chords: ["C", "Am", "F#m7b5", "G"], lift: 0.35, mel: VH_CHORUS_Q }, // 2nd chorus = the "question" (hangs open)
+      { name: "verse",  chords: ["Am", "Em", "G", "C"], mel: VH_VERSE },              // resolves to I
+      { name: "verse",  chords: ["C", "Em", "Am", "G"], mel: VH_VERSE },
+      { name: "pre",    chords: ["Em", "Am", "D", "G"], mel: VH_PRE },                // half cadence on V
+      { name: "bridge", chords: ["Am", "Em", "G", "C"],   layers: { drums: false }, mel: VH_BRIDGE }, // settles on I
+      { name: "bridge", chords: ["C", "Am", "D", "G"],    layers: { drums: false }, mel: VH_BRIDGE },
+      { name: "chorus", chords: ["C", "G", "Am", "G"],    lift: 0.4, mel: VH_CHORUS },
+      { name: "chorus", chords: ["C", "Em", "F#m7b5", "G"], lift: 0.45, mel: VH_CHORUS_Q }, // mid of the final run = the "question"; next chorus resolves home
+      { name: "chorus", chords: ["C", "Am", "G", "C"],    lift: 0.5, mel: VH_CHORUS }, // big authentic cadence V-I
+      { name: "outro",  chords: ["Am", "F#m7b5", "G", "C"], layers: { drums: false }, mel: VH_OUTRO }, // final V-I home
       { name: "settle", chords: ["C", "C"], layers: { bass: false, arp: false, drums: false } }, // pad-only on the tonic — matches the intro for a smooth loop
     ],
   },
@@ -108,6 +290,7 @@ const TRACKS = [
     bassWave: "triangle", arpWave: "sine", padWave: "sine",
     gritty: false, bassCut: 340, arpCut: 1700, detune: 6, space: 0.45,
     swing: 0.55, drums: "soft", arpRate: 8, gain: 1.0, feel: "sparse",
+    leadWave: "sine", leadCut: 1700, pump: 0.2, // subtle lo-fi pump, no hard drama
     // D natural minor (D E F G A Bb C) home, with the harmonic-minor leading tone
     // (C#) borrowed in the V chord so the ii–V–I really resolves: Em7b5 (ii°) →
     // A7 (V, with C# leading tone + G b7) → Dm9 (i). Gm9 = iv, Cmaj9 = bVII,
@@ -125,18 +308,18 @@ const TRACKS = [
     arrangement: [
       { name: "intro", chords: ["Dm9", "Gm9"],               layers: { arp: false, drums: false } },
       { name: "intro", chords: ["Em7b5", "A7"],              layers: { drums: false } },           // half cadence on V
-      { name: "verse", chords: ["Dm9", "Gm9", "Em7b5", "A7"] },                                    // i-iv-ii-V
-      { name: "verse", chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"] },                                 // i-bVI-ii-V
-      { name: "pre",   chords: ["Gm9", "Cmaj9", "Em7b5", "A7"] },                                  // iv-bVII-ii-V
-      { name: "hook",  chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"], lift: 0.3 },                       // resolves V each pass
-      { name: "hook",  chords: ["Cmaj9", "Bbmaj7", "Em7b5", "A7"], lift: 0.3 },
-      { name: "verse", chords: ["Dm9", "Gm9", "Cmaj9", "A7"] },                                    // bVII walks to V
-      { name: "verse", chords: ["Dm9", "Bbmaj7", "Gm9", "A7"] },
-      { name: "bridge",chords: ["Bbmaj7", "Gm9", "Em7b5", "A7"], layers: { drums: false } },        // ends on V
-      { name: "bridge",chords: ["Gm9", "A7", "Dm9", "A7"],   layers: { drums: false } },            // iv-V-i-V
-      { name: "hook",  chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"], lift: 0.35 },
-      { name: "hook",  chords: ["Cmaj9", "Gm9", "Em7b5", "A7"], lift: 0.4 },
-      { name: "outro", chords: ["Gm9", "Em7b5", "A7", "Dm9"], layers: { drums: false } },           // full ii–V–i home
+      { name: "verse", chords: ["Dm9", "Gm9", "Em7b5", "A7"], mel: MC_VERSE },                      // i-iv-ii-V
+      { name: "verse", chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"], mel: MC_VERSE },                   // i-bVI-ii-V
+      { name: "pre",   chords: ["Gm9", "Cmaj9", "Em7b5", "A7"], mel: MC_PRE },                      // iv-bVII-ii-V
+      { name: "hook",  chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"], lift: 0.3, mel: MC_HOOK },         // resolves V each pass
+      { name: "hook",  chords: ["Cmaj9", "Bbmaj7", "Em7b5", "A7"], lift: 0.3, mel: MC_HOOK },
+      { name: "verse", chords: ["Dm9", "Gm9", "Cmaj9", "A7"], mel: MC_VERSE },                      // bVII walks to V
+      { name: "verse", chords: ["Dm9", "Bbmaj7", "Gm9", "A7"], mel: MC_VERSE },
+      { name: "bridge",chords: ["Bbmaj7", "Gm9", "Em7b5", "A7"], layers: { drums: false }, mel: MC_BRIDGE }, // ends on V
+      { name: "bridge",chords: ["Gm9", "A7", "Dm9", "A7"],   layers: { drums: false }, mel: MC_BRIDGE },     // iv-V-i-V
+      { name: "hook",  chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"], lift: 0.35, mel: MC_HOOK },
+      { name: "hook",  chords: ["Cmaj9", "Gm9", "Em7b5", "A7"], lift: 0.4, mel: MC_HOOK },
+      { name: "outro", chords: ["Gm9", "Em7b5", "A7", "Dm9"], layers: { drums: false }, mel: MC_OUTRO }, // full ii–V–i home
       { name: "settle", chords: ["Dm9", "Dm9"], layers: { arp: false, drums: false } },             // pad+bass on the tonic — matches the intro, smooth loop
     ],
   },
@@ -152,7 +335,8 @@ const TRACKS = [
     name: "Lucid Drift", tempo: 62,
     bassWave: "sine", arpWave: "sine", padWave: "sine",
     gritty: false, bassCut: 240, arpCut: 1200, detune: 16, space: 0.68,
-    swing: 0, drums: "none", arpRate: 8, gain: 1.05, feel: "float",
+    swing: 0, drums: "none", arpRate: 8, gain: 0.85, feel: "float", // gain trimmed (was 1.05): PCM render showed this sustained/drumless track ran ~2dB hot vs the rest
+    leadWave: "sine", leadCut: 1300,
     // A major / F#m family (A B C# D E F# G#) — wide and open, but now the chords
     // are voiced correctly so the wash is consonant. F#m (vi), A (I), E (V),
     // Bsus2 (ii colour), Dmaj7 (IV — D F# A C#), C#m (iii — C# E G#). The repeated
@@ -173,19 +357,19 @@ const TRACKS = [
     // colour, not the home. Plagal (Dmaj7→A) and authentic (E→A) cadences land on A;
     // the whole tide opens and closes on A, with a pad-only settle into the loop.
     arrangement: [
-      { name: "wash",  chords: ["A", "Dmaj7"],              layers: { bass: false, arp: false } }, // I-IV pad wash
-      { name: "wash",  chords: ["A", "E"],                  layers: { arp: false } },              // I-V
-      { name: "drift", chords: ["A", "Dmaj7", "E", "A"],    layers: { arp: false } },              // I-IV-V-I
-      { name: "drift", chords: ["A", "F#m", "Dmaj7", "A"] },                                       // I-vi-IV-I
-      { name: "drift", chords: ["F#m", "Dmaj7", "E", "A"] },                                       // vi-IV-V-I
-      { name: "rise",  chords: ["Dmaj7", "E", "F#m", "A"],  lift: 0.3 },                            // IV-V-vi-I
-      { name: "rise",  chords: ["A", "E", "Dmaj7", "A"],    lift: 0.3 },                            // I-V-IV-I
-      { name: "rise",  chords: ["Dmaj7", "C#m", "Bsus", "E"], lift: 0.4 },                          // builds to V
-      { name: "ebb",   chords: ["A", "Dmaj7", "E", "A"],    layers: { arp: false } },               // resolves I
-      { name: "ebb",   chords: ["F#m", "Dmaj7", "E", "A"],  layers: { arp: false } },
-      { name: "rise",  chords: ["A", "Dmaj7", "E", "A"],    lift: 0.35 },
-      { name: "ebb",   chords: ["Dmaj7", "A", "E", "A"],    layers: { arp: false } },               // plagal + auth to I
-      { name: "wash",  chords: ["Dmaj7", "A"],              layers: { arp: false } },               // IV-I plagal
+      { name: "wash",  chords: ["A", "Dmaj7"],              layers: { bass: false, arp: false }, mel: LD_WASH }, // I-IV pad wash
+      { name: "wash",  chords: ["A", "E"],                  layers: { arp: false }, mel: LD_WASH },              // I-V
+      { name: "drift", chords: ["A", "Dmaj7", "E", "A"],    layers: { arp: false }, mel: LD_DRIFT },              // I-IV-V-I
+      { name: "drift", chords: ["A", "F#m", "Dmaj7", "A"], mel: LD_DRIFT },                          // I-vi-IV-I
+      { name: "drift", chords: ["F#m", "Dmaj7", "E", "A"], mel: LD_DRIFT },                          // vi-IV-V-I
+      { name: "rise",  chords: ["Dmaj7", "E", "F#m", "A"],  lift: 0.3, mel: LD_RISE },               // IV-V-vi-I
+      { name: "rise",  chords: ["A", "E", "Dmaj7", "A"],    lift: 0.3, mel: LD_RISE_OPP },           // 2nd repeat: resolve UP (opposite)
+      { name: "rise",  chords: ["Dmaj7", "C#m", "Bsus", "E"], lift: 0.4, mel: LD_RISE_SHARP },       // 3rd repeat: rise to the G# leading tone, unresolved (the question)
+      { name: "ebb",   chords: ["A", "Dmaj7", "E", "A"],    layers: { arp: false }, mel: LD_EBB },   // resolves I
+      { name: "ebb",   chords: ["F#m", "Dmaj7", "E", "A"],  layers: { arp: false }, mel: LD_EBB_OPP }, // 2nd ebb: resolve UP (opposite)
+      { name: "rise",  chords: ["A", "Dmaj7", "E", "A"],    lift: 0.35, mel: LD_RISE }, // 4th repeat: RETURN home (the resolution after the question)
+      { name: "ebb",   chords: ["Dmaj7", "A", "E", "A"],    layers: { arp: false }, mel: LD_EBB },   // plagal + auth, final ebb returns home
+      { name: "wash",  chords: ["Dmaj7", "A"],              layers: { arp: false }, mel: LD_WASH },  // IV-I plagal
       { name: "settle",chords: ["A", "A"],                  layers: { bass: false, arp: false } },  // pad-only A — matches the intro, smooth loop
     ],
   },
@@ -201,6 +385,7 @@ const TRACKS = [
     bassWave: "sawtooth", arpWave: "square", padWave: "sawtooth",
     gritty: true, bassCut: 480, arpCut: 2200, detune: 11, space: 0.3,
     swing: 0.16, drums: "full", arpRate: 16, gain: 0.95, feel: "stab",
+    leadWave: "square", leadCut: 2400, pump: 0.5, drama: true, // dark D&B: strong pump + riser/impact drops
     // A Phrygian: A Bb C D E F G. The Bb (bII) is the signature dark tension, and
     // the Phrygian cadence is bII → i (Bb → Am). Diatonic triads: Am (i), Bb (bII),
     // Cmaj is bIII, Dm (iv), Edim (v° = E G Bb — NOT Em, since B is flat here),
@@ -217,25 +402,68 @@ const TRACKS = [
     // Am (i), so the tension always resolves home instead of wandering.
     arrangement: [
       { name: "intro", chords: ["Am", "Am"],          layers: { arp: false, pad: false } },
-      { name: "A",     chords: ["Am", "F", "Gm", "Bb"] },                               // i-bVI-bVII-bII…
-      { name: "A",     chords: ["Am", "Dm", "Bb", "Am"] },                              // …→ i (Phrygian cadence)
-      { name: "A2",    chords: ["Am", "Gm", "F", "Bb"] },
-      { name: "build", chords: ["Dm", "Gm", "F", "Bb"] },                               // builds to bII
-      { name: "drop",  chords: ["Am", "Gm", "Bb", "Am"], lift: 0.5 },                    // resolves bII-i
-      { name: "drop",  chords: ["Am", "F", "Bb", "Am"],  lift: 0.5 },
-      { name: "break", chords: ["Dm", "Am", "Gm", "F"],  layers: { drums: false } },
-      { name: "break", chords: ["F", "Gm", "Dm", "Bb"],  layers: { drums: false } },     // ends on bII pull
-      { name: "A2",    chords: ["Am", "Edim", "Bb", "Am"] },                             // v°-bII-i
-      { name: "build", chords: ["F", "Gm", "Dm", "Bb"] },
-      { name: "drop",  chords: ["Am", "Gm", "Bb", "Am"], lift: 0.55 },
-      { name: "drop",  chords: ["Am", "F", "Bb", "Am"],  lift: 0.55 },
-      { name: "drop",  chords: ["Dm", "F", "Bb", "Am"],  lift: 0.6 },                     // full cadence to i
-      { name: "outro", chords: ["Gm", "F", "Bb", "Am"] },                                // bVII-bVI-bII-i home
+      { name: "A",     chords: ["Am", "F", "Gm", "Bb"], mel: NH_A },                     // i-bVI-bVII-bII…
+      { name: "A",     chords: ["Am", "Dm", "Bb", "Am"], mel: NH_A },                    // …→ i (Phrygian cadence)
+      { name: "A2",    chords: ["Am", "Gm", "F", "Bb"], mel: NH_A2 },
+      { name: "build", chords: ["Dm", "Gm", "F", "Bb"], mel: NH_BUILD },                 // builds to bII
+      { name: "drop",  chords: ["Am", "Gm", "Bb", "Am"], lift: 0.5, mel: NH_DROP },       // resolves bII-i
+      { name: "drop",  chords: ["Am", "F", "Bb", "Am"],  lift: 0.5, mel: NH_DROP_B }, // early pair: "opposite" (rises into A)
+      { name: "break", chords: ["Dm", "Am", "Gm", "F"],  layers: { drums: false }, mel: NH_BREAK },
+      { name: "break", chords: ["F", "Gm", "Dm", "Bb"],  layers: { drums: false }, mel: NH_BREAK }, // ends on bII pull
+      { name: "A2",    chords: ["Am", "Edim", "Bb", "Am"], mel: NH_A2 },                 // v°-bII-i
+      { name: "build", chords: ["F", "Gm", "Dm", "Bb"], mel: NH_BUILD },
+      { name: "drop",  chords: ["Am", "Gm", "Bb", "Am"], lift: 0.55, mel: NH_DROP },
+      { name: "drop",  chords: ["Am", "F", "Bb", "Am"],  lift: 0.55, mel: NH_DROP_Q }, // mid of final run: the "question" (hangs on Bb)
+      { name: "drop",  chords: ["Dm", "F", "Bb", "Am"],  lift: 0.6, mel: NH_DROP },        // final drop RESOLVES HOME (the run's clean landing)
+      { name: "outro", chords: ["Gm", "F", "Bb", "Am"], mel: NH_OUTRO },                 // bVII-bVI-bII-i home
       { name: "settle", chords: ["Am", "Am"], layers: { arp: false, pad: false } },       // drop lead+pad, hold the bass+drums groove on i — matches the intro so the beat carries through the loop
     ],
   },
 
-  // 5) PULSE RUNNER — driving OUTRUN SYNTHWAVE. *** AUDIOSURF track (index 4). ***
+  // 5) SOLAR DRIVE — bright MAJOR synth-pop / house. *** Audiosurf-suitable ***
+  //    (steady four-on-the-floor, so the world can pulse on it too). 124bpm in C
+  //    major — the upbeat, happy, daytime counterpart to Pulse Runner's darker
+  //    minor outrun. Classic I–V–vi–IV pop engine, bright saw bass + square stabs.
+  //    What sets it apart: the only fast MAJOR track — sunny and anthemic where the
+  //    others are dreamy, jazzy, ambient, dark, or moody-minor.
+  //    (Sequenced BEFORE Pulse Runner so the two high stabby-dyad drop tracks —
+  //    Solar's sibling Neon Highway and Pulse — don't sit back-to-back in the cycle.)
+  {
+    name: "Solar Drive", tempo: 124,
+    bassWave: "sawtooth", arpWave: "square", padWave: "sawtooth",
+    gritty: true, bassCut: 520, arpCut: 2400, detune: 7, space: 0.22,
+    swing: 0, drums: "full", arpRate: 16, gain: 0.92, feel: "run", steady: true,
+    leadWave: "sawtooth", leadCut: 2400, pump: 0.45, drama: true, // saw (not square) so the pop lead is rich, not clowny; house pump + drops
+    // C major (C D E F G A B). Diatonic triads: C(I) Dm(ii) Em(iii) F(IV) G(V) Am(vi).
+    // I-V-vi-IV pop/house; G(V)→C(I) is the resolution and sections land on C.
+    prog: {
+      C:  { bass: 65.41,  pad: [130.81, 164.81, 196.0],  arp: [261.63, 329.63, 392.0, 329.63] }, // C E G
+      G:  { bass: 98.0,   pad: [196.0, 246.94, 293.66],  arp: [392.0, 493.88, 587.33, 493.88] }, // G B D
+      Am: { bass: 110.0,  pad: [220.0, 261.63, 329.63],  arp: [440.0, 523.25, 659.25, 523.25] }, // A C E
+      F:  { bass: 87.31,  pad: [174.61, 220.0, 261.63],  arp: [349.23, 440.0, 523.25, 440.0] },  // F A C
+      Dm: { bass: 73.42,  pad: [146.83, 174.61, 220.0],  arp: [293.66, 349.23, 440.0, 349.23] }, // D F A
+      Em: { bass: 82.41,  pad: [164.81, 196.0, 246.94],  arp: [329.63, 392.0, 493.88, 392.0] },  // E G B
+    },
+    arrangement: [
+      { name: "intro", chords: ["C", "C"],            layers: { arp: false, pad: false } }, // four-on-the-floor groove start
+      { name: "A",     chords: ["C", "G", "Am", "F"], mel: SD_A },      // I-V-vi-IV
+      { name: "A",     chords: ["C", "G", "F", "C"], mel: SD_A },       // resolves to I
+      { name: "A2",    chords: ["Am", "F", "C", "G"], mel: SD_A2 },     // vi-IV-I-V
+      { name: "build", chords: ["F", "G", "Am", "G"], mel: SD_BUILD },  // builds to V
+      { name: "drop",  chords: ["C", "G", "Am", "F"],  lift: 0.5, mel: SD_DROP },
+      { name: "drop",  chords: ["C", "G", "F", "C"],   lift: 0.5, mel: SD_DROP },  // resolves to I
+      { name: "break", chords: ["Am", "F", "C", "G"],  layers: { drums: false }, mel: SD_BREAK },
+      { name: "break", chords: ["Dm", "G", "C", "C"],  layers: { drums: false }, mel: SD_BREAK }, // ii-V-I
+      { name: "A2",    chords: ["C", "Em", "Am", "F"], mel: SD_A2 },
+      { name: "build", chords: ["F", "G", "Am", "G"], mel: SD_BUILD },
+      { name: "drop",  chords: ["C", "G", "Am", "F"],  lift: 0.55, mel: SD_DROP },
+      { name: "drop",  chords: ["Dm", "G", "C", "C"],  lift: 0.6, mel: SD_DROP_B },  // ii-V-I, final drop climbs UP into C (cadence variety)
+      { name: "outro", chords: ["Am", "F", "G", "C"], mel: SD_OUTRO },  // vi-IV-V-I home
+      { name: "settle", chords: ["C", "C"], layers: { arp: false, pad: false } }, // hold the groove on I — matches the intro, smooth loop
+    ],
+  },
+
+  // 6) PULSE RUNNER — driving OUTRUN SYNTHWAVE. *** AUDIOSURF-suitable (steady). ***
   //    Rock-steady FOUR-ON-THE-FLOOR at 128bpm — classic outrun tempo. NO swing
   //    (swing:0) and `steady:true` so there is ZERO per-bar volume swell and the
   //    fill bars are tamed: the kick lands dead on every quarter and never wobbles
@@ -248,6 +476,7 @@ const TRACKS = [
     bassWave: "sawtooth", arpWave: "sawtooth", padWave: "sawtooth",
     gritty: true, bassCut: 560, arpCut: 2600, detune: 8, space: 0.2,
     swing: 0, drums: "full", arpRate: 16, gain: 0.92, feel: "run", steady: true,
+    leadWave: "sawtooth", leadCut: 2800, pump: 0.5, drama: true, // outrun: strong pump + riser/impact drops
     // E natural minor (E F# G A B C D). Diatonic triads: Em (i), F#dim (ii°),
     // G (bIII), Am (iv), Bm (v), C (bVI), D (bVII). The classic Em–C–G–D loop
     // resolves through D (bVII) back to Em. D now carries its third (F#).
@@ -263,60 +492,101 @@ const TRACKS = [
     // is the resolution, and every section lands on Em (or the v, Bm, into Em).
     arrangement: [
       { name: "intro", chords: ["Em", "Em"],          layers: { arp: false, pad: false } },
-      { name: "A",     chords: ["Em", "C", "G", "D"] },                 // i-bVI-bIII-bVII
-      { name: "A",     chords: ["Em", "Am", "C", "D"] },
-      { name: "A2",    chords: ["Em", "G", "C", "D"] },
-      { name: "build", chords: ["C", "G", "Am", "Bm"] },                // builds to v (Bm)
-      { name: "drop",  chords: ["Em", "C", "G", "D"],  lift: 0.5 },
-      { name: "drop",  chords: ["Em", "G", "C", "D"],  lift: 0.5 },
-      { name: "break", chords: ["Am", "C", "G", "Bm"], layers: { drums: false } },
-      { name: "break", chords: ["C", "G", "Am", "Bm"], layers: { drums: false } },
-      { name: "A2",    chords: ["Em", "C", "Am", "D"] },
-      { name: "build", chords: ["C", "G", "Am", "Bm"] },
-      { name: "drop",  chords: ["Em", "C", "G", "D"],  lift: 0.55 },
-      { name: "drop",  chords: ["Em", "Am", "C", "D"], lift: 0.6 },
-      { name: "outro", chords: ["C", "G", "D", "Em"] },                 // bVI-bIII-bVII-i home
+      { name: "A",     chords: ["Em", "C", "G", "D"], mel: PR_A },      // i-bVI-bIII-bVII
+      { name: "A",     chords: ["Em", "Am", "C", "D"], mel: PR_A },
+      { name: "A2",    chords: ["Em", "G", "C", "D"], mel: PR_A2 },
+      { name: "build", chords: ["C", "G", "Am", "Bm"], mel: PR_BUILD }, // builds to v (Bm)
+      { name: "drop",  chords: ["Em", "C", "G", "D"],  lift: 0.5, mel: PR_DROP },
+      { name: "drop",  chords: ["Em", "G", "C", "D"],  lift: 0.5, mel: PR_DROP },
+      { name: "break", chords: ["Am", "C", "G", "Bm"], layers: { drums: false }, mel: PR_BREAK },
+      { name: "break", chords: ["C", "G", "Am", "Bm"], layers: { drums: false }, mel: PR_BREAK },
+      { name: "A2",    chords: ["Em", "C", "Am", "D"], mel: PR_A2 },
+      { name: "build", chords: ["C", "G", "Am", "Bm"], mel: PR_BUILD },
+      { name: "drop",  chords: ["Em", "C", "G", "D"],  lift: 0.55, mel: PR_DROP },
+      { name: "drop",  chords: ["Em", "Am", "C", "D"], lift: 0.6, mel: PR_DROP_B }, // final drop steps UP into E (cadence variety)
+      { name: "outro", chords: ["C", "G", "D", "Em"], mel: PR_OUTRO },  // bVI-bIII-bVII-i home
       { name: "settle", chords: ["Em", "Em"], layers: { arp: false, pad: false } }, // drop lead+pad, hold the four-on-the-floor on i — matches the intro so it no longer ends harsh
     ],
   },
 
-  // 6) SOLAR DRIVE — bright MAJOR synth-pop / house. *** Audiosurf-suitable ***
-  //    (steady four-on-the-floor, so the world can pulse on it too). 124bpm in C
-  //    major — the upbeat, happy, daytime counterpart to Pulse Runner's darker
-  //    minor outrun. Classic I–V–vi–IV pop engine, bright saw bass + square stabs.
-  //    What sets it apart: the only fast MAJOR track — sunny and anthemic where the
-  //    others are dreamy, jazzy, ambient, dark, or moody-minor.
+  // 7) AMBER STATIC — mid-tempo LO-FI CHILLHOP. 94bpm, warm + dusty F-major jazz
+  //    (maj7/9 chords), gentle swing, soft kit, all sine/triangle so it's round and
+  //    cozy. Fills the calm-but-grooving pocket between the dreamy slow tracks and
+  //    the fast drivers. What sets it apart: the only mid-tempo head-nod beat-tape —
+  //    warmer + faster than Midnight Cruise's late-night jazz, with a beat unlike the
+  //    drumless/dreamy tracks. Melody lays back and sparse like a lo-fi topline.
   {
-    name: "Solar Drive", tempo: 124,
-    bassWave: "sawtooth", arpWave: "square", padWave: "sawtooth",
-    gritty: true, bassCut: 520, arpCut: 2400, detune: 7, space: 0.22,
-    swing: 0, drums: "full", arpRate: 16, gain: 0.92, feel: "run", steady: true,
-    // C major (C D E F G A B). Diatonic triads: C(I) Dm(ii) Em(iii) F(IV) G(V) Am(vi).
-    // I-V-vi-IV pop/house; G(V)→C(I) is the resolution and sections land on C.
+    name: "Amber Static", tempo: 94,
+    bassWave: "triangle", arpWave: "sine", padWave: "triangle",
+    gritty: false, bassCut: 320, arpCut: 1600, detune: 6, space: 0.4,
+    swing: 0.32, drums: "soft", arpRate: 8, gain: 0.9, feel: "sparse", // gain trimmed (was 1.0): PCM render showed it ran a touch hot
+    leadWave: "triangle", leadCut: 1800, pump: 0.2, // gentle lo-fi pump, no hard drama
+    // F major (F G A Bb C D E) with lo-fi 7th/9th colours. Fmaj7 (I), Gm9 (ii),
+    // Am7 (iii), Bbmaj7 (IV), C9 (V dominant), Dm7 (vi). ii-V-I turnarounds resolve
+    // home to Fmaj7. Voicings stacked low→high; arps are the chord tones.
     prog: {
-      C:  { bass: 65.41,  pad: [130.81, 164.81, 196.0],  arp: [261.63, 329.63, 392.0, 329.63] }, // C E G
-      G:  { bass: 98.0,   pad: [196.0, 246.94, 293.66],  arp: [392.0, 493.88, 587.33, 493.88] }, // G B D
-      Am: { bass: 110.0,  pad: [220.0, 261.63, 329.63],  arp: [440.0, 523.25, 659.25, 523.25] }, // A C E
-      F:  { bass: 87.31,  pad: [174.61, 220.0, 261.63],  arp: [349.23, 440.0, 523.25, 440.0] },  // F A C
-      Dm: { bass: 73.42,  pad: [146.83, 174.61, 220.0],  arp: [293.66, 349.23, 440.0, 349.23] }, // D F A
-      Em: { bass: 82.41,  pad: [164.81, 196.0, 246.94],  arp: [329.63, 392.0, 493.88, 392.0] },  // E G B
+      Fmaj7:  { bass: 87.31,  pad: [174.61, 220.0, 261.63],  arp: [349.23, 440.0, 523.25, 659.25] },  // F A C + maj7 E
+      Gm9:    { bass: 98.0,   pad: [196.0, 233.08, 293.66],  arp: [392.0, 466.16, 587.33, 698.46] },  // G Bb D F
+      Am7:    { bass: 110.0,  pad: [220.0, 261.63, 329.63],  arp: [440.0, 523.25, 659.25, 783.99] },  // A C E G
+      Bbmaj7: { bass: 116.54, pad: [233.08, 293.66, 349.23], arp: [466.16, 587.33, 698.46, 880.0] },  // Bb D F A
+      C9:     { bass: 130.81, pad: [261.63, 329.63, 392.0],  arp: [523.25, 659.25, 783.99, 466.16] }, // C E G + b7 Bb (dominant)
+      Dm7:    { bass: 73.42,  pad: [146.83, 174.61, 220.0],  arp: [293.66, 349.23, 440.0, 523.25] },  // D F A C
     },
     arrangement: [
-      { name: "intro", chords: ["C", "C"],            layers: { arp: false, pad: false } }, // four-on-the-floor groove start
-      { name: "A",     chords: ["C", "G", "Am", "F"] },                 // I-V-vi-IV
-      { name: "A",     chords: ["C", "G", "F", "C"] },                  // resolves to I
-      { name: "A2",    chords: ["Am", "F", "C", "G"] },                 // vi-IV-I-V
-      { name: "build", chords: ["F", "G", "Am", "G"] },                 // builds to V
-      { name: "drop",  chords: ["C", "G", "Am", "F"],  lift: 0.5 },
-      { name: "drop",  chords: ["C", "G", "F", "C"],   lift: 0.5 },     // resolves to I
-      { name: "break", chords: ["Am", "F", "C", "G"],  layers: { drums: false } },
-      { name: "break", chords: ["Dm", "G", "C", "C"],  layers: { drums: false } }, // ii-V-I
-      { name: "A2",    chords: ["C", "Em", "Am", "F"] },
-      { name: "build", chords: ["F", "G", "Am", "G"] },
-      { name: "drop",  chords: ["C", "G", "Am", "F"],  lift: 0.55 },
-      { name: "drop",  chords: ["Dm", "G", "C", "C"],  lift: 0.6 },     // ii-V-I big resolve
-      { name: "outro", chords: ["Am", "F", "G", "C"] },                 // vi-IV-V-I home
-      { name: "settle", chords: ["C", "C"], layers: { arp: false, pad: false } }, // hold the groove on I — matches the intro, smooth loop
+      { name: "intro",  chords: ["Fmaj7", "Am7"],                 layers: { arp: false, drums: false } },
+      { name: "verse",  chords: ["Fmaj7", "Am7", "Dm7", "Gm9"], mel: AS_VERSE },         // I-iii-vi-ii
+      { name: "verse",  chords: ["Bbmaj7", "Am7", "Dm7", "Gm9"], mel: AS_VERSE },        // IV-iii-vi-ii
+      { name: "pre",    chords: ["Gm9", "Am7", "Bbmaj7", "C9"], mel: AS_PRE },           // builds ii→V
+      { name: "hook",   chords: ["Fmaj7", "Dm7", "Gm9", "C9"],    lift: 0.3, mel: AS_HOOK }, // I-vi-ii-V
+      { name: "hook",   chords: ["Fmaj7", "Am7", "Bbmaj7", "C9"], lift: 0.3, mel: AS_HOOK },
+      { name: "verse",  chords: ["Dm7", "Gm9", "Am7", "Bbmaj7"], mel: AS_VERSE },
+      { name: "bridge", chords: ["Bbmaj7", "Am7", "Gm9", "C9"],   layers: { drums: false }, mel: AS_BRIDGE },
+      { name: "bridge", chords: ["Dm7", "Gm9", "C9", "Fmaj7"],    layers: { drums: false }, mel: AS_BRIDGE }, // resolves to I
+      { name: "hook",   chords: ["Fmaj7", "Dm7", "Gm9", "C9"],    lift: 0.35, mel: AS_HOOK },
+      { name: "hook",   chords: ["Bbmaj7", "Am7", "Gm9", "C9"],   lift: 0.4, mel: AS_HOOK },
+      { name: "outro",  chords: ["Gm9", "C9", "Fmaj7", "Fmaj7"], mel: AS_OUTRO },        // ii-V-I home
+      { name: "settle", chords: ["Fmaj7", "Fmaj7"], layers: { arp: false, drums: false } }, // pad+bass on the tonic — smooth loop
+    ],
+  },
+
+  // 8) COBALT GROOVE — DORIAN cool-groove / smooth deep-house. 110bpm, A Dorian
+  //    (A B C D E F# G — minor with a BRIGHT natural 6, the F#). Steady four-on-the-
+  //    floor (Audiosurf-suitable — a 3rd beat-locked option at a fresh tempo). The
+  //    iconic Am→D modal vamp (D major IV is the Dorian signature). What sets it
+  //    apart: the only Dorian track, smooth + cool (not anthemic like Pulse or
+  //    bouncy like Solar), mid-tempo — confident nu-house glide.
+  {
+    name: "Cobalt Groove", tempo: 110,
+    bassWave: "sawtooth", arpWave: "square", padWave: "sawtooth",
+    gritty: true, bassCut: 480, arpCut: 2300, detune: 7, space: 0.25,
+    swing: 0, drums: "full", arpRate: 16, gain: 0.92, feel: "run", steady: true,
+    leadWave: "sawtooth", leadCut: 2500, pump: 0.45, drama: true, // Dorian house: pump + riser/impact drops
+    // A Dorian: i Am7, IV D (MAJOR — carries the signature F#), v Em7, bVII G,
+    // bIII C. The Am↔D vamp and the F# are the whole identity; every section lands
+    // back on Am (i). D major's third (F#) is the bright Dorian colour.
+    prog: {
+      Am7: { bass: 110.0,  pad: [220.0, 261.63, 329.63],  arp: [440.0, 523.25, 659.25, 783.99] }, // A C E G
+      D:   { bass: 73.42,  pad: [146.83, 185.0, 220.0],   arp: [293.66, 369.99, 440.0, 587.33] }, // D F# A (the Dorian IV)
+      Em7: { bass: 82.41,  pad: [164.81, 196.0, 246.94],  arp: [329.63, 392.0, 493.88, 587.33] }, // E G B D (v)
+      G:   { bass: 98.0,   pad: [196.0, 246.94, 293.66],  arp: [392.0, 493.88, 587.33, 783.99] }, // G B D (bVII)
+      C:   { bass: 130.81, pad: [261.63, 329.63, 392.0],  arp: [523.25, 659.25, 783.99, 659.25] }, // C E G (bIII)
+    },
+    arrangement: [
+      { name: "intro", chords: ["Am7", "Am7"],          layers: { arp: false, pad: false } },
+      { name: "A",     chords: ["Am7", "D", "Em7", "Am7"], mel: CG_A },    // i-IV-v-i (the vamp)
+      { name: "A",     chords: ["Am7", "D", "G", "D"], mel: CG_A },        // i-IV-bVII-IV
+      { name: "A2",    chords: ["Am7", "G", "D", "Am7"], mel: CG_A2 },     // i-bVII-IV-i
+      { name: "build", chords: ["C", "G", "D", "Em7"], mel: CG_BUILD },    // builds to v
+      { name: "drop",  chords: ["Am7", "D", "Am7", "D"],  lift: 0.5, mel: CG_DROP },  // the Dorian vamp, peak
+      { name: "drop",  chords: ["Am7", "G", "D", "Am7"],  lift: 0.5, mel: CG_DROP },
+      { name: "break", chords: ["Em7", "C", "G", "D"],    layers: { drums: false }, mel: CG_BREAK },
+      { name: "break", chords: ["C", "G", "Em7", "D"],    layers: { drums: false }, mel: CG_BREAK },
+      { name: "A2",    chords: ["Am7", "Em7", "D", "Am7"], mel: CG_A2 },
+      { name: "build", chords: ["C", "G", "D", "Em7"], mel: CG_BUILD },
+      { name: "drop",  chords: ["Am7", "D", "Am7", "D"],  lift: 0.55, mel: CG_DROP },
+      { name: "drop",  chords: ["Am7", "G", "D", "Am7"],  lift: 0.6, mel: CG_DROP },
+      { name: "outro", chords: ["G", "D", "Em7", "Am7"], mel: CG_OUTRO },  // bVII-IV-v-i home
+      { name: "settle", chords: ["Am7", "Am7"], layers: { arp: false, pad: false } }, // hold the groove on i — smooth loop
     ],
   },
 ];
@@ -389,9 +659,27 @@ export class Sound {
       this.master.gain.value = this.muted ? 0 : 0.8; // honor a muted pref restored before audio started (0.9 was hot)
       this.master.connect(this.comp);
 
+      // Macro-dynamics bus: scales the WHOLE music mix per section so the song has a
+      // real soft→build→peak→ease arc (drops sit loud; intro/breaks/outro sit back).
+      // It scales the SUMMED signal, so it's phase-immune — unlike per-voice `lift`,
+      // which the layered low-end (kick + bass) can partially cancel, so a "louder"
+      // drop wasn't actually reading louder. Driven per bar in _scheduleStep.
+      this.dynGain = this.ctx.createGain();
+      this.dynGain.gain.value = 0.75;
+      this.dynGain.connect(this.master);
+
       this.musicGain = this.ctx.createGain();
       this.musicGain.gain.value = 0.26; // music sits softer in the mix now
-      this.musicGain.connect(this.master);
+      this.musicGain.connect(this.dynGain);
+
+      // Sidechain "pump" bus: the sustained bed (pad + bass) routes through here so it
+      // can DUCK on every kick, then breathe back up — the signature pumping groove of
+      // dance music. Starts at 1 (transparent); only tracks with `pump` get the ducking
+      // automation (scheduled per kick). The lead/arp/drums stay direct so the topline
+      // and beat don't pump (which would sound seasick).
+      this.pumpGain = this.ctx.createGain();
+      this.pumpGain.gain.value = 1;
+      this.pumpGain.connect(this.musicGain);
 
       this.sfxGain = this.ctx.createGain();
       this.sfxGain.gain.value = 0.5;
@@ -429,6 +717,17 @@ export class Sound {
       this._lfoGain.gain.value = 0;
       this._lfo.connect(this._lfoGain);
       this._lfo.start();
+
+      // Always-on subtle vibrato for the melody lead — a few cents of 5 Hz pitch
+      // shimmer patched into each lead note so the topline "sings" instead of
+      // sitting dead-flat like a plain synth tone.
+      this._vibrato = this.ctx.createOscillator();
+      this._vibrato.type = "sine";
+      this._vibrato.frequency.value = 5.2;
+      this._vibratoGain = this.ctx.createGain();
+      this._vibratoGain.gain.value = 5; // cents (gentle)
+      this._vibrato.connect(this._vibratoGain);
+      this._vibrato.start();
     }
     if (this.ctx.state === "suspended") this.ctx.resume();
     // Only kick off the sequencer if it isn't already running, so restarting the
@@ -488,6 +787,25 @@ export class Sound {
 
   trackIndex() {
     return this._trackIndex;
+  }
+
+  trackCount() {
+    return TRACKS.length;
+  }
+
+  // Switch to a RANDOM track different from the current one (used by the "random track
+  // each run" mode). steadyOnly restricts the pick to beat-locked tracks so Audiosurf
+  // still has its pulse. Returns the new track's name (or the current one if no other
+  // candidate qualifies).
+  randomTrack(steadyOnly = false) {
+    const pool = [];
+    for (let i = 0; i < TRACKS.length; i++) {
+      if (i === this._trackIndex) continue;
+      if (steadyOnly && !TRACKS[i].steady) continue;
+      pool.push(i);
+    }
+    if (!pool.length) return TRACKS[this._trackIndex].name;
+    return this.setTrack(pool[Math.floor(Math.random() * pool.length)]);
   }
 
   // Is the current track beat-locked (safe for Audiosurf's on-beat pulsing)?
@@ -557,6 +875,31 @@ export class Sound {
     const isFillBar = loc.secLen >= 4 && phraseBar === loc.secLen - 1;
     const churnFill = isFillBar && !track.steady; // bass-double + arp-run only when not steady
 
+    // Macro-dynamics: set the whole-mix level by SECTION once per bar so the song
+    // breathes soft→build→peak→ease (phase-immune, unlike per-voice lift). Smooth ramp.
+    if (s === 0 && this.dynGain) {
+      const voices = (loc.bass ? 1 : 0) + (loc.arp ? 1 : 0) + (loc.pad ? 1 : 0) + (loc.drums ? 1 : 0);
+      let energy = 0.75;                       // verses / A sections
+      if (!loc.drums) energy = 0.62;           // breakdowns sit back (beat dropped out)
+      if (voices <= 2) energy = 0.58;          // sparse intro/settle = soft start AND soft loop seam
+      energy = Math.min(1, energy + loc.lift * 0.35); // drops/choruses rise to the peak
+      this.dynGain.gain.linearRampToValueAtTime(energy, t + this._sec16 * 16 * 0.6);
+    }
+
+    // --- Drop drama -----------------------------------------------------------
+    // Sidechain PUMP: duck the pad+bass bus on every kick, breathe back before the
+    // next — the signature dance "pump". Only while the kit plays, so a breakdown
+    // (drums dropped out) naturally stops pumping and the bed swells wide open.
+    if (track.pump && loc.drums && s % 4 === 0) this._pumpDuck(t, track.pump);
+    // RISER: a rising whoosh across the LAST bar of a build, cut at the drop downbeat
+    // — the anticipation that makes the drop feel earned. Full-kit "drama" tracks only.
+    if (track.drama && loc.section.name === "build" && phraseBar === loc.secLen - 1 && s === 0)
+      this._riser(t, this._sec16 * 16);
+    // IMPACT: a boom + crash on the downbeat of each drop — the "POW". Drama tracks only,
+    // so the dreamy/brush tracks keep their gentle swell instead of a hard slam.
+    if (track.drama && loc.section.name === "drop" && phraseBar === 0 && s === 0)
+      this._impact(t);
+
     // Pad chord: lay the whole chord down once at the top of each bar so a warm
     // bed hums under everything. This is the biggest "vibey" win.
     if (s === 0 && loc.pad) this._pad(t, chord.pad, track, lift);
@@ -586,7 +929,22 @@ export class Sound {
       if (playSlot) {
         let note = this._arpNote(chord.arp, s, phraseBar, songBar, feel);
         if (churnFill && s >= 12) note = note * 2; // octave-up tail on the run
-        this._arp(swung, note, track, lift);
+        // When this section has a composed melody, the arp steps back to a quiet
+        // inner-harmony shimmer so it supports the topline instead of competing.
+        this._arp(swung, note, track, lift, loc.section.mel ? 0.42 : 1);
+      }
+    }
+
+    // Composed topline — the REAL melody (note tokens in section.mel). This is the
+    // voice that builds across the phrase and resolves at the cadence; the arp/pad/
+    // bass are just the bed under it. A note fires on the 16th step it's written to.
+    if (loc.section.mel) {
+      const notes = parseBar(loc.section.mel[loc.barInSection % loc.section.mel.length]);
+      for (const nt of notes) {
+        if (nt.step !== s) continue;
+        // dyads split their level so a harmonised hit isn't twice as loud as a single note
+        const gm = nt.freqs.length > 1 ? 0.7 : 1;
+        for (const f of nt.freqs) if (f) this._lead(swung, f, nt.dur * this._sec16, track, lift, gm);
       }
     }
 
@@ -655,19 +1013,22 @@ export class Sound {
   // note give a slow chorus shimmer; a low-passed sine/triangle keeps it gentle.
   _pad(t, freqs, track, lift = 0) {
     const barLen = this._sec16 * 16;
-    const dur = barLen * 0.98;
+    // Ring ~1.18 bars so each pad OVERLAPS the next — they crossfade instead of leaving a
+    // silence gap at every bar end (that gap was the "dramatic stop" at ambient loop seams).
+    const dur = barLen * 1.18;
     const lp = this.ctx.createBiquadFilter();
     // lifted sections open the pad's top end a touch so a chorus/drop feels brighter
     lp.type = "lowpass"; lp.frequency.value = 900 + lift * 700; lp.Q.value = 0.4;
     const g = this.ctx.createGain();
     const peak = 0.05 * (1 + lift); // louder in lifted sections
-    // long, smooth swell in and out so chords blur into each other
+    // swell in, hold near peak most of the bar, then a gentle release that overlaps the next
+    // bar's swell (continuous drone — no dead air at the seam)
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(peak, t + barLen * 0.25);
-    g.gain.setValueAtTime(peak, t + dur * 0.6);
+    g.gain.linearRampToValueAtTime(peak, t + barLen * 0.3);
+    g.gain.setValueAtTime(peak, t + barLen * 0.85);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    lp.connect(g); g.connect(this.musicGain);
-    if (this.spaceIn) g.connect(this.spaceIn); // pads carry the space
+    lp.connect(g); g.connect(this.pumpGain || this.musicGain); // pad rides the sidechain pump bus
+    if (this.spaceIn) g.connect(this.spaceIn); // pads carry the space (the reverb tail does NOT pump)
     const det = (track.detune || 6) * 0.6;
     for (const f of freqs) {
       for (const d of [-det, det]) {
@@ -695,7 +1056,7 @@ export class Sound {
       shaper.connect(lp);
       head = shaper;
     }
-    lp.connect(g); g.connect(this.musicGain);
+    lp.connect(g); g.connect(this.pumpGain || this.musicGain); // bass rides the sidechain pump bus (ducks under the kick)
 
     // two slightly detuned oscillators for a thick but smooth low end
     for (const det of [-5, 5]) {
@@ -708,13 +1069,14 @@ export class Sound {
 
   // The lead/arp pluck. A couple of detuned voices + a slow lowpass make it
   // shimmery instead of fizzy; a chunk of it is sent to the space bus.
-  _arp(t, freq, track, lift = 0) {
+  _arp(t, freq, track, lift = 0, comp = 1) {
     const dur = this._sec16 * (track.arpRate === 16 ? 1.0 : 1.8); // longer notes on dreamy tracks
     const lp = this.ctx.createBiquadFilter();
     // lifted sections brighten the lead so a chorus/drop cuts through a bit more
     lp.type = "lowpass"; lp.frequency.value = (track.arpCut || 1800) * (1 + lift * 0.4); lp.Q.value = 1;
     const g = this.ctx.createGain();
-    this._env(g, t, 0.1 * (track.gain || 1) * (1 + lift * 0.6), 0.006, dur); // gentle attack, no click
+    // `comp` trims the arp when it's playing UNDER a composed melody (see scheduler).
+    this._env(g, t, 0.1 * comp * (track.gain || 1) * (1 + lift * 0.6), 0.006, dur); // gentle attack, no click
     lp.connect(g); g.connect(this.musicGain);
 
     // send to the atmosphere bus for surreal echoes
@@ -730,6 +1092,39 @@ export class Sound {
       o.type = track.arpWave || "triangle"; o.frequency.value = freq; o.detune.value = d;
       this._react(o);
       o.connect(lp); o.start(t); o.stop(t + dur + 0.03);
+    }
+  }
+
+  // The composed-melody lead. Unlike the plucky arp this is a SINGING voice: a
+  // longer attack→sustain→release envelope (no pluck), gentle always-on vibrato,
+  // and a generous space send, so the topline reads as a melody you could hum.
+  // `dur` is the note's musical length in seconds (already scaled from 16ths).
+  _lead(t, freq, dur, track, lift = 0, gainMul = 1) {
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = (track.leadCut || 2200) * (1 + lift * 0.35);
+    lp.Q.value = 0.9;
+    const g = this.ctx.createGain();
+    const peak = 0.14 * gainMul * (track.gain || 1) * (1 + lift * 0.5); // the lead sits a touch above the arp
+    const atk = Math.min(0.04, dur * 0.2);
+    const rel = Math.min(0.18, dur * 0.5);
+    // vocal swell: rise to peak, hold, then release — never a click, never a pluck
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + atk);
+    g.gain.setValueAtTime(peak, t + Math.max(atk, dur - rel));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.02);
+    lp.connect(g); g.connect(this.musicGain);
+    if (this.spaceIn && track.space) { // the lead carries the most of the dreamy tail
+      const send = this.ctx.createGain(); send.gain.value = track.space * 0.6;
+      g.connect(send); send.connect(this.spaceIn);
+    }
+    const det = (track.detune || 7) * 0.7;
+    for (const d of [-det, det]) {
+      const o = this.ctx.createOscillator();
+      o.type = track.leadWave || "triangle"; o.frequency.value = freq; o.detune.value = d;
+      this._react(o);
+      if (this._vibratoGain) this._vibratoGain.connect(o.detune); // subtle "singing" vibrato
+      o.connect(lp); o.start(t); o.stop(t + dur + 0.05);
     }
   }
 
@@ -780,6 +1175,52 @@ export class Sound {
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
     o.connect(g); g.connect(this.musicGain);
     o.start(t); o.stop(t + 0.22);
+  }
+
+  // --- Drop-drama voices ----------------------------------------------------
+
+  // Sidechain pump: duck the pad+bass bus on the kick, breathe back before the next.
+  _pumpDuck(t, amt) {
+    if (!this.pumpGain) return;
+    const beat = this._sec16 * 4;
+    const g = this.pumpGain.gain;
+    g.setValueAtTime(1 - amt, t);                  // duck hard on the kick
+    g.linearRampToValueAtTime(1, t + beat * 0.92); // ...then breathe back up
+  }
+
+  // Rising whoosh that crescendos across `dur` then cuts — fired into a drop.
+  _riser(t, dur) {
+    if (!this.ctx || this.muted) return;
+    const n = this.ctx.createBufferSource(); n.buffer = this._noise; n.loop = true;
+    const bp = this.ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(300, t);
+    bp.frequency.exponentialRampToValueAtTime(4000, t + dur); // sweep up = "whoosh"
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.16, t + dur * 0.96); // crescendo into the drop
+    g.gain.setValueAtTime(0.16, t + dur);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.06); // cut at the downbeat
+    n.connect(bp); bp.connect(g); g.connect(this.musicGain);
+    n.start(t); n.stop(t + dur + 0.1);
+  }
+
+  // The "POW" on a drop downbeat: a low boom + a bright crash.
+  _impact(t) {
+    if (!this.ctx || this.muted) return;
+    const o = this.ctx.createOscillator(), og = this.ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(120, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.45); // boom drops in pitch
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.exponentialRampToValueAtTime(0.4, t + 0.01);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    o.connect(og); og.connect(this.musicGain); o.start(t); o.stop(t + 0.55);
+    const n = this.ctx.createBufferSource(); n.buffer = this._noise;
+    const hp = this.ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 3000;
+    const ng = this.ctx.createGain();
+    ng.gain.setValueAtTime(0.16, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    n.connect(hp); hp.connect(ng); ng.connect(this.musicGain); n.start(t); n.stop(t + 0.5);
   }
 
   // Snare = a darkened noise burst. Lower center freq + lower gain than before so

@@ -131,7 +131,7 @@ export class PlatformField {
       stepsSinceSpline: 0,
       drift: { x: 0, y: 0 },
       driftSteps: CONFIG.gen.safeStraight,
-      launchRunway: 0,
+      launchRunwayUntilZ: 0, // z the post-flipper straight/flat landing runway extends to
     };
   }
 
@@ -141,6 +141,19 @@ export class PlatformField {
   setProfile(profile, { fixedDanger = null } = {}) {
     this.profile = profile;
     this.fixedDanger = fixedDanger;
+  }
+
+  // Read-only snapshot of the generation frontier, for the distant emitter VISUAL to
+  // track (background.js). `drift` is where the path is currently HEADING (the roaming
+  // target) — that's what the emitter points at to telegraph "climb up-right / drop
+  // down-left". `cursor` is the live frontier; sprawl/drama size the emitter's mouth.
+  get emitterTarget() {
+    const s = this._state;
+    return {
+      cursorX: s.cursor.x, cursorY: s.cursor.y, cursorZ: s.cursor.z,
+      driftX: s.drift.x, driftY: s.drift.y,
+      sprawl: this.profile.sprawl, drama: this.profile.drama,
+    };
   }
 
   reset() {

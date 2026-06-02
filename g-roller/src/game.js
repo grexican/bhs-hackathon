@@ -44,6 +44,7 @@ export class Game {
     this._zen = false; // Zen mode: no death (power-bounce instead), no scoring/gems, no hazards
     this._god = false; // God mode (cheat): no death (power-bounce) but difficulty + scoring stay NORMAL — get harder without dying
     this._audiosurf = false; // Audiosurf mode: the world pulses on the music's beat
+    this._randomTrack = false; // "🎲 Random" track mode: pick a different track each run (selectable past the last track in the track cycler)
     this._beatPulse = 0;     // 0..1 punch fired ON each beat, decays fast (drives bloom + FOV kick)
     this._restartLock = 0; // brief input-dead window after dying (no instant restart)
     this._cameraFrozen = false; // true during the cinematic fall-death: camera holds, doesn't chase the dead ball
@@ -309,10 +310,30 @@ export class Game {
     this._syncSettings();
   }
 
+  // Cycle: track 0 → 1 → … → last → 🎲 Random → track 0 … The "Random" slot turns on
+  // random-each-run mode; picking any real track turns it back off and pins that track.
   _cycleTrack() {
-    if (!this.sound.ctx) { this.sound.start(); this._toast(`🎵 ${this.sound.trackName()}`, "#a94bff"); }
-    else this._toast(`🎵 ${this.sound.nextTrack()}`, "#a94bff");
-    this._userTrack = this.sound.trackIndex(); // remember the manual pick so it persists across reloads
+    const firstStart = !this.sound.ctx;
+    if (firstStart) this.sound.start(); // a keypress is a user gesture — audio may start
+    if (this._randomTrack) {
+      // leave Random → back to the first track
+      this._randomTrack = false;
+      this._userTrack = 0;
+      this.sound.setTrack(0);
+      this._toast(`🎵 ${this.sound.trackName()}`, "#a94bff");
+    } else if (firstStart) {
+      // first press only started audio — announce the current track, don't advance
+      this._toast(`🎵 ${this.sound.trackName()}`, "#a94bff");
+    } else if (this.sound.trackIndex() === this.sound.trackCount() - 1) {
+      // past the last track → enter Random mode
+      this._randomTrack = true;
+      this._toast("🎲 Random — a new track each run", "#a94bff");
+    } else {
+      this.sound.nextTrack();
+      this._userTrack = this.sound.trackIndex();
+      this._toast(`🎵 ${this.sound.trackName()}`, "#a94bff");
+    }
+    this._saveSettings(); // persist the pick immediately (incl. random mode)
     this._syncSettings();
   }
 
@@ -488,7 +509,7 @@ export class Game {
     const s = this._settings;
     if (!s) return;
     s.sound.textContent = `🔊 Sound: ${this.sound.muted ? "Off" : "On"}`;
-    s.track.textContent = `🎵 Track: ${this.sound.trackName()}`;
+    s.track.textContent = this._randomTrack ? "🎵 Track: 🎲 Random" : `🎵 Track: ${this.sound.trackName()}`;
     s.fx.textContent = `🎚️ Music FX: ${this.sound.reactive ? "On" : "Off"}`;
     s.motion.textContent = `🌿 Reduced Motion: ${this._reducedMotion ? "On" : "Off"}`;
     s.view.textContent = `👁 View: ${this._firstPerson ? "First-person" : "Third-person"}`;
@@ -538,10 +559,14 @@ export class Game {
     // wired up lazily once audio starts (in _startGame), since there's no AudioContext yet.
     const audiosurf = get("gr_audiosurf");
     if (audiosurf !== null) this._audiosurf = audiosurf === "1";
+    const rand = get("gr_randtrack");
+    if (rand !== null) this._randomTrack = rand === "1";
     // Play audiosurf's rhythmic track while it's on, otherwise the saved manual choice.
     this.sound.setTrack(this._userTrack);
     // Audiosurf needs a steady beat; keep the saved pick if it's steady, else default.
     if (this._audiosurf && !this.sound.currentSteady()) this.sound.setTrack(CONFIG.audiosurf.track);
+    // Random mode: start the session on a random track too (it re-rolls each run anyway).
+    if (this._randomTrack) this.sound.randomTrack(this._audiosurf);
     this._applyDifficultyMult(); // apply restored (or default) level — forced to 0 in zen
     document.body.classList.toggle("is-zen", this._zen); // hide HUD counters if restored into zen
     this._diffSpeedMult = CONFIG.gen.tiers[this._diffLevel].pace;
@@ -559,6 +584,7 @@ export class Game {
     localStorage.setItem("gr_skin", String(this._skinIndex ?? 0));
     localStorage.setItem("gr_zen", this._zen ? "1" : "0");
     localStorage.setItem("gr_audiosurf", this._audiosurf ? "1" : "0");
+    localStorage.setItem("gr_randtrack", this._randomTrack ? "1" : "0");
   }
 
   _toggleCheat() {
@@ -600,10 +626,14 @@ export class Game {
         }
       }
       // Show the game-over card SHORTLY after splashdown (snappy), or on a JUMP press,
-      // with a hard safety cap in case the fall never registers a splash.
-      if (this.input.startPresses !== this._seenStart) { this._seenStart = this.input.startPresses; this._finishDeath(); }
+      // with a hard safety cap in case the fall never registers a splash. The press-to-
+      // skip only arms after a short grace — otherwise the jump you were mashing to clear
+      // the gap you just missed instantly skips the whole cinematic (it "just ends").
+      const canSkip = this._dyingT > 0.8;
+      if (canSkip && this.input.startPresses !== this._seenStart) { this._seenStart = this.input.startPresses; this._finishDeath(); }
       else if (this._splashT != null && this._dyingT - this._splashT >= 1.5) this._finishDeath();
       else if (this._dyingT >= CONFIG.world.fallDeathHang) this._finishDeath();
+      if (!canSkip) this._seenStart = this.input.startPresses; // swallow presses during the grace so they don't queue a skip
     } else if (this.state === "paused") {
       // Frozen. A jump press (or Esc, handled in keydown) resumes — NOT a restart.
       if (this.input.startPresses !== this._seenStart) {
@@ -628,7 +658,7 @@ export class Game {
     }
 
     this.particles.update(dt);
-    this.background.update(this.player.position.z, dt, this.state === "playing", this.player.position.x, this.player.position.y);
+    this.background.update(this.player.position.z, dt, this.state === "playing", this.player.position.x, this.player.position.y, this.field.emitterTarget);
     // Frozen during (and after) a cinematic fall-death so the camera holds its spot
     // and watches the ball drop away, then stays put on the empty scene.
     if (!this._cameraFrozen) this._followCamera(false);
@@ -644,6 +674,10 @@ export class Game {
       if (!this.sound.currentSteady()) this.sound.setTrack(CONFIG.audiosurf.track); // any steady track is fine for the on-beat pulse
       if (!this.sound.onBeat) this._installBeatHook();
     }
+    // Random-track mode: pick a fresh track for THIS run (respawn). Steady-only when
+    // audiosurf is on so the beat-pulse still has a kick to ride. _startGame is the
+    // fresh-run entry (resume goes through _resume), so this only fires on a real respawn.
+    if (this._randomTrack) this._toast(`🎲 ${this.sound.randomTrack(this._audiosurf)}`, "#a94bff");
     if (this.state === "dead") this._resetWorld();
     this.player.jumpCount = 0;
     this.player._seenPresses = this.input.jumpPresses; // don't let the start press auto-jump
@@ -774,7 +808,12 @@ export class Game {
     let active = this._effects.shield ? 1 : 0;
     for (const k of EFFECT_DURATIONS_KEYS) if (this._effects[k] > 0) active++;
     this.field.activeEffects = active;
-    this.field.update(dt, this.player.position.z, speed, magnetPos);
+    // Size generation gaps off the SUSTAINABLE auto-run speed (base × tier pace), NOT the
+    // live boosted speed. With a long keep-ahead lead, a gap sized for a momentary accel/
+    // surge/flipper spike would be unjumpable once that boost faded by the time you reach
+    // it (the "impossible jump" bug). Boosts then only ADD clearance margin.
+    const genSpeed = this.baseSpeed * this._diffSpeedMult;
+    this.field.update(dt, this.player.position.z, genSpeed, magnetPos);
 
     // Score = distance * multiplier; the multiplier decays if you stop taking risks.
     // _effMult folds in the powerdown risk/reward bonus on top of the combo multiplier
@@ -1060,7 +1099,9 @@ export class Game {
     // A FALL gets the cinematic: freeze the camera, let the ball plummet through the
     // floor and vanish, THEN the game-over card. Obstacle hits (and reduced-motion)
     // go straight to game over.
-    if (cause === "fell" && !this._reducedMotion) {
+    if (cause === "fell") {
+      // (The fall-watch cinematic applies no camera shake — _followCamera is frozen —
+      // so it's safe under reduced motion; we keep it rather than hard-cutting to the card.)
       this.state = "dying";
       this._dyingT = 0;
       this._splashT = null; // set at "splashdown" (the ball vanishing) — the card shows shortly after

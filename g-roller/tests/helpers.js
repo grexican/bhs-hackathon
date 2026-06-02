@@ -34,7 +34,7 @@ export function freshState() {
     stepsSinceSpline: 0,
     drift: { x: 0, y: 0 },
     driftSteps: CONFIG.gen.safeStraight,
-    launchRunway: 0,
+    launchRunwayUntilZ: 0,
   };
 }
 

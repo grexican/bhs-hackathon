@@ -114,7 +114,12 @@ export const CONFIG = {
 
   // --- Run framing ----------------------------------------------------------
   world: {
-    keepAheadDistance: 200, // generate platforms out to this far ahead of the player
+    keepAheadDistance: 800, // generate platforms out to this far ahead — ALSO where the emitter
+    //                         rides (it sits at the live spawn frontier, so pieces literally come
+    //                         from it out in the distance). Safe at this long lead ONLY because
+    //                         gaps are now sized off the SUSTAINABLE base speed (see game.js
+    //                         genSpeed), not transient boosts — otherwise a gap sized for a fading
+    //                         boost would be unjumpable by the time you arrived.
     cullBehindDistance: 70, // remove platforms this far behind
     // Death: game over only once you fall this far below the LOWEST landable surface
     // still drawn near you. Deep, so a near-miss is a long recoverable plunge.
