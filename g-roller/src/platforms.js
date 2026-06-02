@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { CONFIG, BIOMES, biomeAt, ramp } from "./config.js";
-import { makeTextureLibrary, GROUND_TEXTURES } from "./textures.js";
+import { makeTextureLibrary, makeSkinTexture } from "./textures.js";
 import { emojiCanvas } from "./icons.js";
 import { makeRng } from "./gen/rng.js";
 import { openness, danger, hazardChance } from "./gen/progression.js";
@@ -85,6 +85,11 @@ export class PlatformField {
     this.gems = [];
     this.powerups = [];
     this.tex = makeTextureLibrary();
+    // One baked GROUND skin texture per zone (the zone's colour + pattern), cached by
+    // zone index since zones repeat through the run. `_zoneSkinTex` is the active one,
+    // set per generated piece in _step (keyed to the frontier zone).
+    this._skinCache = {};
+    this._zoneSkinTex = null;
 
     this._geoBox = new THREE.BoxGeometry(1, 1, 1);
     this._geoCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 28);
@@ -120,9 +125,11 @@ export class PlatformField {
     this.activeEffects = 0;  // count of currently-active powerups (pushed in from game.js; reserved for rune gating)
     // Cheat-mode test tool: which powerup types are allowed to spawn. Default = all.
     this.enabledPowerups = new Set(Object.keys(POWERUP_DEFS));
-    this._biomeTextures = BIOMES[0].textures;
     this._biomeBoardMat = BIOMES[0].boardMat;
     this._biomeGenBias = BIOMES[0].genBias;
+    // Bake the baseline (zone 0) skin up front so a board can never be built before a
+    // skin exists; _step swaps in the live zone's skin per piece.
+    this._zoneSkinTex = this._skinCache[0] = makeSkinTexture(BIOMES[0].skin);
 
     // The generator's walking state — a cursor plus a few counters. Bundled so it can
     // be handed straight to planStep(). Initialized in reset().
@@ -182,19 +189,20 @@ export class PlatformField {
 
   // --- Construction helpers -------------------------------------------------
 
-  // Pick a ground texture from the current biome's palette.
-  _groundTex() { return pick(this._biomeTextures || GROUND_TEXTURES); }
-
-  // Turn a plan's abstract texRole into a concrete texture name.
+  // Turn a plan's abstract texRole into a concrete texture name. Ground boards resolve
+  // to the sentinel "ground" → _texFor clones the active ZONE SKIN (the zone's coloured
+  // deck); special plates (boost/flipper/rubber/rune) keep their library textures.
   _texForRole(role) {
-    return role === "ground" ? this._groundTex() : role;
+    return role === "ground" ? "ground" : role;
   }
 
   // Clone a library texture and set its tiling repeat. `src` lets us tile an
   // alpha map (a different bitmap) with the SAME repeat as its diffuse `name`,
   // so the glass lattice lines up exactly with the grid drawn into the texture.
   _texFor(name, w, len, src = null) {
-    const t = (src || this.tex[name]).clone();
+    // "ground" → the active zone's baked skin (its colour/pattern); else a library tex.
+    const base = src || (name === "ground" ? this._zoneSkinTex : this.tex[name]);
+    const t = base.clone();
     t.needsUpdate = true;
     if (name === "boost") {
       // Boost arrows: one column, tiled along the length so they always run
@@ -231,10 +239,11 @@ export class PlatformField {
     // bouncy/boost/flipper keep the identity glow set above.
     const alphaTex = null;
     if (type === "normal") {
+      // Colour comes from the zone's baked SKIN texture (set as the map); boardMat only
+      // sets the surface FEEL (matte/glossy) + an optional inner glow.
       const bm = this._biomeBoardMat;
       mat.roughness = bm ? bm.roughness : 0.36;
       mat.metalness = bm ? bm.metalness : 0.16;
-      if (bm && bm.tint != null) mat.color.setHex(bm.tint); // recolour the whole deck per zone
       if (bm && bm.emissiveIntensity > 0) {
         mat.emissive.setHex(bm.emissive);
         mat.emissiveIntensity = bm.emissiveIntensity;
@@ -623,10 +632,12 @@ export class PlatformField {
     // landed a zone's boards/shape ~800m late, usually in the next zone. Now a board
     // built in the dunes region looks + plays like the dunes, lining up with the
     // fog/sky/weather you cross into (those stay player-keyed in game.js).
-    const bi = BIOMES[biomeAt(this._state.cursor.z)];
-    this._biomeTextures = bi.textures;
+    const bIdx = biomeAt(this._state.cursor.z);
+    const bi = BIOMES[bIdx];
     this._biomeBoardMat = bi.boardMat;
     this._biomeGenBias = bi.genBias;
+    // The zone's baked ground skin (cached per zone — zones repeat as the run cycles).
+    this._zoneSkinTex = this._skinCache[bIdx] || (this._skinCache[bIdx] = makeSkinTexture(bi.skin));
 
     const ctx = this._ctx(forwardSpeed);
     const plan = planStep(this._state, ctx);

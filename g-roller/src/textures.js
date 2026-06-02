@@ -373,3 +373,128 @@ export function makeTextureLibrary() {
 
 // Material keys used for ordinary, safe-to-land platforms.
 export const GROUND_TEXTURES = ["brick", "wood", "marble", "tile", "pebble", "concrete"];
+
+// ===========================================================================
+// Per-ZONE board SKINS (config-driven). Instead of every zone sharing the fixed
+// texture library (same dark panels, same colours — which is why zones read the
+// same), each zone supplies a `skin` { pattern, neon, neon2, panel } and we bake a
+// dedicated ground texture in THAT zone's colour. So the track itself is the zone's
+// colour, with the zone's pattern — the single strongest "different world" cue.
+//   pattern — "grid" | "brick" | "planks" | "veins" | "pebbles" | "plaza" | "circuit"
+//   neon    — the primary glow colour baked into the lines/accents
+//   neon2   — optional second glow (e.g. City's cyan grid with magenta cross-lines)
+//   panel   — optional hex tint blended into the near-black panel base (warms/cools it)
+// ===========================================================================
+const hexCss = (n) => "#" + (n & 0xffffff).toString(16).padStart(6, "0");
+
+// Panel base with an optional colour wash so the slab body itself reads warm (dunes)
+// or cool (ice/void), not just the neon lines.
+function tintedPanel(ctx, s, panelHex) {
+  panelBase(ctx, s);
+  if (panelHex != null) {
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = hexCss(panelHex);
+    ctx.fillRect(0, 0, s, s);
+    ctx.restore();
+  }
+}
+
+// Each pattern draws its motif in the zone's neon colour (c1) with an optional accent
+// (c2). They mirror the look of the original named painters but take the colour as a
+// parameter, so the SAME pattern can be any zone's colour.
+const SKIN_PATTERNS = {
+  // Clean blueprint grid (the City/Neutral default). c2 paints alternating cross-lines.
+  grid(ctx, s, c1, c2) {
+    const n = 2, t = s / n;
+    ctx.save();
+    ctx.globalAlpha = 0.1; ctx.lineWidth = 1;
+    for (let i = 1; i < n; i++) {
+      ctx.strokeStyle = c1;
+      ctx.beginPath(); ctx.moveTo(i * t, 0); ctx.lineTo(i * t, s); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * t); ctx.lineTo(s, i * t); ctx.stroke();
+    }
+    ctx.restore();
+  },
+  // A finer "circuit" lattice: a tight grid + a few brighter trace runs. Reads techy.
+  circuit(ctx, s, c1, c2) {
+    ctx.save();
+    ctx.globalAlpha = 0.12; ctx.lineWidth = 1; ctx.strokeStyle = c1;
+    for (let i = 1; i < 6; i++) {
+      const p = (i / 6) * s;
+      ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, s); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(s, p); ctx.stroke();
+    }
+    ctx.restore();
+    for (let i = 0; i < 5; i++) {
+      const y = Math.random() * s;
+      neonLine(ctx, c2 || c1, 0, y, s, y + (Math.random() - 0.5) * 30, 1.2);
+    }
+  },
+  brick(ctx, s, c1) {
+    const rows = 5, rh = s / rows, bw = s / 2.5;
+    for (let r = 0; r < rows; r++) {
+      const y = r * rh;
+      neonLine(ctx, c1, 0, y, s, y, 1.4);
+      const offset = (r % 2) * (bw / 2);
+      for (let x = offset; x < s + bw; x += bw) neonLine(ctx, c1, x, y, x, y + rh, 1.2);
+    }
+  },
+  planks(ctx, s, c1) {
+    const planks = 5, pw = s / planks;
+    for (let p = 0; p <= planks; p++) neonLine(ctx, c1, p * pw, 0, p * pw, s, 1.6);
+    ctx.save(); ctx.strokeStyle = c1; ctx.globalAlpha = 0.07; ctx.lineWidth = 1;
+    for (let i = 0; i < 18; i++) { const x = Math.random() * s; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + (Math.random() - 0.5) * 8, s); ctx.stroke(); }
+    ctx.restore();
+  },
+  veins(ctx, s, c1) {
+    ctx.save();
+    for (let i = 0; i < 9; i++) {
+      let x = Math.random() * s, y = 0; const pts = [{ x, y }];
+      while (y < s) { x += (Math.random() - 0.5) * 46; y += 18; pts.push({ x, y }); }
+      ctx.strokeStyle = c1;
+      ctx.globalAlpha = 0.16; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const pt of pts) ctx.lineTo(pt.x, pt.y); ctx.stroke();
+      ctx.globalAlpha = 0.8; ctx.lineWidth = 1.1;
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const pt of pts) ctx.lineTo(pt.x, pt.y); ctx.stroke();
+    }
+    ctx.restore();
+  },
+  plaza(ctx, s, c1) {
+    const n = 4, t = s / n;
+    ctx.save();
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      if ((x + y) % 2 === 0) { ctx.fillStyle = c1; ctx.globalAlpha = 0.06; ctx.fillRect(x * t, y * t, t, t); }
+    }
+    ctx.globalAlpha = 1;
+    for (let i = 0; i <= n; i++) { neonLine(ctx, c1, i * t, 0, i * t, s, 1.3); neonLine(ctx, c1, 0, i * t, s, i * t, 1.3); }
+    ctx.restore();
+  },
+  pebbles(ctx, s, c1) {
+    ctx.save();
+    for (let i = 0; i < 90; i++) {
+      const x = Math.random() * s, y = Math.random() * s, r = Math.random() * 9 + 5;
+      const g = ctx.createRadialGradient(x - r / 3, y - r / 3, 1, x, y, r);
+      g.addColorStop(0, "rgba(40,48,66,0.9)"); g.addColorStop(1, "rgba(8,10,18,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = c1; ctx.globalAlpha = 0.4; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(x, y, r - 1, Math.PI * 0.9, Math.PI * 1.6); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  },
+};
+
+// Build a ground texture for a zone skin. Cheap (one 256² canvas); platforms cache one
+// per zone and clone it (sharing the bitmap) for each board's tiling repeat.
+export function makeSkinTexture({ pattern = "grid", neon = 0x5ad6ff, neon2 = null, panel = null } = {}) {
+  const { c, ctx } = makeCanvas(256);
+  tintedPanel(ctx, 256, panel);
+  const c1 = hexCss(neon), c2 = neon2 != null ? hexCss(neon2) : c1;
+  (SKIN_PATTERNS[pattern] || SKIN_PATTERNS.grid)(ctx, 256, c1, c2);
+  boldGrid(ctx, 256, c1, pattern === "plaza" ? 4 : 3); // the bold readable cell grid, in the zone's colour
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  return tex;
+}

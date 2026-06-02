@@ -373,124 +373,178 @@ export const CONFIG = {
   },
 };
 
-// Themed zones the run passes through. Each retints the fog + sun, restricts the
-// platform texture set, AND drives the backdrop mood. All in the same "neon dusk"
-// system from DESIGN.md — distinct moods, one cohesive world.
-//   skylineHue  — 0..1 hue the per-window glow biases toward
-//   skylineSpread — how far around skylineHue the gentle cycle wanders
-//   skyline     — bright window-glow colour
-//   moon / nebula — body tints
-//   bloom       — extra bloom strength while in this zone
-//   accent      — the zone's signature colour, used for the entry title card + the
-//                 full-screen colour shockwave when you cross in (its identity colour)
-//   tagline     — the line under the big name on the entry card (sets the mood)
-//   skylineStyle — the SHAPE of the side buildings: "towers" (city) | "mesas" (dunes
-//                 buttes+pyramids) | "spires" (ice crystals) | "monoliths" (void
-//                 slabs). background.js regenerates the flanking walls on crossing.
-//   boardMat    — the SURFACE FEEL of the zone's normal decks, so boards aren't all
-//                 the same slab: {tint(hex albedo — recolours the whole track),
-//                 roughness, metalness, emissive(hex), emissiveIntensity}. Matte tan
-//                 sandstone vs glossy cyan ice vs inner-glowing violet void. Only
-//                 normal boards take it — bouncy/boost/flipper keep their identity
-//                 glow. (Applied in platforms.js _addBoard.)
-//   genBias     — how the zone PLAYS: per-biome multipliers on the drama elements
-//                 {tunnel, ramp, curve, yaw} so each zone has a signature SHAPE —
-//                 rolling ramps in the dunes, tunnels + half-pipe curves in the ice,
-//                 twisting yaw in the void. Multiplies the chance (capped at 1), so it
-//                 never breaks reachability — it only changes the MIX, not difficulty
-//                 (that's the tier knobs). Default 1× = neutral. (See gen/planPath.js.)
+// The zones the run passes through. Zone 0 is the NEUTRAL baseline — a calm grey
+// "blueprint" world. The themed zones are bold splashes of a single identity colour
+// that ARRIVE out of that grey, so crossing in actually reads as entering somewhere.
+// Each zone drives every surface at once (ground skin, side buildings, sky, run-shape)
+// so it feels like a different world, not a re-tint.
+//   fog / sun     — scene fog colour + key-light tint (the overall wash)
+//   skylineHue/Spread/skyline — the side-building window-glow colour + how it cycles
+//   moon / nebula — far backdrop body tints
+//   bloom         — extra bloom while in this zone
+//   accent        — the zone's signature colour (entry title card + the colour-flare)
+//   tagline       — the line under the big name on the entry card
+//   skylineStyle  — SHAPE of the side buildings: "towers"|"mesas"|"spires"|"monoliths"
+//   skin          — the GROUND skin, baked in the zone's colour (this is what makes the
+//                 TRACK read as the zone): {pattern, neon, neon2?, panel?}. See
+//                 textures.js makeSkinTexture for patterns. THIS replaced the old albedo
+//                 tint — the colour is now painted into the texture, not multiplied on.
+//   boardMat      — surface FEEL of normal decks {roughness, metalness, emissive,
+//                 emissiveIntensity}: matte sand vs glossy ice vs glowing void. (No
+//                 tint — the skin carries colour.) Special plates keep their own glow.
+//   genBias       — how the zone PLAYS: {tunnel, ramp, curve, yaw} frequency multipliers
+//                 so each zone has a signature SHAPE (ramps in dunes, tunnels+curves in
+//                 ice, twists in void). Capped at 1 → never breaks reachability.
 export const BIOMES = [
-  // Neon City — cool blue dusk, teal + magenta window glow (the baseline city).
+  // 0 — NEUTRAL: the grey "blueprint" baseline. Calm, monochrome, restrained. It opens
+  // the run and (optionally) returns between themed zones so colour ARRIVES out of grey.
   {
-    name: "Neon City",
-    until: 600,
-    fog: 0x141a33,
-    sun: 0xfff2d6,
-    textures: ["concrete", "brick", "tile"],
-    skylineHue: 0.83,
-    skylineSpread: 0.14,
-    skyline: 0xff4bd6,
-    moon: 0xbfe3ff,
-    nebula: 0x6a7bff,
+    name: "Calibration",
+    fog: 0x161a22,
+    sun: 0xdfe6f0,
+    skylineHue: 0.6,
+    skylineSpread: 0.04,
+    skyline: 0xc8d2e0,
+    moon: 0xccd6e2,
+    nebula: 0x95a0b6,
     bloom: 0.0,
-    accent: 0xff4bd6,
-    tagline: "where the climb begins",
-    skylineStyle: "towers", // tall city towers
-    // Glossy steel-blue city deck (tint recolours the whole track so the ground reads
-    // as THIS zone, not just a grey slab — the texture detail rides on top).
-    boardMat: { tint: 0x8fa0c8, roughness: 0.36, metalness: 0.16, emissive: 0x101830, emissiveIntensity: 0.12 },
-    // Balanced — the city is the reference shape every other zone bends away from.
+    accent: 0xc8d2e0,
+    tagline: "the proving ground",
+    skylineStyle: "towers",
+    skin: { pattern: "grid", neon: 0xaeb8cc }, // grey blueprint grid — no colour identity
+    boardMat: { roughness: 0.55, metalness: 0.08, emissive: 0x000000, emissiveIntensity: 0 },
     genBias: { tunnel: 1, ramp: 1, curve: 1, yaw: 1 },
   },
-  // Sunset Dunes — warm rose-amber haze, golden windows, an amber moon.
+  // 1 — NEON CITY: the vivid home zone. Cyan circuitry shot through with hot magenta —
+  // the floor-light + window colours of the base game, turned up.
+  {
+    name: "Neon City",
+    fog: 0x0e0a26,
+    sun: 0xfff2d6,
+    skylineHue: 0.83,
+    skylineSpread: 0.16,
+    skyline: 0xff3df0,
+    moon: 0xbfe3ff,
+    nebula: 0x6a7bff,
+    bloom: 0.06,
+    accent: 0x00e6ff,
+    tagline: "neon never sleeps",
+    skylineStyle: "towers",
+    skin: { pattern: "circuit", neon: 0x00e6ff, neon2: 0xff3df0, panel: 0x0a0d22 },
+    boardMat: { roughness: 0.32, metalness: 0.2, emissive: 0x0a1830, emissiveIntensity: 0.14 },
+    genBias: { tunnel: 1, ramp: 1, curve: 1, yaw: 1 },
+  },
+  // 2 — SUNSET DUNES: warm amber desert. Matte sandstone planks, golden light.
   {
     name: "Sunset Dunes",
-    until: 1300,
-    fog: 0x3a1d2a,
-    sun: 0xffb066,
-    textures: ["wood", "brick", "pebble"],
+    fog: 0x351a10,
+    sun: 0xffae55,
     skylineHue: 0.06,
     skylineSpread: 0.06,
     skyline: 0xffb04a,
     moon: 0xffcf9a,
     nebula: 0xff6a8a,
     bloom: 0.08,
-    accent: 0xffb04a,
+    accent: 0xff8a2a,
     tagline: "into the warm horizon",
-    skylineStyle: "mesas", // low desert buttes + pyramids
-    // Matte, sun-baked sandstone — warm tan tint, no sheen (opposite of the glossy
-    // city deck). A faint warm bake so the ground glows like hot sand at dusk.
-    boardMat: { tint: 0xff9a4d, roughness: 0.96, metalness: 0.0, emissive: 0x3a1500, emissiveIntensity: 0.16 },
-    // Rolling DUNES: lots of ramps to roll over + winding yaw; few tunnels (it's open desert).
+    skylineStyle: "mesas",
+    skin: { pattern: "planks", neon: 0xff8a2a, neon2: 0xffd24a, panel: 0x231006 },
+    boardMat: { roughness: 0.92, metalness: 0.02, emissive: 0x2a1000, emissiveIntensity: 0.14 },
     genBias: { tunnel: 0.5, ramp: 1.8, curve: 0.8, yaw: 1.4 },
   },
-  // Ice Caverns — cold cyan + white, frozen window light, a pale-blue moon.
+  // 3 — ICE CAVERNS: cold crystalline cyan-white. Glassy veined decks, high gloss.
   {
     name: "Ice Caverns",
-    until: 2200,
-    fog: 0x123244,
-    sun: 0xcfeaff,
-    textures: ["marble", "tile", "concrete"],
+    fog: 0x0a2a3e,
+    sun: 0xd6f0ff,
     skylineHue: 0.52,
     skylineSpread: 0.08,
-    skyline: 0x9af0ff,
+    skyline: 0xbdf2ff,
     moon: 0xeaffff,
     nebula: 0x6ad6ff,
     bloom: 0.12,
-    accent: 0x9af0ff,
+    accent: 0xbdf2ff,
     tagline: "the frozen deep",
-    skylineStyle: "spires", // jagged ice crystal spires
-    // Glassy, polished ice — icy-cyan tint, high gloss + a cold inner glow.
-    boardMat: { tint: 0x86d3ff, roughness: 0.1, metalness: 0.45, emissive: 0x123a52, emissiveIntensity: 0.28 },
-    // ICE CAVERNS: tunnels (ice tubes) + curved half-pipe boards; fewer ramps.
+    skylineStyle: "spires",
+    skin: { pattern: "veins", neon: 0xbdf2ff, neon2: 0x6fd0ff, panel: 0x07202e },
+    boardMat: { roughness: 0.12, metalness: 0.45, emissive: 0x103a52, emissiveIntensity: 0.26 },
     genBias: { tunnel: 2.0, ramp: 0.8, curve: 1.8, yaw: 0.9 },
   },
-  // The Void — deep violet + blue, eerie violet glow, dim flare.
+  // 4 — THE VOID: eerie violet nothingness. Dark rock glowing from within.
   {
     name: "The Void",
-    until: Infinity,
     fog: 0x0a0614,
     sun: 0xb06bff,
-    textures: ["pebble", "marble", "concrete"],
-    skylineHue: 0.72,
+    skylineHue: 0.74,
     skylineSpread: 0.1,
-    skyline: 0xa05bff,
+    skyline: 0xb060ff,
     moon: 0xcaa6ff,
     nebula: 0x7a3bff,
-    bloom: 0.18,
-    accent: 0xa05bff,
+    bloom: 0.2,
+    accent: 0xb060ff,
     tagline: "beyond the edge",
-    skylineStyle: "monoliths", // sparse floating monoliths
-    // Dark void rock, violet tint, GLOWING from within — boards read as lit floating slabs.
-    boardMat: { tint: 0x9a5cff, roughness: 0.55, metalness: 0.18, emissive: 0x3a1f7a, emissiveIntensity: 0.45 },
-    // THE VOID: disorienting twists — lots of yaw + some tunnels; few ramps (nothing to roll up).
+    skylineStyle: "monoliths",
+    skin: { pattern: "veins", neon: 0xb060ff, neon2: 0xff5fd0, panel: 0x0a0614 },
+    boardMat: { roughness: 0.5, metalness: 0.2, emissive: 0x3a1f7a, emissiveIntensity: 0.42 },
     genBias: { tunnel: 1.4, ramp: 0.7, curve: 1.2, yaw: 1.6 },
   },
 ];
 
+// Per-RUN zone sequence. Zones no longer sit at fixed distances in a fixed order: the
+// run OPENS on the neutral baseline (zone 0), then crosses the THEMED zones in a
+// RANDOMISED order (so you don't always hit the same one next), each filling one band.
+// Test hooks: `enabled` limits which themed zones can appear (cheat toggles, like the
+// powerup picker); `forced` pins the WHOLE run to one zone so you can study it.
+export const ZoneSeq = {
+  themeLen: 720,         // metres a THEMED zone fills
+  baseLen: 260,          // metres a NEUTRAL breather fills (short — grey is a palette-cleanser)
+  baseIndex: 0,          // the neutral baseline zone
+  interleaveBase: true,  // neutral breather between each themed zone (grey → colour → grey)
+  enabled: null,         // Set of themed-zone indices allowed (null = all themed)
+  forced: null,          // pin the whole run to this zone index (testing)
+  _schedule: [],         // one full cycle: [{ zone, end }] with cumulative end-distances
+  _cycleLen: 0,
+
+  themedPool() {
+    return BIOMES.map((_, i) => i).filter((i) => i !== this.baseIndex);
+  },
+
+  // Build this run's zone schedule: open on a grey breather, then the themed zones in a
+  // RANDOM order, each (optionally) followed by another short grey breather. The cycle
+  // repeats seamlessly (it ends on grey, the next cycle opens on grey). Math.random is
+  // fine here — per-run only, never on the unit-tested generator path.
+  build() {
+    let pool = this.themedPool();
+    if (this.enabled && this.enabled.size) pool = pool.filter((i) => this.enabled.has(i));
+    if (!pool.length) pool = this.themedPool(); // never strand the run in endless grey
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const sched = [];
+    let z = 0;
+    const push = (zone, len) => { z += len; sched.push({ zone, end: z }); };
+    push(this.baseIndex, this.baseLen); // opening breather
+    for (const t of pool) {
+      push(t, this.themeLen);
+      if (this.interleaveBase) push(this.baseIndex, this.baseLen);
+    }
+    this._schedule = sched;
+    this._cycleLen = z;
+  },
+
+  zoneAt(z) {
+    if (this.forced != null) return this.forced;
+    if (!this._schedule.length) this.build();
+    let p = z % this._cycleLen;
+    if (p < 0) p += this._cycleLen;
+    for (const s of this._schedule) if (p < s.end) return s.zone;
+    return this.baseIndex;
+  },
+};
+
 export function biomeAt(z) {
-  for (let i = 0; i < BIOMES.length; i++) if (z < BIOMES[i].until) return i;
-  return BIOMES.length - 1;
+  return ZoneSeq.zoneAt(z);
 }
 
 // Peak height of a full jump and the air time it grants — the basis for every

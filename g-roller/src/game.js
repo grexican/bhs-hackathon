@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { CONFIG, BIOMES, biomeAt } from "./config.js";
+import { CONFIG, BIOMES, biomeAt, ZoneSeq } from "./config.js";
 import { Input } from "./input.js";
 import { Player, BALL_SKINS } from "./player.js";
 import { PlatformField, POWERUP_DEFS } from "./platforms.js";
@@ -132,6 +132,7 @@ export class Game {
       if (e.code === "KeyZ") this._toggleZen();
       if (e.code === "KeyA") this._toggleAudiosurf();
       if (this._cheat && e.code === "KeyI") this._toggleGod(); // cheat-only: immortal (still escalates)
+      if (this._cheat && e.code === "KeyC") this._cycleForcedZone(); // cheat-only: pin/cycle the zone to study it
       // Cheat-only desktop testing: instantly fire a powerdown on yourself.
       // R rain · F fog · B blackout · T trip · O slow-mo.
       if (this._cheat && this.state === "playing") {
@@ -248,7 +249,8 @@ export class Game {
     this.score = 0;
     this.multiplier = 1;
     this._comboTimer = 0;
-    this._biome = 0;
+    ZoneSeq.build(); // reshuffle the themed-zone order for this run (forced/enabled persist)
+    this._biome = biomeAt(0); // opening zone (baseline, or a forced zone when testing)
     this._throttleSmooth = 0;
     this._invuln = 0;
     this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0, rain: 0, splat: 0 };
@@ -263,12 +265,13 @@ export class Game {
     this.scene.fog.near = CONFIG.effects.fogNear;
     this.scene.fog.far = CONFIG.effects.fogFar;
     this.canvas.classList.remove("is-tripping");
-    this.scene.fog.color.setHex(BIOMES[0].fog);
-    this.sun.color.setHex(BIOMES[0].sun);
+    const startBiome = BIOMES[this._biome]; // baseline, or a forced zone when testing
+    this.scene.fog.color.setHex(startBiome.fog);
+    this.sun.color.setHex(startBiome.sun);
     // Park the backdrop on the starting biome's mood (no flash for the fresh start).
-    this._biomeBloom = BIOMES[0].bloom || 0;
+    this._biomeBloom = startBiome.bloom || 0;
     this._biomeFlash = 0;
-    this.background.setBiome(BIOMES[0]);
+    this.background.setBiome(startBiome);
     this.field.reset();
     this.player.reset();
     this._cameraFrozen = false; // un-freeze after a cinematic fall-death
@@ -413,6 +416,21 @@ export class Game {
   _toggleGod() {
     this._god = !this._god;
     this._toast(this._god ? "😇 GOD MODE: On" : "😇 GOD MODE: Off", "#ffd34e");
+  }
+
+  // Cheat-only zone tester: cycle the FORCED zone so the whole world pins to one zone
+  // and you can study it. Steps null(random) → 0 → 1 → … → last → null. Fresh terrain
+  // ahead takes on the forced zone within a board or two; the sky/flash switch at once.
+  _cycleForcedZone() {
+    const n = BIOMES.length;
+    ZoneSeq.forced = ZoneSeq.forced == null ? 0 : ZoneSeq.forced + 1;
+    if (ZoneSeq.forced >= n) {
+      ZoneSeq.forced = null;
+      this._toast("🎲 Zones: Random", "#9fe0ff");
+    } else {
+      const b = BIOMES[ZoneSeq.forced];
+      this._toast(`📍 ${b.name}`, "#" + (b.accent & 0xffffff).toString(16).padStart(6, "0"));
+    }
   }
 
   // Audiosurf mode: the world visibly pulses ON the music's beat so it feels
@@ -989,7 +1007,7 @@ export class Game {
     const i = biomeAt(z);
     if (i !== this._biome) {
       this._biome = i;
-      this._biomeEntry(BIOMES[i]);
+      this._biomeEntry(BIOMES[i], i);
     }
     const b = BIOMES[i];
     // Stronger lerp than before so the fog/sun shift is actually FELT (a ~2s mood
@@ -1009,8 +1027,12 @@ export class Game {
   //   3) a bloom + camera FOV punch on the 3D scene,
   //   4) a musical "portal" sting that arrives on the zone's chord.
   // Everything here is presentation — no gameplay/physics changes.
-  _biomeEntry(b) {
+  _biomeEntry(b, idx) {
     this.background.setBiome(b); // backdrop tints ease toward this zone (the slow ~2s mood shift)
+    // The neutral baseline is a quiet palette-cleanser between zones — let it grey the
+    // world out, but DON'T announce it (no card/flash/punch). Only themed zones are an
+    // "arrival." This is what makes each colour zone POP out of the grey.
+    if (idx === ZoneSeq.baseIndex) return;
     const css = hexCss(b.accent ?? b.skyline ?? 0x9fe0ff);
 
     // 1) Cinematic title card. Restart the animation by toggling the class off/on
