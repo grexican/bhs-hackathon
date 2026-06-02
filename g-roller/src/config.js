@@ -480,7 +480,7 @@ export const BIOMES = [
     tagline: "beyond the edge",
     fovKick: -5, // the camera NARROWS on entry (claustrophobic squeeze) instead of the usual widen
     skylineStyle: "none", // NO buildings — the void is truly empty (no city flanking the track)
-    cityLights: 0.08,     // …and almost no city-lights floor below: just black nothingness
+    cloudLevel: 0,        // …and no nebula clouds either — empty sky. (The glowing floor stays — it's nice.)
     skylineVar: {},
     skin: { pattern: "pebbles", neon: 0xb060ff, neon2: 0x7a3bff, panel: 0x0a0614 }, // glowing void-rubble; rim is deep violet (was hot pink — too close to the bouncy pads + off-theme)
     boardMat: { roughness: 0.5, metalness: 0.2, emissive: 0x3a1f7a, emissiveIntensity: 0.42 },
