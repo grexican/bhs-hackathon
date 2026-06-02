@@ -223,6 +223,7 @@ export class Background {
     // City-light FLOOR tint — the glowing city far below takes on the zone's colour too,
     // so the whole "city lighting" reads as the zone, not a fixed amber/cyan pool.
     this._cityTint = new THREE.Color(0xffffff); this._cityTarget = new THREE.Color(0xffffff);
+    this._cityLevel = 1; this._cityLevelTarget = 1; // city-lights-floor brightness (0 in the Void)
     this._skylineSig = ""; // style+variation signature — regenerate the walls when it changes
 
     // Drifting nebula sprites.
@@ -409,15 +410,15 @@ export class Background {
   // Drive the backdrop mood from the active biome. The game calls this once on a
   // zone change with that biome's palette; update() then EASES toward these targets
   // (no snap). All tints are stored as THREE.Color targets / scalar hue targets.
-  setBiome({ skylineHue, skylineSpread, skylineSat, moon, nebula, skyline, skylineStyle, skylineVar, accent }) {
-    // Side buildings: swap the silhouette per zone. Regenerate the range planes when the
-    // SHAPE *or* the per-zone variation (density/height/gaps) changes — so even two
-    // "towers" zones get visibly different skylines, not the identical wall.
+  setBiome({ skylineHue, skylineSpread, skylineSat, moon, nebula, skyline, skylineStyle, skylineVar, accent, cityLights }) {
+    // Side buildings: swap the silhouette per zone. Style "none" = NO buildings at all
+    // (the Void) — hide the flanking walls. Otherwise regenerate the range planes when
+    // the SHAPE *or* per-zone variation changes (so even two "towers" zones differ).
     const style = skylineStyle || this._skylineStyle || "towers";
+    const hideSky = style === "none";
+    for (const p of this.ranges) p.visible = !hideSky;
     const sig = style + "|" + JSON.stringify(skylineVar || {});
-    if (sig !== this._skylineSig) {
-      this._skylineStyle = style;
-      this._skylineSig = sig;
+    if (!hideSky && sig !== this._skylineSig) {
       for (const p of this.ranges) {
         const old = p.userData.tex;
         const tex = skylineTexture(style, skylineVar || {});
@@ -427,6 +428,9 @@ export class Background {
         if (old) old.dispose();
       }
     }
+    this._skylineStyle = style;
+    this._skylineSig = sig;
+    this._cityLevelTarget = cityLights != null ? cityLights : 1; // dim/kill the city-lights floor (Void)
     if (skylineHue != null) this._hueTarget = skylineHue;
     if (skylineSpread != null) this._spreadTarget = skylineSpread;
     if (skylineSat != null) this._satTarget = skylineSat;
@@ -461,6 +465,7 @@ export class Background {
     this._haloTint.lerp(this._haloTarget, k);
     this._nebTint.lerp(this._nebTarget, k);
     this._cityTint.lerp(this._cityTarget, k);
+    this._cityLevel += (this._cityLevelTarget - this._cityLevel) * k;
 
     // Blackout powerdown fades the whole sky down too (not just the platforms), so
     // it's a real blackout instead of dark ground under a bright skyline.
@@ -504,7 +509,7 @@ export class Background {
     // a faint pool of lights in the black, not a bright purple slab.
     this.farLights.position.set(0, this.farLightsY, playerZ);
     this.farLights.rotation.z = t * 0.004;
-    this.farLights.material.opacity = 0.32 * f;
+    this.farLights.material.opacity = 0.32 * f * this._cityLevel; // fades to ~nothing in the Void
     this.farLights.material.color.copy(this._cityTint); // the city below glows the zone's colour
     // Dark occluder rides just below the lights so the void doesn't show through.
     this.farDark.position.set(0, this.farLightsY - 1, playerZ);

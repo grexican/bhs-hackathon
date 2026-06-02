@@ -327,12 +327,12 @@ export function planScatter(pathPlan, state, ctx) {
   if (pathPlan.safe || pathPlan.kind !== "path") return [];
   const { profile, O, rng } = ctx;
   const g = G();
-  // COUNT rides density (forgiveness). SPREAD (radius) rides openness × a GENTLED
-  // sprawl: the route sweeps the full sprawl, but the decor cloud widens only a FRACTION
-  // as much, so branch pickups stay within jump reach instead of being flung to the
-  // backdrop (the "unreachable items" trap). 0.35 keeps Hard's cloud (sprawl 2.1 →
-  // ~1.39×) inside one jump's lateral reach. Wide route, reachable cloud.
-  const sFactor = 1 + (profile.sprawl - 1) * 0.35;
+  // COUNT rides density (the difficulty lever: Easy many, Hard few). SPREAD is MAXED and
+  // nearly tier-INDEPENDENT — a wide "go anywhere" field for everyone — with only a SMALL
+  // widening on harder tiers so the extremes get an extra traversal challenge. The
+  // easy/hard FEEL is the count filling (or sparsely dotting) that same wide spread, not
+  // a tighter cloud. 0.92 base keeps Easy wide; +0.1·(sprawl-1) nudges Hard a touch wider.
+  const sFactor = 0.92 + (profile.sprawl - 1) * 0.1;
   const count = Math.max(0, Math.round(ramp(g.scatter.count, O) * profile.density));
   const rx = ramp(g.scatter.radiusX, O) * sFactor;
   const ry = ramp(g.scatter.radiusY, O) * sFactor;

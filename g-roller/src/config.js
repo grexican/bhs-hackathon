@@ -248,14 +248,15 @@ export const CONFIG = {
     // tight enough that branches stay relevant/reachable, not flung off-screen.
     scatter: {
       count: [2, 3], // base extra platforms per step (× tier density → Easy many, Hard few)
-      // SPREAD is kept inside JUMP REACH so a branch is a real ALTERNATE ROUTE, not
-      // unreachable backdrop. One jump strafes ~65 units laterally (jumpReach), so the
-      // radius (× the gentled sprawl factor below) tops out around there even on Hard —
-      // the farthest branch is a committed jump, most are comfortable. Was [40,110]×1.55
-      // ≈ ±170 on Hard, which flung every branch out of bounds ("might as well not move
-      // for it").
-      radiusX: [22, 50], // how wide the cloud scatters (× gentled sprawl) — within reach
-      radiusY: [16, 40], // how tall the cloud scatters (× gentled sprawl; parallax layers)
+      // SPREAD is MAXED toward the reach envelope and is ~the SAME for every tier — the
+      // field reads "go anywhere". DIFFICULTY comes from COUNT, not a tighter spread:
+      // Easy (many pieces) fills the wide area = abundant, safe to roam; Hard / deep-in
+      // (few pieces) leaves the same wide spread SPARSE, so reaching a branch takes
+      // timing + moving across/forward/back to stick the landing. A jump strafes ~65
+      // laterally, so the radius tops out a touch past that (the edges are a committed,
+      // demanding reach — not pointless like the old ±170, not a tight cluster either).
+      radiusX: [44, 78], // wide from early, ramps to the reach edge by the time the field opens
+      radiusY: [30, 58], // vertical scatter (parallax + up/down reaches)
       zSpread: 54, // depth jitter around the front
       bouncyChance: 0.16, // chance a branch platform is a trampoline (at/above path height)
       bouncyDepthBoost: 0.55, // EXTRA trampoline chance for branches at the DEPTHS (lowest scatter):
@@ -478,8 +479,9 @@ export const BIOMES = [
     accent: 0xb060ff,
     tagline: "beyond the edge",
     fovKick: -5, // the camera NARROWS on entry (claustrophobic squeeze) instead of the usual widen
-    skylineStyle: "monoliths",
-    skylineVar: { density: 0.75, heightScale: 1.15 }, // sparse, tall slabs
+    skylineStyle: "none", // NO buildings — the void is truly empty (no city flanking the track)
+    cityLights: 0.08,     // …and almost no city-lights floor below: just black nothingness
+    skylineVar: {},
     skin: { pattern: "pebbles", neon: 0xb060ff, neon2: 0x7a3bff, panel: 0x0a0614 }, // glowing void-rubble; rim is deep violet (was hot pink — too close to the bouncy pads + off-theme)
     boardMat: { roughness: 0.5, metalness: 0.2, emissive: 0x3a1f7a, emissiveIntensity: 0.42 },
     genBias: { tunnel: 1.4, ramp: 0.7, curve: 1.2, yaw: 1.6 },
