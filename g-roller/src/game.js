@@ -1040,8 +1040,8 @@ export class Game {
     this._biomeFlash = this._reducedMotion ? 0.35 : 0.8;
     if (!this._reducedMotion) this._fovKick = 7;
 
-    // 4) The audio half — a whoosh into the zone's chord.
-    this.sound.portal(b.chord);
+    // 4) The audio half — an airy whoosh (no chime; it clashed with the music).
+    this.sound.portal();
   }
 
   _applyPowerup(u) {

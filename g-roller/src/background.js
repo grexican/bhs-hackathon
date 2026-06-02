@@ -349,12 +349,51 @@ export class Background {
     // The rising "ground" motes are off for now — the only flow we want is the stream
     // coming AT us from the emitter (kept, not deleted).
     this.motes.visible = false;
+
+    // --- Per-biome AMBIENT WEATHER: the air of each zone, and the single biggest
+    // "this is a different world" cue. ONE shared Points pool that you fly THROUGH
+    // (world-anchored, recycled around the player) — so the MOTION reads: City embers
+    // RISE, desert dust BLOWS sideways, Ice snow FALLS, Void stars HANG and twinkle.
+    // setBiome() parks the look (colour/opacity) + swaps the motion; _updateWeather
+    // integrates + recycles each frame. Per-particle twinkle rides vertex colours.
+    this._wMax = 200;
+    this._reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const wpos = new Float32Array(this._wMax * 3);
+    const wcol = new Float32Array(this._wMax * 3);
+    this._wPhase = new Float32Array(this._wMax); // sway/twinkle phase per particle
+    this._wJit = new Float32Array(this._wMax);   // per-particle velocity jitter (no lockstep)
+    for (let i = 0; i < this._wMax; i++) {
+      wpos[i * 3] = (Math.random() - 0.5) * 280;
+      wpos[i * 3 + 1] = (Math.random() - 0.5) * 180;
+      wpos[i * 3 + 2] = Math.random() * 320;
+      wcol[i * 3] = wcol[i * 3 + 1] = wcol[i * 3 + 2] = 1;
+      this._wPhase[i] = Math.random() * 6.28;
+      this._wJit[i] = 0.7 + Math.random() * 0.6;
+    }
+    const wgeo = new THREE.BufferGeometry();
+    wgeo.setAttribute("position", new THREE.BufferAttribute(wpos, 3));
+    wgeo.setAttribute("color", new THREE.BufferAttribute(wcol, 3));
+    this._wPos = wgeo.getAttribute("position");
+    this._wCol = wgeo.getAttribute("color");
+    this._wMat = new THREE.PointsMaterial({
+      size: 2.4, sizeAttenuation: true, vertexColors: true, transparent: true,
+      opacity: 0, depthWrite: false, fog: false, blending: THREE.AdditiveBlending,
+    });
+    this.weather = new THREE.Points(wgeo, this._wMat);
+    this.weather.frustumCulled = false; // it surrounds the camera — never cull it
+    this.weather.renderOrder = 3;
+    wgeo.setDrawRange(0, 0);
+    this.group.add(this.weather);
+    // Eased look (live → target); motion params swap live on a biome change.
+    this._wColor = new THREE.Color(0xffffff); this._wColorTarget = new THREE.Color(0xffffff);
+    this._wOpacity = 0; this._wOpacityTarget = 0;
+    this._w = { vx: 0, vy: 6, vz: 0, sway: 5, swaySpeed: 1, twinkle: 0, count: 0 };
   }
 
   // Drive the backdrop mood from the active biome. The game calls this once on a
   // zone change with that biome's palette; update() then EASES toward these targets
   // (no snap). All tints are stored as THREE.Color targets / scalar hue targets.
-  setBiome({ skylineHue, skylineSpread, moon, nebula, skyline }) {
+  setBiome({ skylineHue, skylineSpread, moon, nebula, skyline, weather }) {
     if (skylineHue != null) this._hueTarget = skylineHue;
     if (skylineSpread != null) this._spreadTarget = skylineSpread;
     if (moon != null) {
@@ -364,6 +403,59 @@ export class Background {
     }
     if (nebula != null) this._nebTarget.setHex(nebula);
     this.emitter.setTint(skyline); // the mouth glows the zone's neon window-accent
+
+    // Ambient weather: ease the LOOK (colour/opacity), swap the MOTION immediately so
+    // the new air (falling snow vs rising embers) reads within a couple of seconds as
+    // particles recycle. Reduced-motion thins the field and (below) kills the twinkle.
+    if (weather) {
+      this._wColorTarget.setHex(weather.color);
+      this._wOpacityTarget = weather.opacity;
+      this._w.vx = weather.vx; this._w.vy = weather.vy; this._w.vz = weather.vz;
+      this._w.sway = weather.sway; this._w.swaySpeed = weather.swaySpeed;
+      this._w.twinkle = this._reducedMotion ? 0 : weather.twinkle;
+      this._w.count = Math.min(this._wMax, Math.round(weather.count * (this._reducedMotion ? 0.4 : 1)));
+      this._wMat.size = weather.size;
+      this.weather.geometry.setDrawRange(0, this._w.count);
+    }
+  }
+
+  // Integrate + recycle the ambient weather. World-anchored so you fly THROUGH it: each
+  // particle drifts by the biome velocity (+ a no-net-drift sway), and is recycled onto
+  // the opposite face of a box around the player when it exits — keeping a steady field
+  // around the camera no matter how far/fast you travel. Colour eases; twinkle + tint
+  // ride per-vertex colour (additive blend → brightness reads as a spark/star flicker).
+  _updateWeather(dt, px, py, pz, t, f) {
+    const k = dt > 0 ? 1 - Math.exp(-dt / 0.9) : 0;
+    this._wColor.lerp(this._wColorTarget, k);
+    this._wOpacity += (this._wOpacityTarget - this._wOpacity) * k;
+    this._wMat.opacity = this._wOpacity * f;
+    const w = this._w;
+    if (w.count <= 0 || this._wMat.opacity < 0.01 || dt <= 0) return;
+    const pos = this._wPos.array, col = this._wCol.array;
+    const spreadX = 150, aheadZ = 320;
+    const ceil = py + 150, floor = py - 95;
+    const cr = this._wColor.r, cg = this._wColor.g, cb = this._wColor.b;
+    for (let i = 0; i < w.count; i++) {
+      const j = this._wJit[i], ph = this._wPhase[i];
+      let x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+      x += (w.vx * j + w.sway * w.swaySpeed * Math.cos(t * w.swaySpeed + ph)) * dt; // drift + oscillating sway (derivative → no net walk)
+      y += w.vy * j * dt;
+      z += w.vz * j * dt;
+      // Recycle onto the opposite face when it leaves the box around the player.
+      if (z < pz - 50) { z = pz + 40 + Math.random() * aheadZ; x = px + (Math.random() - 0.5) * 2 * spreadX; y = py - 60 + Math.random() * 200; }
+      else if (z > pz + aheadZ + 90) { z = pz + 40 + Math.random() * 70; }
+      if (y < floor) { y = ceil; x = px + (Math.random() - 0.5) * 2 * spreadX; }      // fell out the bottom (snow/dust) → reappear up top
+      else if (y > ceil) { y = floor; x = px + (Math.random() - 0.5) * 2 * spreadX; }  // rose out the top (embers/stars) → reappear below
+      const dx = x - px;
+      if (dx > spreadX) { x = px - spreadX; z = pz + 40 + Math.random() * aheadZ; }      // blew off one side (wind) → re-enter upwind
+      else if (dx < -spreadX) { x = px + spreadX; z = pz + 40 + Math.random() * aheadZ; }
+      pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+      // Per-particle brightness → twinkle (or steady). Additive blend turns it into glow.
+      const b = w.twinkle ? 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 3.2 + ph * 5)) : 1;
+      col[i * 3] = cr * b; col[i * 3 + 1] = cg * b; col[i * 3 + 2] = cb * b;
+    }
+    this._wPos.needsUpdate = true;
+    this._wCol.needsUpdate = true;
   }
 
   update(playerZ, dt = 0, playing = false, playerX = 0, playerY = 0, emit = null) {
@@ -473,5 +565,8 @@ export class Background {
       p.material.color.setHSL(hue, 0.62, Math.min(0.95, 0.6 + beat * 0.32));
       p.material.opacity = p.userData.baseOpacity * (0.78 + 0.22 * Math.sin(t * 0.22 + i)) * (1 + beat * 0.6) * f;
     });
+
+    // Ambient weather fills the air for the active zone (snow/dust/embers/stars).
+    this._updateWeather(dt, playerX, playerY, playerZ, t, f);
   }
 }

@@ -384,9 +384,18 @@ export const CONFIG = {
 //   accent      — the zone's signature colour, used for the entry title card + the
 //                 full-screen colour shockwave when you cross in (its identity colour)
 //   tagline     — the line under the big name on the entry card (sets the mood)
-//   chord       — the notes (Hz) of the entry "portal" sting, so each crossing arrives
-//                 on a chord that fits the zone: bright & major for city/ice, warm for
-//                 dunes, dark & minor for the void. (See sound.portal.)
+//   weather     — the AMBIENT PARTICLE field that fills the air for the whole zone, and
+//                 the single biggest "this is a different world" cue. It's the MOTION
+//                 that reads, not the colour: embers RISE, desert dust BLOWS sideways,
+//                 snow FALLS, void-stars HANG and drift. Background.js integrates one
+//                 shared pool against these params. Fields:
+//                   color    — particle tint
+//                   count    — how many are live (density)
+//                   size     — point size
+//                   vx,vy,vz — base drift velocity (units/s; vy<0 falls, vy>0 rises)
+//                   sway     — lateral sine-sway amplitude; swaySpeed its rate
+//                   twinkle  — 1 = per-particle opacity flicker (sparks/stars)
+//                   opacity  — base material opacity
 export const BIOMES = [
   // Neon City — cool blue dusk, teal + magenta window glow (the baseline city).
   {
@@ -403,7 +412,8 @@ export const BIOMES = [
     bloom: 0.0,
     accent: 0xff4bd6,
     tagline: "where the climb begins",
-    chord: [523.25, 659.25, 783.99, 1046.5], // C major — bright, open
+    // Neon embers/sparks drifting UP off the city — electric, alive.
+    weather: { color: 0xff6bd6, count: 55, size: 2.2, vx: 0, vy: 9, vz: -2, sway: 7, swaySpeed: 1.3, twinkle: 1, opacity: 0.5 },
   },
   // Sunset Dunes — warm rose-amber haze, golden windows, an amber moon.
   {
@@ -420,7 +430,8 @@ export const BIOMES = [
     bloom: 0.08,
     accent: 0xffb04a,
     tagline: "into the warm horizon",
-    chord: [440, 554.37, 659.25, 880], // A major — warm, golden
+    // Sand & dust BLOWING sideways on a hot wind — the desert reads instantly.
+    weather: { color: 0xffd29a, count: 140, size: 1.9, vx: 28, vy: -3, vz: -7, sway: 3, swaySpeed: 2.0, twinkle: 0, opacity: 0.34 },
   },
   // Ice Caverns — cold cyan + white, frozen window light, a pale-blue moon.
   {
@@ -437,7 +448,8 @@ export const BIOMES = [
     bloom: 0.12,
     accent: 0x9af0ff,
     tagline: "the frozen deep",
-    chord: [587.33, 739.99, 880, 1174.7], // D major up high — crystalline
+    // Snow FALLING with a gentle drift — cold and quiet.
+    weather: { color: 0xeaffff, count: 150, size: 2.7, vx: 2, vy: -15, vz: -3, sway: 9, swaySpeed: 0.9, twinkle: 0, opacity: 0.6 },
   },
   // The Void — deep violet + blue, eerie violet glow, dim flare.
   {
@@ -454,7 +466,8 @@ export const BIOMES = [
     bloom: 0.18,
     accent: 0xa05bff,
     tagline: "beyond the edge",
-    chord: [392, 466.16, 587.33, 783.99], // G minor — dark, eerie
+    // Stars / void-motes HANGING in space, drifting up slowly and twinkling — eerie, weightless.
+    weather: { color: 0xd9c2ff, count: 95, size: 2.3, vx: 0, vy: 4, vz: 0, sway: 4, swaySpeed: 0.35, twinkle: 1, opacity: 0.72 },
   },
 ];
 
