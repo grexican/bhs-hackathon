@@ -1337,6 +1337,37 @@ export class Sound {
     }
   }
 
+  // Crossing into a new biome: a rising whoosh that swells then "arrives" on the
+  // zone's chord (passed in from BIOMES) with a long, shimmering reverb tail — the
+  // audio half of the gateway moment. Routed through musicGain so it sits inside the
+  // mix like a stinger, not on top as a blippy SFX.
+  portal(chord) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    this._riser(t, 0.55);          // whoosh up, crescendo, cut at the arrival
+    const hit = t + 0.55;          // the downbeat the riser cuts into
+    const notes = chord && chord.length ? chord : [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((f, i) => {
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = "triangle";
+      o.frequency.value = f;
+      const peak = 0.15 / (1 + i * 0.3); // higher notes softer so the chord doesn't get shrill
+      g.gain.setValueAtTime(0.0001, hit);
+      g.gain.exponentialRampToValueAtTime(peak, hit + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, hit + 1.7); // long bell-like shimmer
+      o.connect(g); g.connect(this.musicGain);
+      if (this.spaceIn) { const s = this.ctx.createGain(); s.gain.value = 0.6; g.connect(s); s.connect(this.spaceIn); }
+      o.start(hit); o.stop(hit + 1.8);
+    });
+    // A soft low boom an octave under the root gives the arrival some weight.
+    const bo = this.ctx.createOscillator(), bg = this.ctx.createGain();
+    bo.type = "sine"; bo.frequency.value = notes[0] / 2;
+    bg.gain.setValueAtTime(0.0001, hit);
+    bg.gain.exponentialRampToValueAtTime(0.3, hit + 0.03);
+    bg.gain.exponentialRampToValueAtTime(0.0001, hit + 0.9);
+    bo.connect(bg); bg.connect(this.musicGain); bo.start(hit); bo.stop(hit + 1);
+  }
+
   // --- helpers --------------------------------------------------------------
 
   _env(g, t, peak, attack, decay) {

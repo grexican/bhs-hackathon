@@ -58,6 +58,7 @@ export class Game {
     this._biome = 0;
     this._biomeBloom = 0;   // eased extra bloom for the active biome's signature flare level
     this._biomeFlash = 0;   // brief bloom punch on a zone change, decays to 0
+    this._fovKick = 0;      // brief FOV widen on a zone change — the camera "whoomphs" back, decays to 0
     this._reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     this._lean = 0; // smoothed steer for a soft camera lean
     this._throttleSmooth = 0; // smoothed Up/Down throttle for the speed camera response
@@ -93,6 +94,9 @@ export class Game {
       restart: document.getElementById("overlay-restart"),
       toast: document.getElementById("toast"),
       effects: document.getElementById("effects"),
+      biomeCard: document.getElementById("biome-card"),
+      biomeCardName: document.getElementById("biome-card-name"),
+      biomeCardTag: document.getElementById("biome-card-tag"),
     };
     // The pause-screen Restart button (promoted out of the ⚙️ panel).
     if (this._hud.restart) this._hud.restart.addEventListener("click", () => this._restartToTitle());
@@ -985,19 +989,59 @@ export class Game {
     const i = biomeAt(z);
     if (i !== this._biome) {
       this._biome = i;
-      const b = BIOMES[i];
-      this._toast(`Entering ${b.name}`, "#9fe0ff");
-      this.background.setBiome(b);   // backdrop tints ease toward this zone
-      this._biomeFlash = 0.5;        // momentary bloom punch on entry
+      this._biomeEntry(BIOMES[i]);
     }
     const b = BIOMES[i];
     // Stronger lerp than before so the fog/sun shift is actually FELT (a ~2s mood
     // change, matched to the backdrop ease) rather than a barely-there drift.
     this.scene.fog.color.lerp(new THREE.Color(b.fog), 0.04);
     this.sun.color.lerp(new THREE.Color(b.sun), 0.04);
-    // Ease the biome's signature bloom level; decay the entry flash.
+    // Ease the biome's signature bloom level; decay the entry flash + FOV kick.
     this._biomeBloom += ((b.bloom || 0) - this._biomeBloom) * (dt > 0 ? 1 - Math.exp(-dt / 0.9) : 0);
-    if (this._biomeFlash > 0) this._biomeFlash = Math.max(0, this._biomeFlash - dt * 1.2);
+    if (this._biomeFlash > 0) this._biomeFlash = Math.max(0, this._biomeFlash - dt * 1.8); // snappier punch than before
+    if (this._fovKick > 0) this._fovKick = Math.max(0, this._fovKick - dt * 18);           // ~0.4s back to normal
+  }
+
+  // The gateway "moment" when you cross into a new zone. Four beats fire together so
+  // a boundary FEELS like arriving somewhere new, not a quiet tint drift:
+  //   1) a big cinematic title card (zone name + mood tagline, in the zone's colour),
+  //   2) a full-screen colour shockwave in that colour,
+  //   3) a bloom + camera FOV punch on the 3D scene,
+  //   4) a musical "portal" sting that arrives on the zone's chord.
+  // Everything here is presentation — no gameplay/physics changes.
+  _biomeEntry(b) {
+    this.background.setBiome(b); // backdrop tints ease toward this zone (the slow ~2s mood shift)
+    const css = hexCss(b.accent ?? b.skyline ?? 0x9fe0ff);
+
+    // 1) Cinematic title card. Restart the animation by toggling the class off/on
+    //    (the void-offsetWidth reflow forces the browser to replay it).
+    const card = this._hud.biomeCard;
+    if (card) {
+      this._hud.biomeCardName.textContent = b.name;
+      this._hud.biomeCardTag.textContent = b.tagline || "";
+      card.style.setProperty("--c", css);
+      card.classList.remove("is-show");
+      void card.offsetWidth;
+      card.classList.add("is-show");
+    }
+
+    // 2) Full-screen colour shockwave (same restart-the-animation trick).
+    if (!this._biomeFlashEl) this._biomeFlashEl = document.getElementById("biome-flash");
+    const flash = this._biomeFlashEl;
+    if (flash) {
+      flash.style.setProperty("--c", css);
+      flash.classList.remove("is-cross");
+      void flash.offsetWidth;
+      flash.classList.add("is-cross");
+    }
+
+    // 3) Scene punch: a strong-but-brief bloom flare + a quick FOV widen that eases
+    //    back. Reduced-motion players keep a gentler flare and skip the camera move.
+    this._biomeFlash = this._reducedMotion ? 0.35 : 0.8;
+    if (!this._reducedMotion) this._fovKick = 7;
+
+    // 4) The audio half — a whoosh into the zone's chord.
+    this.sound.portal(b.chord);
   }
 
   _applyPowerup(u) {
@@ -1259,7 +1303,7 @@ export class Game {
     // Audiosurf: a quick FOV widen on each beat (rides the same decaying pulse as the
     // bloom kick) so the camera "breathes" with the music alongside the glow flash.
     const beatFov = this._audiosurf ? this._beatPulse * CONFIG.audiosurf.fovKick : 0;
-    const targetFov = this._baseFov + speedFov + this._throttleSmooth * 6 + beatFov;
+    const targetFov = this._baseFov + speedFov + this._throttleSmooth * 6 + beatFov + this._fovKick;
     if (Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.camera.fov += (targetFov - this.camera.fov) * 0.08;
       this.camera.updateProjectionMatrix();

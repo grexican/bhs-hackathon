@@ -134,6 +134,64 @@
         100% { transform: translateY(118vh) scaleY(1.35); opacity: 0; }
       }
 
+      /* Biome gateway: a full-screen colour shockwave that blooms from the centre and
+         washes the new zone's signature colour over the whole view, then fades fast —
+         the visual "WHOOMPH" of crossing a threshold. Colour is set from JS per zone
+         (--c); the sweep is one GPU-cheap radial-gradient scale. Sits above the 3D
+         canvas but below the HUD so the title card reads on top of it. */
+      #biome-flash {
+        position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0;
+        background: radial-gradient(circle at center,
+          var(--c, #fff) 0%, color-mix(in srgb, var(--c, #fff) 40%, transparent) 30%, transparent 62%);
+        mix-blend-mode: screen;
+      }
+      #biome-flash.is-cross { animation: biome-flash 1.15s cubic-bezier(0.16, 0.84, 0.3, 1) forwards; }
+      @keyframes biome-flash {
+        0%   { opacity: 0;    transform: scale(0.25); }
+        18%  { opacity: 0.85; transform: scale(0.7); }
+        45%  { opacity: 0.5;  transform: scale(1.25); }
+        100% { opacity: 0;    transform: scale(1.7); }
+      }
+
+      /* The cinematic "ENTERING <ZONE>" card — big zone name + a mood tagline, in the
+         zone's accent colour. Scales + drifts up and fades, like a film location title.
+         Replaces the tiny corner toast for biome crossings so arriving feels like an
+         event. Colour + text set from JS; --c is the zone accent. */
+      .biome-card {
+        position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%);
+        text-align: center; opacity: 0; pointer-events: none; white-space: nowrap;
+      }
+      .biome-card__eyebrow {
+        font-size: clamp(11px, 2vw, 14px); font-weight: 800; letter-spacing: 6px;
+        text-transform: uppercase; color: var(--c, #fff); opacity: 0.85;
+      }
+      .biome-card__name {
+        font-size: clamp(40px, 9vw, 86px); font-weight: 900; letter-spacing: 4px; line-height: 1.04;
+        color: #fff; text-shadow: 0 0 32px var(--c, #fff), 0 0 8px var(--c, #fff); margin-top: 4px;
+      }
+      .biome-card__tag {
+        font-size: clamp(14px, 3vw, 20px); font-weight: 600; font-style: italic;
+        letter-spacing: 1px; color: var(--c, #fff); opacity: 0.92; margin-top: 8px;
+      }
+      .biome-card.is-show { animation: biome-card 2.8s cubic-bezier(0.16, 0.84, 0.3, 1) forwards; }
+      @keyframes biome-card {
+        0%   { opacity: 0; transform: translate(-50%, -42%) scale(0.82); letter-spacing: 14px; filter: blur(6px); }
+        14%  { opacity: 1; transform: translate(-50%, -50%) scale(1.04); letter-spacing: 4px; filter: blur(0); }
+        70%  { opacity: 1; transform: translate(-50%, -52%) scale(1); }
+        100% { opacity: 0; transform: translate(-50%, -64%) scale(1); }
+      }
+      /* Reduced motion: keep the announcement, drop the swooping/blur/scale theatrics. */
+      @media (prefers-reduced-motion: reduce) {
+        #biome-flash.is-cross { animation: biome-flash-rm 0.9s ease-out forwards; }
+        @keyframes biome-flash-rm { 0% { opacity: 0; } 25% { opacity: 0.4; } 100% { opacity: 0; } }
+        .biome-card.is-show { animation: biome-card-rm 2.6s ease-out forwards; }
+        @keyframes biome-card-rm {
+          0% { opacity: 0; transform: translate(-50%, -50%); }
+          12%, 72% { opacity: 1; transform: translate(-50%, -50%); }
+          100% { opacity: 0; transform: translate(-50%, -50%); }
+        }
+      }
+
       /* Heads-up display layered on top of the 3D canvas */
       .hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
 
@@ -355,6 +413,7 @@
     <div id="fog-lens"></div>
     <div id="dark-lens"></div>
     <div id="rain-lens"></div>
+    <div id="biome-flash"></div>
 
     <div class="hud">
       <div class="hud__panel">
@@ -405,6 +464,12 @@
       </div>
 
       <div class="toast" id="toast"></div>
+
+      <div class="biome-card" id="biome-card">
+        <div class="biome-card__eyebrow">Entering</div>
+        <div class="biome-card__name" id="biome-card-name"></div>
+        <div class="biome-card__tag" id="biome-card-tag"></div>
+      </div>
 
       <div class="hud__center" id="overlay">
         <div class="hud__title" id="overlay-title">G&#8209;ROLLER</div>

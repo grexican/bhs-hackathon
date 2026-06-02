@@ -366,6 +366,12 @@ export const CONFIG = {
 //   skyline     — bright window-glow colour
 //   moon / nebula — body tints
 //   bloom       — extra bloom strength while in this zone
+//   accent      — the zone's signature colour, used for the entry title card + the
+//                 full-screen colour shockwave when you cross in (its identity colour)
+//   tagline     — the line under the big name on the entry card (sets the mood)
+//   chord       — the notes (Hz) of the entry "portal" sting, so each crossing arrives
+//                 on a chord that fits the zone: bright & major for city/ice, warm for
+//                 dunes, dark & minor for the void. (See sound.portal.)
 export const BIOMES = [
   // Neon City — cool blue dusk, teal + magenta window glow (the baseline city).
   {
@@ -380,6 +386,9 @@ export const BIOMES = [
     moon: 0xbfe3ff,
     nebula: 0x6a7bff,
     bloom: 0.0,
+    accent: 0xff4bd6,
+    tagline: "where the climb begins",
+    chord: [523.25, 659.25, 783.99, 1046.5], // C major — bright, open
   },
   // Sunset Dunes — warm rose-amber haze, golden windows, an amber moon.
   {
@@ -394,6 +403,9 @@ export const BIOMES = [
     moon: 0xffcf9a,
     nebula: 0xff6a8a,
     bloom: 0.08,
+    accent: 0xffb04a,
+    tagline: "into the warm horizon",
+    chord: [440, 554.37, 659.25, 880], // A major — warm, golden
   },
   // Ice Caverns — cold cyan + white, frozen window light, a pale-blue moon.
   {
@@ -408,6 +420,9 @@ export const BIOMES = [
     moon: 0xeaffff,
     nebula: 0x6ad6ff,
     bloom: 0.12,
+    accent: 0x9af0ff,
+    tagline: "the frozen deep",
+    chord: [587.33, 739.99, 880, 1174.7], // D major up high — crystalline
   },
   // The Void — deep violet + blue, eerie violet glow, dim flare.
   {
@@ -422,6 +437,9 @@ export const BIOMES = [
     moon: 0xcaa6ff,
     nebula: 0x7a3bff,
     bloom: 0.18,
+    accent: 0xa05bff,
+    tagline: "beyond the edge",
+    chord: [392, 466.16, 587.33, 783.99], // G minor — dark, eerie
   },
 ];
 
