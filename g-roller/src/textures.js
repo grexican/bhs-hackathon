@@ -254,26 +254,45 @@ const PAINTERS = {
     boldGrid(ctx, s, NEON.pebble, 3); // glass tile: bold readable grid over the stones
   },
 
-  // "Round dot rubber" — the bouncy board. Bright pink studs on the dark panel.
-  // Kept punchy (the material below also self-glows) but now sits on the shared
-  // base with a hot frame so it belongs to the family.
+  // Bouncy board — concentric pink "shockwave" rings rippling out from the centre,
+  // like a struck trampoline mat. Reads as SPRINGY at a glance (vs the old flat
+  // studs). The material self-glows pink on top of this.
   rubber(ctx, s) {
     panelBase(ctx, s);
-    const n = 5, t = s / n;
-    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-      const cx = x * t + t / 2, cy = y * t + t / 2;
-      const halo = ctx.createRadialGradient(cx, cy, 1, cx, cy, t * 0.5);
-      halo.addColorStop(0, "rgba(255,107,157,0.45)");
-      halo.addColorStop(1, "rgba(255,107,157,0)");
-      ctx.fillStyle = halo;
-      ctx.beginPath(); ctx.arc(cx, cy, t * 0.5, 0, Math.PI * 2); ctx.fill();
-      const g = ctx.createRadialGradient(cx - 2, cy - 2, 1, cx, cy, t * 0.34);
-      g.addColorStop(0, "#ff8fb6");
-      g.addColorStop(1, "#d11e57");
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(cx, cy, t * 0.32, 0, Math.PI * 2); ctx.fill();
+    const cx = s / 2, cy = s / 2;
+    ctx.save();
+    ctx.lineCap = "round";
+    for (let i = 1; i <= 5; i++) {
+      const r = (i / 5) * s * 0.46;
+      ctx.strokeStyle = "#ff5f9e";
+      ctx.globalAlpha = 0.18; ctx.lineWidth = 9;                 // soft halo
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.95; ctx.lineWidth = 2.4;               // bright core
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
     }
+    ctx.globalAlpha = 1; ctx.fillStyle = "#ffc0da";
+    ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.fill(); // bright hit-point
+    ctx.restore();
     neonFrame(ctx, s, "#ff4f8a", 6, 2);
+  },
+
+  // Flipper / launch pad — bold ORANGE chevrons firing FORWARD (down in canvas),
+  // same neon-arrow language as the green boost pad but a different job: this one
+  // FLINGS you. Distinct colour + the hinge-kick animation sell the launch.
+  flipper(ctx, s) {
+    panelBase(ctx, s);
+    ctx.fillStyle = "#ffb24a";
+    ctx.shadowColor = "#ff7a1c"; ctx.shadowBlur = 24;
+    for (let i = 0; i < 3; i++) {
+      const y = i * (s / 3) + 12;
+      ctx.beginPath();
+      ctx.moveTo(s * 0.15, y + 24); ctx.lineTo(s * 0.5, y + 66);
+      ctx.lineTo(s * 0.85, y + 24); ctx.lineTo(s * 0.85, y);
+      ctx.lineTo(s * 0.5, y + 42); ctx.lineTo(s * 0.15, y);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    neonFrame(ctx, s, "#ff7a1c", 6, 2.4);
   },
 
   // Speed-boost pad — glowing forward chevrons (green = "go fast") on the dark

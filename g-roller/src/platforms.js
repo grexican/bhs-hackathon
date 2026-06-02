@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { CONFIG, jumpReach, ramp, smoothstep, BIOMES, biomeAt } from "./config.js";
 import { makeTextureLibrary, GROUND_TEXTURES } from "./textures.js";
-import { iconCanvas } from "./icons.js";
+import { emojiCanvas } from "./icons.js";
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
@@ -9,26 +9,31 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const chance = (p) => Math.random() < p;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-// Telegraphed pickups: each has its own color, shape and glyph so you always
-// know what you're about to touch. GOOD = cool colors, BAD (powerdowns) = warm.
-// weight = spawn frequency: simpler / milder effects are common, powerful or
-// harsh ones (flight, trip) are rare.
+// ONE source of truth per effect — read these everywhere instead of repeating
+// per-effect data in the HUD/toast/loop code:
+//   color   — tints the glyph, the 3D pickup mesh, the aura cloud accent, HUD chip + toast
+//   shape   — the 3D pickup mesh
+//   icon    — emoji shown in-world (above the pickup, orbiting the ball) + in the cheat menu
+//   good    — buff (true) vs powerdown (false); good=cool tint, bad=warm
+//   weight  — spawn frequency (milder effects common; flight/trip rare)
+//   dur     — seconds the timed effect lasts (omitted for shield [boolean until hit] and splat [instant])
+//   label   — the toast text shown when you pick it up
 export const POWERUP_DEFS = {
-  shield:     { color: 0x9fe0ff, shape: "ring",  icon: "🛡️", good: true,  weight: 5 },
-  slow:       { color: 0x2fd9c0, shape: "ico",   icon: "🐢", good: true,  weight: 5 },
-  magnet:     { color: 0x4a78ff, shape: "ring",  icon: "🧲", good: true,  weight: 4 },
-  doublejump: { color: 0xc6ff3a, shape: "knot",  icon: "⏫", good: true,  weight: 3 },
-  lowgrav:    { color: 0x9affd6, shape: "octa",  icon: "🌕", good: true,  weight: 2.5 },
-  flight:     { color: 0xffd24a, shape: "octa",  icon: "🕊️", good: true,  weight: 1.3 },
-  reverse:    { color: 0xff9f1c, shape: "box",   icon: "🔄", good: false, weight: 5 },
-  surge:      { color: 0xff3b3b, shape: "cone",  icon: "⚡", good: false, weight: 3 },
-  splat:      { color: 0x8a5a2b, shape: "box",   icon: "💦", good: false, weight: 3 },
-  morph:      { color: 0xff4bd6, shape: "ico",   icon: "🌀", good: false, weight: 2.5 },
-  flubber:    { color: 0x6aff6a, shape: "ico",   icon: "🫧", good: false, weight: 2.5 },
-  blackout:   { color: 0x44507a, shape: "octa",  icon: "🌑", good: false, weight: 2 },
-  fog:        { color: 0x9aa6b5, shape: "box",   icon: "🌫️", good: false, weight: 2 },
-  rain:       { color: 0x6f9fd0, shape: "ico",   icon: "🌧️", good: false, weight: 2 },
-  trip:       { color: 0xa94bff, shape: "tetra", icon: "🌈", good: false, weight: 1.3 },
+  shield:     { color: 0x9fe0ff, shape: "ring",  icon: "🛡️", good: true,  weight: 5,   label: "SHIELD" },
+  slow:       { color: 0x2fd9c0, shape: "ico",   icon: "🐢", good: true,  weight: 5,   dur: 10, label: "SLOW-MO" },
+  magnet:     { color: 0x4a78ff, shape: "ring",  icon: "🧲", good: true,  weight: 4,   dur: 15, label: "MAGNET" },
+  doublejump: { color: 0x6effc0, shape: "knot",  icon: "🦘", good: true,  weight: 3,   dur: 16, label: "DOUBLE JUMP" },
+  lowgrav:    { color: 0x9affd6, shape: "octa",  icon: "🌕", good: true,  weight: 2.5, dur: 20, label: "LOW GRAVITY" },
+  flight:     { color: 0x7fdfff, shape: "octa",  icon: "🪽", good: true,  weight: 1.3, dur: 12, label: "FLIGHT — hold jump!" },
+  reverse:    { color: 0xff9f1c, shape: "box",   icon: "↔️", good: false, weight: 2,   dur: 10, label: "REVERSED!" },
+  surge:      { color: 0xff3b3b, shape: "cone",  icon: "⚡", good: false, weight: 3,   dur: 7,  label: "SURGE!" },
+  splat:      { color: 0xb5742f, shape: "box",   icon: "💦", good: false, weight: 3,   dur: 10, label: "SPLAT!" },
+  morph:      { color: 0xff4bd6, shape: "ico",   icon: "🌀", good: false, weight: 2.5, dur: 20, label: "MORPH!" },
+  flubber:    { color: 0xff8f4a, shape: "ico",   icon: "🫧", good: false, weight: 2.5, dur: 20, label: "FLUBBER! — steer in the air" },
+  blackout:   { color: 0xd1657f, shape: "octa",  icon: "🌑", good: false, weight: 2,   dur: 18, label: "BLACKOUT! — follow the edge lights" },
+  fog:        { color: 0xc2a78f, shape: "box",   icon: "☁️", good: false, weight: 2,   dur: 25, label: "FOGGED! — distance is gone" },
+  rain:       { color: 0xc98fb0, shape: "ico",   icon: "🌧️", good: false, weight: 2,   dur: 15, label: "DOWNPOUR! — wipers can't keep up" },
+  trip:       { color: 0xff8adf, shape: "tetra", icon: "🌈", good: false, weight: 1.3, dur: 20, label: "TRIPPING!" },
 };
 const GOOD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => POWERUP_DEFS[k].good);
 const BAD_POWERUPS = Object.keys(POWERUP_DEFS).filter((k) => !POWERUP_DEFS[k].good);
@@ -105,6 +110,7 @@ export class PlatformField {
     this.itemMultiplier = 1; // cheat code bumps this to spawn extra gems/powerups
     this.activeEffects = 0;  // count of currently-active powerups/downs (pushed in from game.js each frame) — runes spawn less while this is high
     this.difficultyMult = 1; // Easy/Medium/Hard scales the floor of the hazard ramps
+    this.spreadMult = 1;     // Easy/Medium/Hard scales how FAST the SPREAD ramp opens up (gaps/wander/clouds) — <1 keeps the field tight & survivable longer, >1 sprawls it fast
     this.fixedDifficulty = null; // when set (zen mode), PINS the hazard ramp here instead of escalating with distance
     // Cheat-mode test tool: which powerup types are allowed to spawn. Default = all.
     // Disable all but one and (with cheat's 5x items) it spawns constantly to test.
@@ -241,6 +247,11 @@ export class PlatformField {
     const edge = new THREE.LineSegments(edgeGeo, this._edgeMat);
     edge.visible = this.blackout;
     visual.add(edge);
+
+    // Bouncy gets a subtle coil spring under the deck (the FLIPPER's launch is now
+    // carried by its orange-chevron surface texture + the hinge-kick animation —
+    // no 3D props, which were reading as hazard spikes).
+    if (type === "bouncy") this._decorateLaunchPad(group, type, w, len, hy);
 
     this.scene.add(group);
 
@@ -550,6 +561,7 @@ export class PlatformField {
       x, y, z, w, len, hy: 0.5, geoType: "box", type: "normal", texName: this._groundTex(), spline,
     });
     p.hx = w / 2 + spline.meanderX + 1; // widen the landing/raycast box to include the meander
+    p._surfaceMinY = y - spline.ampY - 1; // deepest valley of the ribbon — the real floor for death checks
 
     // Far end: displacement is 0 there by construction, so the exit is the center (x,y).
     this._cursor = { x, y, z: z + len / 2 };
@@ -662,10 +674,45 @@ export class PlatformField {
       color: def.color, emissive: def.color, emissiveIntensity: 0.85, roughness: 0.25, metalness: 0.3,
     }));
     group.add(mesh);
+    // Visible "aura" cloud = the actual trigger zone (rolling INTO it collects the
+    // pickup), tinted green for buffs / red for powerdowns so you read good/bad AND
+    // its catch range at a glance. Radius matches the harvest radius below.
+    const aura = new THREE.Mesh(this._auraGeo(), new THREE.MeshBasicMaterial({
+      color: good ? 0x46e07a : 0xff5046, transparent: true, opacity: 0.16,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    aura.scale.setScalar(CONFIG.powerupAuraRadius);
+    group.add(aura);
     group.add(this._iconSprite(type)); // floating glyph above the shape
     group.position.set(x, y, z);
     this.scene.add(group);
     this.powerups.push({ mesh: group, type, good, grounded, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
+  }
+
+  // Cached unit sphere for the pickup aura cloud (scaled per-pickup to the radius).
+  _auraGeo() {
+    if (!this._sphereGeo) this._sphereGeo = new THREE.SphereGeometry(1, 16, 12);
+    return this._sphereGeo;
+  }
+
+  // A subtle coil spring beneath the bouncy deck — reinforces the springy read of
+  // its ripple-ring surface texture. Pure decoration (collision uses surfaceMesh).
+  // Material is per-board (NOT cached) — _disposeBoard traverses the group and
+  // disposes every mesh material on cull, so a shared one would get freed mid-run.
+  _decorateLaunchPad(group, type, w, len, hy) {
+    if (type !== "bouncy") return;
+    if (!this._coilGeo) this._coilGeo = new THREE.TorusGeometry(1, 0.12, 8, 18); // geometry is safe to share (not traverse-disposed)
+    const coilMat = new THREE.MeshStandardMaterial({
+      color: 0xff3f7a, emissive: 0xff1f5a, emissiveIntensity: 0.55, roughness: 0.4, metalness: 0.5,
+    });
+    const r = Math.min(w, len) * 0.26; // smaller than before — a compact spring, not a huge one
+    for (let i = 0; i < 3; i++) {
+      const ring = new THREE.Mesh(this._coilGeo, coilMat);
+      ring.rotation.x = Math.PI / 2;       // lie flat — stacked flat rings read as a coil
+      ring.scale.setScalar(r);
+      ring.position.y = -hy - 0.4 - i * r * 0.45; // hang a short coil just below the deck
+      group.add(ring);
+    }
   }
 
   // Cached geometry per pickup shape.
@@ -684,21 +731,21 @@ export class PlatformField {
     return g;
   }
 
-  // A camera-facing vector glyph that hovers above a pickup or rune plate.
-  // Drawn (not emoji) so every effect is instantly recognizable. Material cached
-  // per effect key, tinted by that effect's own color.
+  // A camera-facing EMOJI glyph hovering above a pickup or rune plate. The stylized
+  // vector icons washed out in-world (glossy/glassy, hard to read), so the in-game
+  // pickups use plain bold emoji — big and readable. (The HUD keeps the vector set.)
   _iconSprite(key) {
     if (!this._iconCache) this._iconCache = {};
     let mat = this._iconCache[key];
     if (!mat) {
       const def = POWERUP_DEFS[key];
-      const c = iconCanvas(key, def ? def.color : 0xffffff);
+      const c = emojiCanvas(def ? def.icon : "❓");
       mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false });
       this._iconCache[key] = mat;
     }
     const s = new THREE.Sprite(mat);
-    s.scale.set(1.5, 1.5, 1);
-    s.position.set(0, 1.5, 0);
+    s.scale.set(3.0, 3.0, 1); // 2x the old 1.5 — big and easy to read above the pickup
+    s.position.set(0, 2.1, 0);
     return s;
   }
 
@@ -799,8 +846,13 @@ export class PlatformField {
 
     const g = this._randGeo(ramp(CONFIG.roundGeoChance, sd));
     const round = g.geoType !== "box";
-    const w = rand(ramp(CONFIG.padWidthLo, dd), ramp(CONFIG.padWidthHi, dd));
-    let len = rand(ramp(CONFIG.padLenLo, dd), ramp(CONFIG.padLenHi, dd));
+    // Pad SIZE rides a difficulty-scaled ramp: the same distance counts as "harder"
+    // on Hard (×1.7) and "easier" on Easy (×0.55), so Hard pads shrink toward small
+    // single-jump pads while Easy keeps generous landings. (Gaps stay reachable —
+    // they're sized off jumpReach, not pad size.)
+    const padD = safe ? 0 : Math.min(1, hd * this.difficultyMult);
+    const w = rand(ramp(CONFIG.padWidthLo, padD), ramp(CONFIG.padWidthHi, padD));
+    let len = rand(ramp(CONFIG.padLenLo, padD), ramp(CONFIG.padLenHi, padD));
     if (round) len = Math.min(len, rand(10, 18));
 
     // Reachable step budgets (open up with SPREAD).
@@ -840,7 +892,7 @@ export class PlatformField {
         else if (chance(0.1)) type = "boost";
       }
     }
-    const texName = type === "boost" ? "boost" : type === "flipper" ? "rubber" : type === "rune" ? "rune" : this._groundTex();
+    const texName = type === "boost" ? "boost" : type === "flipper" ? "flipper" : type === "rune" ? "rune" : this._groundTex();
     if (type === "flipper") len = rand(9, 14); // small launch panels — a full-length flipper looks wrong
     if (type === "rune") len = rand(9, 14);    // short plate so a jump can clear a bad one
 
@@ -1004,7 +1056,7 @@ export class PlatformField {
   update(dt, playerZ, forwardSpeed, magnetPos = null) {
     this._time += dt;
     this._difficulty = this.fixedDifficulty != null ? this.fixedDifficulty : smoothstep(playerZ / CONFIG.difficultyDistance);
-    this._spreadD = smoothstep(playerZ / CONFIG.spreadDistance);
+    this._spreadD = smoothstep(playerZ * this.spreadMult / CONFIG.spreadDistance);
     this._biomeTextures = BIOMES[biomeAt(playerZ)].textures; // platforms re-skin per biome
 
     // Light/extinguish every board's edge outline when blackout flips on/off.
@@ -1112,8 +1164,15 @@ export class PlatformField {
   lowestTopNear(z) {
     let min = Infinity;
     for (const p of this.platforms) {
-      if (p.pos.z < z - 25 || p.pos.z > z + 110) continue; // roughly what's on screen
-      if (p.topY < min) min = p.topY;
+      // Look further AHEAD (out to the keep-ahead horizon): during a long descending
+      // hop the board you're falling toward must count, or the floor reads as the
+      // high board you just left and you "die" in mid-air over a perfectly good gap.
+      if (p.pos.z < z - 25 || p.pos.z > z + 190) continue;
+      // A spline's rolling surface dips to pos.y - ampY in its valleys (well below the
+      // board's flat topY). Use that valley depth so rolling/falling through a deep
+      // spline trough isn't mistaken for "fell off the world".
+      const surf = p._surfaceMinY != null ? p._surfaceMinY : p.topY;
+      if (surf < min) min = surf;
     }
     return min === Infinity ? -Infinity : min;
   }
@@ -1140,9 +1199,10 @@ export class PlatformField {
 
   harvestPowerups(playerPos, radius) {
     const grabbed = [];
+    const aura = CONFIG.powerupAuraRadius + radius; // matches the visible cloud (cloud radius + ball radius)
     for (const u of this.powerups) {
       if (u.collected) continue;
-      if (this._reach(u.mesh.position, playerPos, radius + 2, radius + 2)) {
+      if (this._reach(u.mesh.position, playerPos, aura, aura)) {
         u.collected = true; u.mesh.visible = false;
         grabbed.push({ type: u.type, good: u.good, pos: u.mesh.position.clone() });
       }

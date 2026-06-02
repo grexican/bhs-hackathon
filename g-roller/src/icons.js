@@ -262,15 +262,38 @@ function cloud(ctx, cx, cy) {
   fillStroke(ctx);
 }
 
+// Which glyphs are POWERDOWNS (bad). Mirrors the `good:false` entries in
+// POWERUP_DEFS — kept as a local list so icons.js stays free of a circular import.
+const BAD_ICONS = new Set(["reverse", "surge", "splat", "morph", "flubber", "blackout", "fog", "rain", "trip"]);
+
 // Draw glyph `key` onto a 2D context that's `size` px square, tinted `color`.
 export function drawIcon(ctx, key, size = SIZE, color = "#ffffff") {
   const fn = ICONS[key];
   ctx.clearRect(0, 0, size, size);
   if (!fn) return;
   const css = toCss(color);
+  const bad = BAD_ICONS.has(key);
   ctx.save();
   ctx.translate(size / 2, size / 2);
   ctx.scale(size / 128, size / 128); // glyphs are authored in a 128px space
+
+  // GOOD/BAD badge: a translucent disc + a bold ring behind the glyph. GREEN = a
+  // buff, RED = a debuff. This is the unmissable signal — it reads instantly even
+  // when the glyph's own hue is ambiguous (a blue-ish rain cloud must NOT look like
+  // a powerup). The per-effect tint below only distinguishes WHICH effect it is.
+  const badge = bad ? "#ff4338" : "#2fd06f";
+  ctx.beginPath();
+  ctx.arc(0, 0, 56, 0, Math.PI * 2);
+  ctx.fillStyle = bad ? "rgba(255,60,48,0.15)" : "rgba(40,205,110,0.15)";
+  ctx.fill();
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = badge;
+  ctx.shadowColor = badge;
+  ctx.shadowBlur = size * 0.05;
+  ctx.stroke();
+
+  // The glyph itself, inset so it sits comfortably inside the badge ring.
+  ctx.scale(0.76, 0.76);
   ctx.fillStyle = css;
   ctx.strokeStyle = "#0a0e1c"; // dark outline keeps glyphs readable on any backdrop
   ctx.lineWidth = 7;
@@ -293,6 +316,29 @@ export function iconCanvas(key, color = "#ffffff") {
     c.width = c.height = SIZE;
     drawIcon(c.getContext("2d"), key, SIZE, color);
     _canvasCache[cacheKey] = c;
+  }
+  return c;
+}
+
+// The PLAIN EMOJI glyph — used for the IN-WORLD sprites (floating pickups, rune
+// plates, orbit glyphs), where the stylized vector icons washed out and were hard
+// to read at distance. The HUD chips/toasts keep the crisp vector icons (iconImg).
+// Rendered with the OS colour-emoji font + a dark halo so it pops against bright
+// neon scenery. Cached per emoji.
+const _emojiCache = {};
+export function emojiCanvas(emoji) {
+  let c = _emojiCache[emoji];
+  if (!c) {
+    c = document.createElement("canvas");
+    c.width = c.height = SIZE;
+    const ctx = c.getContext("2d");
+    ctx.font = `96px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "rgba(0,0,0,0.9)"; // dark halo = legible over any backdrop
+    ctx.shadowBlur = 10;
+    ctx.fillText(emoji, SIZE / 2, SIZE / 2 + 4);
+    _emojiCache[emoji] = c;
   }
   return c;
 }

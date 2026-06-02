@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { CONFIG } from "./config.js";
-import { iconCanvas } from "./icons.js";
+import { emojiCanvas } from "./icons.js";
 import { POWERUP_DEFS } from "./platforms.js";
 
 const ONE = new THREE.Vector3(1, 1, 1);
@@ -1010,17 +1010,17 @@ export class Player {
     return m;
   }
 
-  // A camera-facing vector glyph for an active effect orbiting the ball. Drawn
-  // (not emoji) and tinted by the effect's own color, cached per key.
+  // A camera-facing EMOJI glyph for an active effect orbiting the ball — plain emoji
+  // (not the stylized vector icon) so it reads clearly in-world. Cached per key.
   _emojiSprite(key) {
     let tex = this._emojiTex[key];
     if (!tex) {
       const def = POWERUP_DEFS[key];
-      tex = new THREE.CanvasTexture(iconCanvas(key, def ? def.color : 0xffffff));
+      tex = new THREE.CanvasTexture(emojiCanvas(def ? def.icon : "❓"));
       this._emojiTex[key] = tex;
     }
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
-    s.scale.set(1.1, 1.1, 1);
+    s.scale.set(1.2, 1.2, 1); // small — these orbit the ball, they shouldn't dominate
     return s;
   }
 }

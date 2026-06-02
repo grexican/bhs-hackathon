@@ -51,7 +51,7 @@
         position: absolute; transform: translate(-50%, -50%) rotate(var(--rot)) scale(0.2);
         border-radius: 46% 54% 43% 57% / 52% 44% 56% 48%;
         opacity: 0; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5));
-        animation: splat-in 0.18s ease-out forwards, splat-drip 17s ease-in 0.18s forwards;
+        animation: splat-in 0.18s ease-out forwards, splat-drip 10s ease-in 0.18s forwards;
       }
       @keyframes splat-in {
         from { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rot)) scale(0.2); }
@@ -74,9 +74,9 @@
            windshield fogs over, not just a ring. The blur is set from JS so it
            ramps with the fog level — that's the "everything goes soft" part. */
         background: radial-gradient(ellipse at center,
-          rgba(176,180,188,0.40) 0%,
-          rgba(174,178,186,0.50) 55%,
-          rgba(178,182,190,0.66) 100%);
+          rgba(176,180,188,0.30) 0%,
+          rgba(174,178,186,0.40) 55%,
+          rgba(178,182,190,0.54) 100%);
         backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px);
       }
 
@@ -257,6 +257,19 @@
       }
       @keyframes pulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 rgba(255,211,78,0); } 50% { opacity: 0.65; box-shadow: 0 0 22px rgba(255,211,78,0.3); } }
 
+      /* Restart button on the pause screen — promoted out of the ⚙️ panel so it's
+         right there when you pause. The overlay is click-through, so this opts back
+         into pointer events. */
+      .hud__restart {
+        pointer-events: auto; cursor: pointer;
+        font: 800 16px "Trebuchet MS", system-ui, sans-serif; color: #fff;
+        padding: 11px 26px; border-radius: 999px; margin-top: 2px;
+        background: rgba(255, 63, 122, 0.18); border: 2px solid rgba(255, 63, 122, 0.7);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.35); letter-spacing: 0.5px;
+      }
+      .hud__restart:hover { background: rgba(255, 63, 122, 0.32); border-color: var(--pink); color: #fff; }
+      .hud__restart.is-hidden { display: none; }
+
       .hud__controls { font-size: 14px; opacity: 0.75; line-height: 1.7; max-width: 460px; }
       .hud__controls kbd {
         background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
@@ -332,6 +345,7 @@
       }
       .settings__pu.off { opacity: 0.32; }
       .settings__pu--mini { font-size: 11px; padding: 4px 8px; }
+      .settings__puemoji { font-size: 17px; vertical-align: middle; } /* the in-world emoji, legible in the cheat chips */
     </style>
   </head>
   <body>
@@ -377,7 +391,7 @@
           <button class="settings__row" id="set-skin">🎨 Ball Skin</button>
           <button class="settings__row" id="set-zen">🧘 Zen Mode</button>
           <button class="settings__row" id="set-audiosurf">🎵 Audiosurf</button>
-          <button class="settings__row" id="set-endrun">🏁 End Run → Title</button>
+          <button class="settings__row" id="set-endrun">↺ Restart</button>
           <div id="set-powerups" style="display:none">
             <div class="settings__puhdr">
               🧪 Spawn pool (cheat)
@@ -396,6 +410,7 @@
         <div class="hud__title" id="overlay-title">G&#8209;ROLLER</div>
         <div class="hud__subtitle" id="overlay-subtitle">Roll the gauntlet of floating blocks</div>
         <div class="hud__hint" id="overlay-hint">Press JUMP to roll</div>
+        <button class="hud__restart is-hidden" id="overlay-restart" type="button">↺ Restart</button>
         <div class="hud__controls hud__controls--keys">
           <kbd>Space</kbd> / <kbd>W</kbd> jump — hold for height, release early to drop fast<br />
           <kbd>A</kbd><kbd>D</kbd> / <kbd>&larr;</kbd><kbd>&rarr;</kbd> steer &nbsp;·&nbsp; <kbd>&uarr;</kbd><kbd>&darr;</kbd> speed up / down<br />

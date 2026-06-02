@@ -11,20 +11,17 @@ import { Background } from "./background.js";
 import { Sound } from "./sound.js";
 import { iconImg } from "./icons.js";
 
-// Maps a timed effect's state key to its CONFIG duration key.
-const EFFECT_DURATIONS = {
-  magnet: "magnetDuration", slow: "slowDuration", doublejump: "doubleJumpDuration",
-  flight: "flightDuration", reverse: "reverseDuration", surge: "surgeDuration",
-  morph: "morphDuration", trip: "tripDuration", lowgrav: "lowgravDuration",
-  flubber: "flubberDuration", blackout: "blackoutDuration", fog: "fogDuration", rain: "rainDuration",
-};
-// The timed-effect keys (everything that counts down). Used to tally how many
-// effects are ACTIVE right now — drives the rune spawn-rate cooldown in the field.
-const EFFECT_DURATIONS_KEYS = Object.keys(EFFECT_DURATIONS);
+// All per-effect data (durations included) lives on POWERUP_DEFS now — these lists
+// are DERIVED from it so adding/removing an effect needs no edits here.
+// Timed effects = entries with a `dur` (shield is a boolean-until-hit; splat is instant).
+// Used to tally how many effects are ACTIVE right now (drives the rune-spawn cooldown).
+const EFFECT_DURATIONS_KEYS = Object.keys(POWERUP_DEFS).filter((k) => POWERUP_DEFS[k].dur > 0);
+// The timed POWERDOWNS — having these active cranks the scoring multiplier
+// (risk/reward for riding them out instead of avoiding them).
+const BAD_EFFECTS = EFFECT_DURATIONS_KEYS.filter((k) => !POWERUP_DEFS[k].good);
 
-// The timed POWERDOWNS (bad effects). Having these active cranks the scoring
-// multiplier — risk/reward for riding them out instead of avoiding them.
-const BAD_EFFECTS = ["reverse", "surge", "morph", "trip", "flubber", "blackout", "fog", "rain"];
+// THREE hex color (0x9fe0ff) -> "#rrggbb" for the DOM HUD + toasts.
+const hexCss = (n) => "#" + n.toString(16).padStart(6, "0");
 
 // The conductor. Builds the 3D world, runs the game loop, owns the Start ->
 // Playing -> Dead state machine, scoring, powerups, the chase camera, and the
@@ -49,6 +46,9 @@ export class Game {
     this._audiosurf = false; // Audiosurf mode: the world pulses on the music's beat
     this._beatPulse = 0;     // 0..1 punch fired ON each beat, decays fast (drives bloom + FOV kick)
     this._restartLock = 0; // brief input-dead window after dying (no instant restart)
+    this._cameraFrozen = false; // true during the cinematic fall-death: camera holds, doesn't chase the dead ball
+    this._dyingT = 0;       // timer for the fall-death plummet before the game-over card
+    this._deathLook = new THREE.Vector3(); // eased camera gaze target while watching the ball fall
     this.gems = 0;
     this.score = 0;
     this.multiplier = 1;
@@ -61,7 +61,7 @@ export class Game {
     this._lean = 0; // smoothed steer for a soft camera lean
     this._throttleSmooth = 0; // smoothed Up/Down throttle for the speed camera response
     this._shake = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0, rain: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0, rain: 0, splat: 0 };
     this._invuln = 0;
 
     this._buildRenderer();
@@ -89,9 +89,12 @@ export class Game {
       overlay: document.getElementById("overlay"),
       subtitle: document.getElementById("overlay-subtitle"),
       hint: document.getElementById("overlay-hint"),
+      restart: document.getElementById("overlay-restart"),
       toast: document.getElementById("toast"),
       effects: document.getElementById("effects"),
     };
+    // The pause-screen Restart button (promoted out of the ⚙️ panel).
+    if (this._hud.restart) this._hud.restart.addEventListener("click", () => this._restartToTitle());
 
     this.bestScore = Number(localStorage.getItem("gr_bestScore") || 0);
     this.bestDistance = Number(localStorage.getItem("gr_bestDistance") || 0);
@@ -118,7 +121,9 @@ export class Game {
       if (e.code === "KeyG") this._toggleReduced();
       if (e.code === "KeyK") this._cycleSkin();
       if (e.code === "KeyL") this._cycleDifficulty();
-      if (e.code === "Escape") this._togglePause(); // pause / resume (NOT quit — quit is "End Run" in ⚙️)
+      // Pause/resume. Esc works, but browsers often swallow the FIRST Esc (it's
+      // reserved for exiting fullscreen/pointer-lock), so P is a reliable alternative.
+      if (e.code === "Escape" || e.code === "KeyP") this._togglePause();
       if (e.code === "KeyZ") this._toggleZen();
       if (e.code === "KeyA") this._toggleAudiosurf();
       if (this._cheat && e.code === "KeyI") this._toggleGod(); // cheat-only: immortal (still escalates)
@@ -241,7 +246,8 @@ export class Game {
     this._biome = 0;
     this._throttleSmooth = 0;
     this._invuln = 0;
-    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0, rain: 0 };
+    this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0, rain: 0, splat: 0 };
+    this._splatActive = false;
     this._clearSplats();
     this._darkLevel = 0; // lights back to full for a fresh run
     this.hemi.intensity = this._hemiBase;
@@ -260,6 +266,9 @@ export class Game {
     this.background.setBiome(BIOMES[0]);
     this.field.reset();
     this.player.reset();
+    this._cameraFrozen = false; // un-freeze after a cinematic fall-death
+    this._dyingT = 0;
+    this.player.mesh.visible = !this._firstPerson; // the ball is back (it vanished on a fall death)
     this._followCamera(true);
   }
 
@@ -281,10 +290,9 @@ export class Game {
     return Math.max(CONFIG.minSpeed, Math.min(CONFIG.maxForwardSpeed + CONFIG.accelMax + 6, s));
   }
 
-  // How long a timed effect lasts. Cheat mode keeps these TRUE to each powerup
-  // (it only spawns more of them) so you can test the real durations.
+  // How long a timed effect lasts — straight off its POWERUP_DEFS entry.
   _dur(key) {
-    return CONFIG[EFFECT_DURATIONS[key]];
+    return POWERUP_DEFS[key].dur;
   }
 
   _toggleView() {
@@ -304,6 +312,7 @@ export class Game {
   _cycleTrack() {
     if (!this.sound.ctx) { this.sound.start(); this._toast(`🎵 ${this.sound.trackName()}`, "#a94bff"); }
     else this._toast(`🎵 ${this.sound.nextTrack()}`, "#a94bff");
+    this._userTrack = this.sound.trackIndex(); // remember the manual pick so it persists across reloads
     this._syncSettings();
   }
 
@@ -343,9 +352,12 @@ export class Game {
       // PIN the hazard ramp to a fixed point so it never ramps up with distance.
       const med = CONFIG.difficultyLevels.find((l) => l.name === "Medium") ?? CONFIG.difficultyLevels[CONFIG.defaultDifficulty];
       this.field.difficultyMult = med.mult;
+      this.field.spreadMult = med.spreadMult ?? 1; // zen sits at Medium's sprawl
       this.field.fixedDifficulty = CONFIG.zenDifficulty;
     } else {
-      this.field.difficultyMult = CONFIG.difficultyLevels[this._diffLevel].mult;
+      const lvl = CONFIG.difficultyLevels[this._diffLevel];
+      this.field.difficultyMult = lvl.mult;
+      this.field.spreadMult = lvl.spreadMult ?? 1; // Easy stays tight longer, Hard sprawls fast
       this.field.fixedDifficulty = null; // normal: hazards ramp with distance
     }
   }
@@ -402,7 +414,7 @@ export class Game {
       this.sound.onBeat = null; // stop all pulses — normal play is untouched, no perf cost
       this._beatPulse = 0;      // reset the bloom add so no leftover glow
       this.bloom.strength = this._bloomBase; // clear any pulse left on the bloom line
-      // Leave the current track playing (don't yank it) — the player can cycle it freely.
+      this.sound.setTrack(this._userTrack); // restore the player's chosen track (audiosurf had forced the rhythmic one)
       this._toast("🎵 AUDIOSURF: Off", "#ff4bd6");
     }
     this._syncSettings();
@@ -471,7 +483,7 @@ export class Game {
     this._settings.skin.addEventListener("click", () => this._cycleSkin());
     this._settings.zen.addEventListener("click", () => this._toggleZen());
     if (this._settings.audiosurf) this._settings.audiosurf.addEventListener("click", () => this._toggleAudiosurf());
-    this._settings.endrun.addEventListener("click", () => { this._quitRun(); open(false); }); // mobile way out of a run / zen
+    this._settings.endrun.addEventListener("click", () => { this._restartToTitle(); open(false); }); // mobile way out of a run / zen
     this._syncSettings();
   }
 
@@ -493,7 +505,9 @@ export class Game {
       for (const key in this._puButtons) {
         const on = this.field.enabledPowerups.has(key);
         const b = this._puButtons[key];
-        b.innerHTML = `${iconImg(key, POWERUP_DEFS[key].color, 16)} ${key}`;
+        // Show the same EMOJI used in-world (not the HUD vector icon) so the cheat
+        // menu matches what you actually see on the pickups.
+        b.innerHTML = `<span class="settings__puemoji">${POWERUP_DEFS[key].icon}</span> ${key}`;
         b.classList.toggle("off", !on);
       }
     }
@@ -515,7 +529,7 @@ export class Game {
     const fx = get("gr_fx");
     if (fx !== null) this.sound.reactive = fx === "1";
     const track = get("gr_track");
-    if (track !== null) this.sound.setTrack(Number(track));
+    this._userTrack = track !== null ? Number(track) : 0; // the player's MANUAL track choice — audiosurf forces its own track WITHOUT overwriting this
     const diff = get("gr_diff");
     if (diff !== null) {
       const i = Number(diff);
@@ -527,7 +541,8 @@ export class Game {
     // wired up lazily once audio starts (in _startGame), since there's no AudioContext yet.
     const audiosurf = get("gr_audiosurf");
     if (audiosurf !== null) this._audiosurf = audiosurf === "1";
-    if (this._audiosurf) this.sound.setTrack(CONFIG.audiosurfTrack);
+    // Play audiosurf's rhythmic track while it's on, otherwise the saved manual choice.
+    this.sound.setTrack(this._audiosurf ? CONFIG.audiosurfTrack : this._userTrack);
     this._applyDifficultyMult(); // apply restored (or default) level — forced to 0 in zen
     document.body.classList.toggle("is-zen", this._zen); // hide HUD counters if restored into zen
     this._diffSpeedMult = CONFIG.difficultyLevels[this._diffLevel].speedMult ?? 1;
@@ -540,7 +555,7 @@ export class Game {
     localStorage.setItem("gr_motion", this._reducedMotion ? "1" : "0");
     localStorage.setItem("gr_muted", this.sound.muted ? "1" : "0");
     localStorage.setItem("gr_fx", this.sound.reactive ? "1" : "0");
-    localStorage.setItem("gr_track", String(this.sound.trackIndex()));
+    localStorage.setItem("gr_track", String(this._userTrack ?? this.sound.trackIndex())); // save the MANUAL pick, not the audiosurf-forced track
     localStorage.setItem("gr_diff", String(this._diffLevel));
     localStorage.setItem("gr_skin", String(this._skinIndex ?? 0));
     localStorage.setItem("gr_zen", this._zen ? "1" : "0");
@@ -552,7 +567,7 @@ export class Game {
     this.field.itemMultiplier = this._cheat ? CONFIG.cheatItemMultiplier : 1;
     if (!this._cheat) this._setAllPowerups(true); // leaving cheat restores the full spawn pool
     this._toast(
-      this._cheat ? `🎮 CHEAT ON · ${CONFIG.cheatItemMultiplier}× items` : "CHEAT OFF",
+      this._cheat ? "🎮 CHEAT ON · pick your spawn pool in ⚙️" : "CHEAT OFF",
       "#ffd34e"
     );
     this._syncSettings(); // show/hide the cheat-only Powerups row
@@ -566,6 +581,30 @@ export class Game {
 
     if (this.state === "playing") {
       this._tickPlaying(dt);
+    } else if (this.state === "dying") {
+      // Cinematic fall-death: the camera is LOCKED where it was (position frozen,
+      // forward progress stopped) and just tilts its gaze down to watch the ball drop
+      // straight into the void. Gameplay is off.
+      this._dyingT += dt;
+      const pl = this.player, v = pl.vel;
+      if (pl.mesh.visible) {
+        v.y -= CONFIG.gravity * dt;          // only gravity — forward/sideways are locked
+        pl.position.y += v.y * dt;           // position IS the mesh position — falls straight down
+        pl._roll(dt);                        // keeps tumbling (its forward/side spin is retained)
+        // Ease the gaze toward the ball (seeded from the live view dir in _die, so no snap).
+        this._deathLook.lerp(pl.position, 1 - Math.exp(-dt / 0.5));
+        this.camera.lookAt(this._deathLook);
+        if (pl.position.y < this.camera.position.y - 110) { // plunged out of frame → splashdown
+          pl.mesh.visible = false;
+          this.particles.burst(pl.position, 0x9fb8ff, 22); // a small poof as it winks out
+          this._splashT = this._dyingT;
+        }
+      }
+      // Show the game-over card SHORTLY after splashdown (snappy), or on a JUMP press,
+      // with a hard safety cap in case the fall never registers a splash.
+      if (this.input.startPresses !== this._seenStart) { this._seenStart = this.input.startPresses; this._finishDeath(); }
+      else if (this._splashT != null && this._dyingT - this._splashT >= 1.5) this._finishDeath();
+      else if (this._dyingT >= CONFIG.fallDeathHang) this._finishDeath();
     } else if (this.state === "paused") {
       // Frozen. A jump press (or Esc, handled in keydown) resumes — NOT a restart.
       if (this.input.startPresses !== this._seenStart) {
@@ -591,7 +630,9 @@ export class Game {
 
     this.particles.update(dt);
     this.background.update(this.player.position.z, dt, this.state === "playing", this.player.position.x, this.player.position.y);
-    this._followCamera(false);
+    // Frozen during (and after) a cinematic fall-death so the camera holds its spot
+    // and watches the ball drop away, then stays put on the empty scene.
+    if (!this._cameraFrozen) this._followCamera(false);
     this._tickCamera(dt);
     this.composer.render(); // bloom (was wrongly blamed for the flip — that was the camera roll)
   }
@@ -624,8 +665,10 @@ export class Game {
       }
     }
     if (this._invuln > 0) this._invuln -= dt;
-    for (const k of ["magnet", "slow", "reverse", "surge", "doublejump", "flight", "morph", "trip", "lowgrav", "flubber", "blackout", "fog", "rain"])
-      if (this._effects[k] > 0) this._effects[k] -= dt;
+    // Count every timed effect down (list derived from POWERUP_DEFS — splat included now).
+    for (const k of EFFECT_DURATIONS_KEYS) if (this._effects[k] > 0) this._effects[k] -= dt;
+    // Splat's gunk clears when its timer runs out (it's a real timed effect now, not a CSS-only fade).
+    if (this._splatActive && this._effects.splat <= 0) { this._clearSplats(); this._splatActive = false; }
     // Psychedelic powerdown: recolor the view (gentle variant if reduced-motion).
     const tripping = this._effects.trip > 0;
     this.canvas.classList.toggle("is-tripping", tripping && !this._reducedMotion);
@@ -668,7 +711,7 @@ export class Game {
     // fog (everything goes soft), plus extra bloom so lights flare/halo like real fog.
     if (!this._fogLensEl) this._fogLensEl = document.getElementById("fog-lens");
     this._fogLensEl.style.opacity = this._fogLevel;
-    const blur = (this._fogLevel * 3.5).toFixed(2);
+    const blur = (this._fogLevel * 2.7).toFixed(2); // a touch less blur — fog is slightly easier to see through now
     this._fogLensEl.style.backdropFilter = this._fogLensEl.style.webkitBackdropFilter = `blur(${blur}px)`;
     // Bloom = base + fog crank + the active biome's signature flare + a brief
     // entry-flash punch when you cross into a new zone.
@@ -811,7 +854,7 @@ export class Game {
     this._renderEffects();
     // Zen mode never dies — ignore the normal death signal. Instead the catch below
     // lets you actually FALL well past the boards before flinging you back up.
-    if (ev.died && !this._zen && !this._god) this._die();
+    if (ev.died && !this._zen && !this._god) this._die("fell");
 
     // Zen power-bounce: only once you've fallen a real distance BELOW the lowest
     // nearby board (zenCatchDepth) and are still descending. No teleport — the bounce
@@ -878,7 +921,7 @@ export class Game {
       this.sound.clang();
     } else {
       this.particles.burst(this.player.position, 0xff3b3b, 30);
-      this._die();
+      this._die("hit");
     }
   }
 
@@ -917,26 +960,16 @@ export class Game {
   }
 
   _applyPowerup(u) {
-    const map = {
-      shield: ["SHIELD", "#35e0ff"], magnet: ["MAGNET", "#b06bff"], slow: ["SLOW-MO", "#4dff8a"],
-      doublejump: ["DOUBLE JUMP", "#7cff5a"], flight: ["FLIGHT — hold jump!", "#ffe14d"],
-      lowgrav: ["LOW GRAVITY", "#9affd6"],
-      reverse: ["REVERSED!", "#ff9f1c"], surge: ["SURGE!", "#ff3b3b"],
-      morph: ["MORPH!", "#ff4bd6"], splat: ["SPLAT!", "#8a5a2b"], trip: ["TRIPPING!", "#a94bff"],
-      flubber: ["FLUBBER! — steer in the air", "#6aff6a"],
-      blackout: ["BLACKOUT! — follow the edge lights", "#9fb3d0"],
-      fog: ["FOGGED! — distance is gone", "#9aa6b5"],
-      rain: ["DOWNPOUR! — wipers can't keep up", "#9fb8d0"],
-    };
+    const def = POWERUP_DEFS[u.type];
     // Different effects stack (run at once). Re-grabbing the SAME timed one ADDS its
     // full duration onto whatever's left, so a second blackout extends the blackout
     // rather than resetting it to the max. (Shield is a boolean; splat is instant.)
     if (u.type === "shield") this._effects.shield = true;
-    else if (u.type === "splat") this._splat();
+    else if (u.type === "splat") { this._splat(); this._effects.splat = (this._effects.splat || 0) + this._dur("splat"); this._splatActive = true; }
     else this._effects[u.type] = (this._effects[u.type] || 0) + this._dur(u.type);
 
     this.particles.burst(u.pos, u.good ? 0x66f0ff : 0xff7a1c, 20);
-    this._toast(map[u.type][0], map[u.type][1], u.type);
+    this._toast(def.label, hexCss(def.color), u.type); // label + color come from POWERUP_DEFS
     this.sound.power(u.good);
     if (!u.good) this._shake = 0.3;
   }
@@ -957,7 +990,7 @@ export class Game {
       b.style.background = `radial-gradient(circle at 40% 35%, ${colors[i % colors.length]} 0%, ${colors[i % colors.length]} 55%, transparent 72%)`;
       b.style.setProperty("--rot", `${Math.random() * 360}deg`);
       layer.appendChild(b);
-      setTimeout(() => b.remove(), 17000); // gunk clings to the screen a long time now (~17s)
+      setTimeout(() => b.remove(), 10000); // matches the splat effect duration (the HUD timer); the effect-expiry clear is the backstop
     }
   }
 
@@ -972,7 +1005,8 @@ export class Game {
     if (this.state === "playing") {
       this.state = "paused"; // the loop stops ticking gameplay while paused
       this._hud.subtitle.textContent = "⏸ Paused";
-      this._hud.hint.textContent = this._isTouch ? "Tap JUMP to resume" : "Esc or JUMP to resume · End Run in ⚙️ to quit";
+      this._hud.hint.textContent = this._isTouch ? "Tap JUMP to resume" : "Esc or JUMP to resume";
+      if (this._hud.restart) this._hud.restart.classList.remove("is-hidden"); // offer Restart right here
       this._hud.overlay.classList.remove("is-hidden");
     } else if (this.state === "paused") {
       this._resume();
@@ -981,31 +1015,78 @@ export class Game {
 
   _resume() {
     this.state = "playing";
+    if (this._hud.restart) this._hud.restart.classList.add("is-hidden");
     this._hud.overlay.classList.add("is-hidden");
     this._seenStart = this.input.startPresses;       // don't treat the resume press as a restart
     this.player._seenPresses = this.input.jumpPresses; // and don't auto-jump on resume
   }
 
-  // Voluntarily end the run (the "End Run" button in ⚙️) — the way out of zen, where
-  // you can't die. Clean exit to the title overlay (no death FX/score-save); jump restarts.
-  _quitRun() {
-    if (this.state !== "playing" && this.state !== "paused") return;
-    this.state = "dead"; // reuses the "press jump to start again" gate
-    this._restartLock = 0.3; // no accidental instant restart
+  // Restart: bail out of the current run and go properly back to the title — the
+  // world is reset RIGHT NOW (fresh field, ball at the start, camera snapped) so
+  // it's a real return to the start screen, not a frozen run that only clears when
+  // you press jump. Reachable from the pause screen and the ⚙️ panel; also the way
+  // out of zen (where you can't die).
+  _restartToTitle() {
+    if (this.state !== "playing" && this.state !== "paused" && this.state !== "dying") return;
+    this._resetWorld();        // fully reset NOW
+    this.state = "start";
+    this._restartLock = 0.3;   // no accidental instant re-launch
     this.canvas.classList.remove("is-tripping", "is-tripping--gentle");
+    this._seenStart = this.input.startPresses; // don't let the click/press fall through into a start
+    if (this._hud.restart) this._hud.restart.classList.add("is-hidden"); // hide the pause-screen button
     this._hud.subtitle.textContent = "Roll the gauntlet of floating blocks";
     this._hud.hint.textContent = this._isTouch ? "Tap JUMP to roll" : "Press JUMP to roll";
     this._hud.overlay.classList.remove("is-hidden");
+    this._refreshHud();
   }
 
-  _die() {
-    if (this.state === "dead") return;
+  _die(cause = "hit") {
+    if (this.state === "dead" || this.state === "dying") return;
+    // Log WHY the run ended — the fall case prints the numbers behind the call so a
+    // "but I was right on a plank!" death can be diagnosed from the console.
+    if (cause === "fell") {
+      const floor = this.field.lowestTopNear(this.player.position.z);
+      console.log(
+        `[G-Roller] DEATH — fell off. ball.y=${this.player.position.y.toFixed(1)}, ` +
+        `lowest landable surface near=${floor === -Infinity ? "NONE" : floor.toFixed(1)}, ` +
+        `fallMargin=${CONFIG.fallMargin} (died once ball.y < surface-margin), ` +
+        `grounded=${this.player.grounded}, z=${this.player.position.z.toFixed(1)}, speed=${this._speed.toFixed(1)}`
+      );
+    } else {
+      console.log(`[G-Roller] DEATH — ${cause} at z=${this.player.position.z.toFixed(1)}`);
+    }
+    this.canvas.classList.remove("is-tripping", "is-tripping--gentle");
+    this.sound.die();
+
+    // A FALL gets the cinematic: freeze the camera, let the ball plummet through the
+    // floor and vanish, THEN the game-over card. Obstacle hits (and reduced-motion)
+    // go straight to game over.
+    if (cause === "fell" && !this._reducedMotion) {
+      this.state = "dying";
+      this._dyingT = 0;
+      this._splashT = null; // set at "splashdown" (the ball vanishing) — the card shows shortly after
+      this._cameraFrozen = true;
+      this._shake = 0.3;
+      // Keep its velocity so it KEEPS SPINNING as it falls — but the dying loop only
+      // applies the vertical part to position, so forward/sideways progress is locked.
+      this._seenStart = this.input.startPresses;    // a pre-death jump press shouldn't skip the cinematic
+      // Seed the eased death-gaze from the camera's CURRENT view direction so the
+      // tilt-down to the falling ball starts exactly where we were looking (no snap).
+      const dir = new THREE.Vector3();
+      this.camera.getWorldDirection(dir);
+      this._deathLook.copy(this.camera.position).addScaledVector(dir, 25);
+      return;
+    }
+    this._shake = 0.6;
+    this.particles.burst(this.player.position, cause === "fell" ? 0xffd34e : 0xff3b3b, 40);
+    this._finishDeath();
+  }
+
+  // The actual game-over: tally the score, save bests, show the card. Reached
+  // immediately for obstacle deaths, or after the fall-death plummet finishes.
+  _finishDeath() {
     this.state = "dead";
     this._restartLock = 0.5; // 500 ms where no input restarts (no accidental instant replay)
-    this._shake = 0.6;
-    this.canvas.classList.remove("is-tripping", "is-tripping--gentle");
-    this.particles.burst(this.player.position, 0xffd34e, 40);
-    this.sound.die();
 
     const dist = Math.max(0, Math.floor(this.player.position.z));
     const score = Math.floor(this.score);
@@ -1036,22 +1117,11 @@ export class Game {
   _renderEffects() {
     const e = this._effects;
     const rows = [];
-    if (e.shield) rows.push(["shield", "Shield", "#9fe0ff", 1]); // no timer — lasts till hit
-    const add = (key, color) => {
-      if (e[key] > 0) rows.push([key, `${Math.ceil(e[key])}s`, color, e[key] / this._dur(key)]);
-    };
-    add("magnet", "#4a78ff");
-    add("slow", "#2fd9c0");
-    add("doublejump", "#c6ff3a");
-    add("lowgrav", "#9affd6");
-    add("flight", "#ffd24a");
-    add("reverse", "#ff9f1c");
-    add("surge", "#ff3b3b");
-    add("morph", "#ff4bd6");
-    add("flubber", "#6aff6a");
-    add("blackout", "#9fb3d0");
-    add("fog", "#9aa6b5");
-    add("trip", "#a94bff");
+    if (e.shield) rows.push(["shield", "Shield", hexCss(POWERUP_DEFS.shield.color), 1]); // no timer — lasts till hit
+    // Every active timed effect, colour straight from POWERUP_DEFS (single source of truth).
+    for (const key of EFFECT_DURATIONS_KEYS) {
+      if (e[key] > 0) rows.push([key, `${Math.ceil(e[key])}s`, hexCss(POWERUP_DEFS[key].color), e[key] / this._dur(key)]);
+    }
     this._hud.effects.innerHTML = rows
       .map(([key, label, color, frac]) => {
         const w = Math.max(0, Math.min(1, frac)) * 100;
