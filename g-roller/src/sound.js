@@ -62,32 +62,37 @@ const TRACKS = [
     bassWave: "sine", arpWave: "triangle", padWave: "triangle",
     gritty: false, bassCut: 300, arpCut: 1500, detune: 9, space: 0.5,
     swing: 0.18, drums: "brush", arpRate: 8, gain: 1.0, feel: "climb",
-    // C Lydian: the F# (instead of F) is the signature bright/floating colour.
+    // C Lydian: C D E F# G A B. The F# (instead of F) is the signature bright,
+    // floating colour. Diatonic chords only — Cmaj7 (I), D major (II, the bright
+    // Lydian II), Em7 (iii), F#m7b5 (vii°, the #4 chord — root F#, b3 A, b5 C nat),
+    // G major (V), Am7 (vi). Voicings stacked low→high for smooth voice leading.
     prog: {
-      C:    { bass: 65.41, pad: [130.81, 164.81, 196.0],  arp: [261.63, 329.63, 392.0, 493.88] },
-      G:    { bass: 98.0,  pad: [196.0, 246.94, 293.66],  arp: [392.0, 493.88, 587.33, 739.99] },
-      "F#dim": { bass: 92.50, pad: [185.0, 220.0, 277.18], arp: [369.99, 440.0, 554.37, 659.25] }, // the #4 lift
-      Dm:   { bass: 73.42, pad: [146.83, 174.61, 220.0],  arp: [293.66, 349.23, 440.0, 523.25] },
-      Am:   { bass: 110.0, pad: [220.0, 261.63, 329.63],  arp: [440.0, 523.25, 659.25, 783.99] },
-      Em:   { bass: 82.41, pad: [164.81, 196.0, 246.94],  arp: [329.63, 392.0, 493.88, 587.33] },
+      C:    { bass: 65.41, pad: [130.81, 164.81, 196.0],  arp: [261.63, 329.63, 392.0, 493.88] }, // C E G + maj7 B
+      G:    { bass: 98.0,  pad: [196.0, 246.94, 293.66],  arp: [392.0, 493.88, 587.33, 739.99] }, // G B D + maj7 F#
+      D:    { bass: 73.42, pad: [146.83, 185.0, 220.0],   arp: [293.66, 369.99, 440.0, 587.33] }, // D F# A (II major); arp D F# A D
+      "F#m7b5": { bass: 92.50, pad: [185.0, 220.0, 261.63], arp: [369.99, 440.0, 523.25, 659.25] }, // F# A C(nat) — the #4 lift, now correct
+      Am:   { bass: 110.0, pad: [220.0, 261.63, 329.63],  arp: [440.0, 523.25, 659.25, 783.99] }, // A C E + 7 G
+      Em:   { bass: 82.41, pad: [164.81, 196.0, 246.94],  arp: [329.63, 392.0, 493.88, 587.33] }, // E G B + 7 D
     },
+    // Diatonic to C Lydian, every section cadences home. The bright II (D) and the
+    // #4 colour (F#m7b5) are used as passing/pre-dominant lifts that fall back to G→C.
     arrangement: [
       { name: "intro",  chords: ["C", "Am"],              layers: { bass: false, arp: false, drums: false } },
-      { name: "introB", chords: ["G", "C", "Em", "Am"],   layers: { drums: false } },
-      { name: "verse",  chords: ["C", "G", "Am", "Em"] },
-      { name: "verse",  chords: ["C", "G", "F#dim", "G"] },
-      { name: "pre",    chords: ["Dm", "Em", "C", "G"] },
-      { name: "chorus", chords: ["C", "G", "Am", "F#dim"], lift: 0.35 },
-      { name: "chorus", chords: ["C", "G", "Em", "Am"],    lift: 0.35 },
-      { name: "verse",  chords: ["Am", "Em", "C", "G"] },
-      { name: "verse",  chords: ["C", "G", "Dm", "G"] },
-      { name: "pre",    chords: ["Em", "Dm", "C", "G"] },
-      { name: "bridge", chords: ["Dm", "Am", "Em", "G"],   layers: { drums: false } },
-      { name: "bridge", chords: ["C", "G", "Dm", "G"],     layers: { drums: false } },
-      { name: "chorus", chords: ["C", "G", "Am", "F#dim"], lift: 0.4 },
-      { name: "chorus", chords: ["C", "Em", "F#dim", "G"], lift: 0.45 },
-      { name: "chorus", chords: ["C", "G", "Am", "Em"],    lift: 0.5 },
-      { name: "outro",  chords: ["C", "Am", "G", "C"],     layers: { drums: false } },
+      { name: "introB", chords: ["Am", "Em", "G", "C"],   layers: { drums: false } }, // vi-iii-V-I lands on tonic
+      { name: "verse",  chords: ["C", "Am", "Em", "G"] },                              // I-vi-iii-V
+      { name: "verse",  chords: ["C", "Am", "D", "G"] },                               // I-vi-II-V (bright II)
+      { name: "pre",    chords: ["Am", "Em", "D", "G"] },                              // builds to V (half cadence)
+      { name: "chorus", chords: ["C", "G", "Am", "G"],    lift: 0.35 },                // I-V-vi-V
+      { name: "chorus", chords: ["C", "Am", "F#m7b5", "G"], lift: 0.35 },              // vii°-V lift, resolves V
+      { name: "verse",  chords: ["Am", "Em", "G", "C"] },                              // resolves to I
+      { name: "verse",  chords: ["C", "Em", "Am", "G"] },
+      { name: "pre",    chords: ["Em", "Am", "D", "G"] },                              // half cadence on V
+      { name: "bridge", chords: ["Am", "Em", "G", "C"],   layers: { drums: false } },  // settles on I
+      { name: "bridge", chords: ["C", "Am", "D", "G"],    layers: { drums: false } },
+      { name: "chorus", chords: ["C", "G", "Am", "G"],    lift: 0.4 },
+      { name: "chorus", chords: ["C", "Em", "F#m7b5", "G"], lift: 0.45 },
+      { name: "chorus", chords: ["C", "Am", "G", "C"],    lift: 0.5 },                 // big authentic cadence V-I
+      { name: "outro",  chords: ["Am", "F#m7b5", "G", "C"], layers: { drums: false } },// final V-I home
     ],
   },
 
@@ -102,30 +107,35 @@ const TRACKS = [
     bassWave: "triangle", arpWave: "sine", padWave: "sine",
     gritty: false, bassCut: 340, arpCut: 1700, detune: 6, space: 0.45,
     swing: 0.55, drums: "soft", arpRate: 8, gain: 1.0, feel: "sparse",
-    // Dm home with ii–V–I colour: Em7b5 → A7 → Dm, plus Gm9 / Cmaj9 / Bbmaj7.
+    // D natural minor (D E F G A Bb C) home, with the harmonic-minor leading tone
+    // (C#) borrowed in the V chord so the ii–V–I really resolves: Em7b5 (ii°) →
+    // A7 (V, with C# leading tone + G b7) → Dm9 (i). Gm9 = iv, Cmaj9 = bVII,
+    // Bbmaj7 = bVI. All voicings now match their names exactly.
     prog: {
-      Dm9:   { bass: 73.42,  pad: [174.61, 220.0, 261.63],  arp: [293.66, 349.23, 440.0, 523.25] },
-      Gm9:   { bass: 98.0,   pad: [233.08, 293.66, 349.23],  arp: [392.0, 466.16, 587.33, 698.46] },
-      A7:    { bass: 110.0,  pad: [220.0, 277.18, 329.63],   arp: [440.0, 554.37, 659.25, 830.61] },
-      Cmaj9: { bass: 130.81, pad: [261.63, 329.63, 392.0],   arp: [523.25, 587.33, 659.25, 783.99] },
-      Bbmaj7:{ bass: 116.54, pad: [233.08, 293.66, 349.23],  arp: [466.16, 587.33, 698.46, 880.0] },
-      "Em7b5": { bass: 82.41, pad: [196.0, 233.08, 293.66],  arp: [329.63, 392.0, 466.16, 587.33] },
+      Dm9:   { bass: 73.42,  pad: [174.61, 220.0, 261.63],  arp: [293.66, 349.23, 440.0, 523.25] }, // F A C over D; arp D F A C
+      Gm9:   { bass: 98.0,   pad: [233.08, 293.66, 349.23],  arp: [392.0, 466.16, 587.33, 698.46] }, // Bb D F over G; arp G Bb D F
+      A7:    { bass: 110.0,  pad: [220.0, 277.18, 329.63],   arp: [440.0, 554.37, 659.25, 783.99] }, // A C# E + b7 G (was G# — fixed)
+      Cmaj9: { bass: 130.81, pad: [261.63, 329.63, 392.0],   arp: [523.25, 587.33, 659.25, 783.99] }, // C E G; arp C D E G
+      Bbmaj7:{ bass: 116.54, pad: [233.08, 293.66, 349.23],  arp: [466.16, 587.33, 698.46, 880.0] },  // Bb D F + maj7 A
+      "Em7b5": { bass: 82.41, pad: [196.0, 233.08, 293.66],  arp: [329.63, 392.0, 466.16, 587.33] },  // E G Bb + b7 D (ii°)
     },
+    // Lo-fi jazz turnarounds. Every section ends on the ii–V–I (Em7b5 → A7 → Dm9)
+    // or resolves to Dm9 directly, so the wandering always cadences home.
     arrangement: [
       { name: "intro", chords: ["Dm9", "Gm9"],               layers: { arp: false, drums: false } },
-      { name: "intro", chords: ["Em7b5", "A7"],              layers: { drums: false } },
-      { name: "verse", chords: ["Dm9", "Gm9", "Em7b5", "A7"] },
-      { name: "verse", chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"] },
-      { name: "pre",   chords: ["Gm9", "Cmaj9", "Em7b5", "A7"] },
-      { name: "hook",  chords: ["Dm9", "Bbmaj7", "Gm9", "A7"], lift: 0.3 },
-      { name: "hook",  chords: ["Cmaj9", "Bbmaj7", "Gm9", "A7"], lift: 0.3 },
-      { name: "verse", chords: ["Dm9", "Gm9", "Cmaj9", "Bbmaj7"] },
-      { name: "verse", chords: ["Dm9", "Em7b5", "Gm9", "A7"] },
-      { name: "bridge",chords: ["Bbmaj7", "Cmaj9", "Gm9", "Dm9"], layers: { drums: false } },
-      { name: "bridge",chords: ["Gm9", "A7", "Dm9", "Dm9"],   layers: { drums: false } },
-      { name: "hook",  chords: ["Dm9", "Bbmaj7", "Gm9", "A7"], lift: 0.35 },
+      { name: "intro", chords: ["Em7b5", "A7"],              layers: { drums: false } },           // half cadence on V
+      { name: "verse", chords: ["Dm9", "Gm9", "Em7b5", "A7"] },                                    // i-iv-ii-V
+      { name: "verse", chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"] },                                 // i-bVI-ii-V
+      { name: "pre",   chords: ["Gm9", "Cmaj9", "Em7b5", "A7"] },                                  // iv-bVII-ii-V
+      { name: "hook",  chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"], lift: 0.3 },                       // resolves V each pass
+      { name: "hook",  chords: ["Cmaj9", "Bbmaj7", "Em7b5", "A7"], lift: 0.3 },
+      { name: "verse", chords: ["Dm9", "Gm9", "Cmaj9", "A7"] },                                    // bVII walks to V
+      { name: "verse", chords: ["Dm9", "Bbmaj7", "Gm9", "A7"] },
+      { name: "bridge",chords: ["Bbmaj7", "Gm9", "Em7b5", "A7"], layers: { drums: false } },        // ends on V
+      { name: "bridge",chords: ["Gm9", "A7", "Dm9", "A7"],   layers: { drums: false } },            // iv-V-i-V
+      { name: "hook",  chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"], lift: 0.35 },
       { name: "hook",  chords: ["Cmaj9", "Gm9", "Em7b5", "A7"], lift: 0.4 },
-      { name: "outro", chords: ["Dm9", "Gm9", "Em7b5", "Dm9"], layers: { drums: false } },
+      { name: "outro", chords: ["Gm9", "Em7b5", "A7", "Dm9"], layers: { drums: false } },           // full ii–V–i home
     ],
   },
 
@@ -141,31 +151,37 @@ const TRACKS = [
     bassWave: "sine", arpWave: "sine", padWave: "sine",
     gritty: false, bassCut: 240, arpCut: 1200, detune: 16, space: 0.68,
     swing: 0, drums: "none", arpRate: 8, gain: 1.05, feel: "pendulum",
-    // F#m / A Lydian family — wide, open, unresolved.
+    // A major / F#m family (A B C# D E F# G#) — wide and open, but now the chords
+    // are voiced correctly so the wash is consonant. F#m (vi), A (I), E (V),
+    // Bsus2 (ii colour), Dmaj7 (IV — D F# A C#), C#m (iii — C# E G#). The repeated
+    // 4th arp note gives the gentle pendulum a built-in turn-around chord tone.
     prog: {
-      "F#m":   { bass: 92.50,  pad: [185.0, 220.0, 277.18],  arp: [369.99, 440.0, 554.37, 440.0] },
-      A:       { bass: 110.0,  pad: [220.0, 277.18, 329.63], arp: [440.0, 554.37, 659.25, 554.37] },
-      E:       { bass: 82.41,  pad: [164.81, 207.65, 246.94], arp: [329.63, 415.30, 493.88, 415.30] },
-      Bsus:    { bass: 61.74,  pad: [185.0, 246.94, 277.18], arp: [369.99, 493.88, 554.37, 493.88] },
-      "Dmaj7": { bass: 73.42,  pad: [220.0, 277.18, 329.63], arp: [440.0, 554.37, 659.25, 554.37] },
-      "C#m":   { bass: 69.30,  pad: [207.65, 246.94, 311.13], arp: [415.30, 493.88, 622.25, 493.88] },
+      "F#m":   { bass: 92.50,  pad: [185.0, 220.0, 277.18],  arp: [369.99, 440.0, 554.37, 440.0] },  // F# A C#
+      A:       { bass: 110.0,  pad: [220.0, 277.18, 329.63], arp: [440.0, 554.37, 659.25, 554.37] }, // A C# E
+      E:       { bass: 82.41,  pad: [164.81, 207.65, 246.94], arp: [329.63, 415.30, 493.88, 415.30] }, // E G# B (V)
+      Bsus:    { bass: 61.74,  pad: [185.0, 246.94, 277.18], arp: [369.99, 493.88, 554.37, 493.88] }, // B C# F# (sus2)
+      "Dmaj7": { bass: 73.42,  pad: [185.0, 220.0, 277.18],  arp: [293.66, 369.99, 440.0, 554.37] },  // D F# A C# (was A major — fixed)
+      "C#m":   { bass: 69.30,  pad: [207.65, 277.18, 329.63], arp: [277.18, 329.63, 415.30, 329.63] },// G#3 C#4 E4 = C#m; arp C# E G# (was G# major — fixed)
     },
+    // Ambient tides, but harmonically anchored: each phrase falls onto F#m (vi, the
+    // home colour) or A (I). E (V) → F#m is a deceptive cadence; Dmaj7 (IV) → A is
+    // plagal. The whole arrangement opens and closes on F#m so it breathes home.
     arrangement: [
-      { name: "wash",  chords: ["F#m", "Dmaj7"],            layers: { bass: false, arp: false } },
-      { name: "wash",  chords: ["A", "E"],                  layers: { arp: false } },
-      { name: "drift", chords: ["F#m", "A", "Dmaj7", "E"],  layers: { arp: false } },
-      { name: "drift", chords: ["F#m", "C#m", "A", "E"] },
-      { name: "drift", chords: ["Dmaj7", "A", "Bsus", "E"] },
-      { name: "rise",  chords: ["Dmaj7", "A", "E", "Bsus"], lift: 0.3 },
-      { name: "rise",  chords: ["F#m", "A", "Dmaj7", "E"],  lift: 0.3 },
-      { name: "rise",  chords: ["A", "E", "Dmaj7", "Bsus"], lift: 0.4 },
-      { name: "ebb",   chords: ["C#m", "F#m", "A", "E"],    layers: { arp: false } },
-      { name: "ebb",   chords: ["Dmaj7", "A", "F#m", "E"],  layers: { arp: false } },
-      { name: "rise",  chords: ["F#m", "Dmaj7", "A", "Bsus"], lift: 0.35 },
-      { name: "rise",  chords: ["Dmaj7", "A", "E", "Bsus"], lift: 0.4 },
-      { name: "ebb",   chords: ["C#m", "F#m", "A", "E"],    layers: { arp: false } },
-      { name: "wash",  chords: ["A", "E"],                  layers: { arp: false } },
-      { name: "wash",  chords: ["F#m", "Dmaj7"],            layers: { bass: false, arp: false } },
+      { name: "wash",  chords: ["F#m", "A"],                layers: { bass: false, arp: false } },
+      { name: "wash",  chords: ["Dmaj7", "A"],              layers: { arp: false } },              // IV-I plagal
+      { name: "drift", chords: ["F#m", "Dmaj7", "E", "A"],  layers: { arp: false } },              // vi-IV-V-I
+      { name: "drift", chords: ["F#m", "C#m", "Dmaj7", "A"] },                                     // resolves to I
+      { name: "drift", chords: ["Dmaj7", "Bsus", "E", "F#m"] },                                    // V-vi deceptive
+      { name: "rise",  chords: ["Dmaj7", "A", "Bsus", "E"], lift: 0.3 },                            // builds to V
+      { name: "rise",  chords: ["F#m", "Dmaj7", "E", "A"],  lift: 0.3 },                            // lands on I
+      { name: "rise",  chords: ["Dmaj7", "E", "C#m", "F#m"], lift: 0.4 },                           // V-... -vi home
+      { name: "ebb",   chords: ["C#m", "Dmaj7", "E", "A"],  layers: { arp: false } },               // resolves to I
+      { name: "ebb",   chords: ["Dmaj7", "F#m", "E", "A"],  layers: { arp: false } },
+      { name: "rise",  chords: ["F#m", "Dmaj7", "E", "A"],  lift: 0.35 },
+      { name: "rise",  chords: ["Dmaj7", "Bsus", "E", "F#m"], lift: 0.4 },                          // deceptive to vi
+      { name: "ebb",   chords: ["Dmaj7", "A", "E", "F#m"],  layers: { arp: false } },               // settles on vi
+      { name: "wash",  chords: ["Dmaj7", "A"],              layers: { arp: false } },               // plagal again
+      { name: "wash",  chords: ["E", "F#m"],                layers: { bass: false, arp: false } },  // final V-vi home
     ],
   },
 
@@ -180,31 +196,36 @@ const TRACKS = [
     bassWave: "sawtooth", arpWave: "square", padWave: "sawtooth",
     gritty: true, bassCut: 480, arpCut: 2200, detune: 11, space: 0.3,
     swing: 0.16, drums: "full", arpRate: 16, gain: 0.95, feel: "stab",
-    // A Phrygian: A Bb C D E F G — the Bb (b2) is the signature dark tension.
+    // A Phrygian: A Bb C D E F G. The Bb (bII) is the signature dark tension, and
+    // the Phrygian cadence is bII → i (Bb → Am). Diatonic triads: Am (i), Bb (bII),
+    // Cmaj is bIII, Dm (iv), Edim (v° = E G Bb — NOT Em, since B is flat here),
+    // F (bVI), Gm (bVII). Em was wrong (had a B natural) — now Edim.
     prog: {
-      Am:  { bass: 110.0,  pad: [220.0, 261.63, 329.63],  arp: [220.0, 220.0, 261.63, 329.63] },
-      Bb:  { bass: 116.54, pad: [233.08, 293.66, 349.23], arp: [233.08, 233.08, 293.66, 349.23] }, // bII — the Phrygian colour
-      Dm:  { bass: 73.42,  pad: [146.83, 174.61, 220.0],  arp: [146.83, 146.83, 220.0, 293.66] },
-      Em:  { bass: 82.41,  pad: [164.81, 196.0, 246.94],  arp: [164.81, 164.81, 246.94, 329.63] },
-      F:   { bass: 87.31,  pad: [174.61, 220.0, 261.63],  arp: [174.61, 174.61, 261.63, 349.23] },
-      Gm:  { bass: 98.0,   pad: [196.0, 233.08, 293.66],  arp: [196.0, 196.0, 293.66, 392.0] },
+      Am:   { bass: 110.0,  pad: [220.0, 261.63, 329.63],  arp: [220.0, 220.0, 261.63, 329.63] }, // A C E
+      Bb:   { bass: 116.54, pad: [233.08, 293.66, 349.23], arp: [233.08, 233.08, 293.66, 349.23] }, // Bb D F (bII)
+      Dm:   { bass: 73.42,  pad: [146.83, 174.61, 220.0],  arp: [146.83, 146.83, 220.0, 293.66] }, // D F A
+      Edim: { bass: 82.41,  pad: [164.81, 196.0, 233.08],  arp: [164.81, 164.81, 233.08, 329.63] }, // E G Bb (v°, was Em)
+      F:    { bass: 87.31,  pad: [174.61, 220.0, 261.63],  arp: [174.61, 174.61, 261.63, 349.23] }, // F A C (bVI)
+      Gm:   { bass: 98.0,   pad: [196.0, 233.08, 293.66],  arp: [196.0, 196.0, 293.66, 392.0] },   // G Bb D (bVII)
     },
+    // Dark driving D&B. Bb → Am is the Phrygian cadence and every section lands on
+    // Am (i), so the tension always resolves home instead of wandering.
     arrangement: [
       { name: "intro", chords: ["Am", "Am"],          layers: { arp: false, pad: false } },
-      { name: "A",     chords: ["Am", "Bb", "Am", "Em"] },
-      { name: "A",     chords: ["Am", "Bb", "Dm", "Em"] },
-      { name: "A2",    chords: ["Am", "F", "Gm", "Em"] },
-      { name: "build", chords: ["Dm", "Em", "F", "Gm"] },
-      { name: "drop",  chords: ["Am", "Bb", "Am", "Em"], lift: 0.5 },
-      { name: "drop",  chords: ["Am", "Bb", "F", "Em"],  lift: 0.5 },
-      { name: "break", chords: ["Dm", "Am", "Bb", "Em"], layers: { drums: false } },
-      { name: "break", chords: ["F", "Gm", "Dm", "Em"],  layers: { drums: false } },
-      { name: "A2",    chords: ["Am", "Em", "Bb", "Am"] },
-      { name: "build", chords: ["F", "Gm", "Dm", "Em"] },
-      { name: "drop",  chords: ["Am", "Bb", "Am", "Em"], lift: 0.55 },
-      { name: "drop",  chords: ["Am", "F", "Bb", "Em"],  lift: 0.55 },
-      { name: "drop",  chords: ["Am", "Bb", "Am", "Am"], lift: 0.6 },
-      { name: "outro", chords: ["Am", "Gm", "F", "Em"] },
+      { name: "A",     chords: ["Am", "F", "Gm", "Bb"] },                               // i-bVI-bVII-bII…
+      { name: "A",     chords: ["Am", "Dm", "Bb", "Am"] },                              // …→ i (Phrygian cadence)
+      { name: "A2",    chords: ["Am", "Gm", "F", "Bb"] },
+      { name: "build", chords: ["Dm", "Gm", "F", "Bb"] },                               // builds to bII
+      { name: "drop",  chords: ["Am", "Gm", "Bb", "Am"], lift: 0.5 },                    // resolves bII-i
+      { name: "drop",  chords: ["Am", "F", "Bb", "Am"],  lift: 0.5 },
+      { name: "break", chords: ["Dm", "Am", "Gm", "F"],  layers: { drums: false } },
+      { name: "break", chords: ["F", "Gm", "Dm", "Bb"],  layers: { drums: false } },     // ends on bII pull
+      { name: "A2",    chords: ["Am", "Edim", "Bb", "Am"] },                             // v°-bII-i
+      { name: "build", chords: ["F", "Gm", "Dm", "Bb"] },
+      { name: "drop",  chords: ["Am", "Gm", "Bb", "Am"], lift: 0.55 },
+      { name: "drop",  chords: ["Am", "F", "Bb", "Am"],  lift: 0.55 },
+      { name: "drop",  chords: ["Dm", "F", "Bb", "Am"],  lift: 0.6 },                     // full cadence to i
+      { name: "outro", chords: ["Gm", "F", "Bb", "Am"] },                                // bVII-bVI-bII-i home
     ],
   },
 
@@ -221,29 +242,34 @@ const TRACKS = [
     bassWave: "sawtooth", arpWave: "sawtooth", padWave: "sawtooth",
     gritty: true, bassCut: 560, arpCut: 2600, detune: 8, space: 0.2,
     swing: 0, drums: "full", arpRate: 16, gain: 0.92, feel: "run", steady: true,
+    // E natural minor (E F# G A B C D). Diatonic triads: Em (i), F#dim (ii°),
+    // G (bIII), Am (iv), Bm (v), C (bVI), D (bVII). The classic Em–C–G–D loop
+    // resolves through D (bVII) back to Em. D now carries its third (F#).
     prog: {
-      Em: { bass: 82.41,  pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] },
-      C:  { bass: 130.81, pad: [261.63, 329.63, 392.0], arp: [523.25, 392.0, 329.63, 392.0] },
-      G:  { bass: 98.0,   pad: [196.0, 246.94, 293.66], arp: [392.0, 493.88, 587.33, 493.88] },
-      D:  { bass: 73.42,  pad: [146.83, 220.0, 293.66], arp: [293.66, 440.0, 587.33, 440.0] },
-      Am: { bass: 110.0,  pad: [220.0, 261.63, 329.63], arp: [440.0, 523.25, 659.25, 523.25] },
-      Bm: { bass: 123.47, pad: [246.94, 293.66, 369.99], arp: [493.88, 587.33, 739.99, 587.33] },
+      Em: { bass: 82.41,  pad: [164.81, 196.0, 246.94], arp: [329.63, 392.0, 493.88, 392.0] },  // E G B
+      C:  { bass: 130.81, pad: [261.63, 329.63, 392.0], arp: [523.25, 392.0, 329.63, 392.0] },  // C E G
+      G:  { bass: 98.0,   pad: [196.0, 246.94, 293.66], arp: [392.0, 493.88, 587.33, 493.88] }, // G B D
+      D:  { bass: 73.42,  pad: [146.83, 184.99, 220.0], arp: [293.66, 369.99, 440.0, 587.33] }, // D F# A (added the 3rd)
+      Am: { bass: 110.0,  pad: [220.0, 261.63, 329.63], arp: [440.0, 523.25, 659.25, 523.25] }, // A C E
+      Bm: { bass: 123.47, pad: [246.94, 293.66, 369.99], arp: [493.88, 587.33, 739.99, 587.33] }, // B D F# (v)
     },
+    // Outrun anthem. i-bVI-bIII-bVII (Em-C-G-D) is the genre staple; D (bVII) → Em
+    // is the resolution, and every section lands on Em (or the v, Bm, into Em).
     arrangement: [
       { name: "intro", chords: ["Em", "Em"],          layers: { arp: false, pad: false } },
-      { name: "A",     chords: ["Em", "C", "G", "D"] },
-      { name: "A",     chords: ["Em", "C", "Am", "D"] },
+      { name: "A",     chords: ["Em", "C", "G", "D"] },                 // i-bVI-bIII-bVII
+      { name: "A",     chords: ["Em", "Am", "C", "D"] },
       { name: "A2",    chords: ["Em", "G", "C", "D"] },
-      { name: "build", chords: ["Am", "Bm", "C", "D"] },
+      { name: "build", chords: ["C", "G", "Am", "Bm"] },                // builds to v (Bm)
       { name: "drop",  chords: ["Em", "C", "G", "D"],  lift: 0.5 },
       { name: "drop",  chords: ["Em", "G", "C", "D"],  lift: 0.5 },
-      { name: "break", chords: ["Am", "Bm", "C", "D"], layers: { drums: false } },
+      { name: "break", chords: ["Am", "C", "G", "Bm"], layers: { drums: false } },
       { name: "break", chords: ["C", "G", "Am", "Bm"], layers: { drums: false } },
-      { name: "A2",    chords: ["Em", "Bm", "C", "D"] },
-      { name: "build", chords: ["C", "D", "Am", "Bm"] },
+      { name: "A2",    chords: ["Em", "C", "Am", "D"] },
+      { name: "build", chords: ["C", "G", "Am", "Bm"] },
       { name: "drop",  chords: ["Em", "C", "G", "D"],  lift: 0.55 },
-      { name: "drop",  chords: ["Em", "C", "Am", "D"], lift: 0.6 },
-      { name: "outro", chords: ["Em", "D", "C", "Bm"] },
+      { name: "drop",  chords: ["Em", "Am", "C", "D"], lift: 0.6 },
+      { name: "outro", chords: ["C", "G", "D", "Em"] },                 // bVI-bIII-bVII-i home
     ],
   },
 ];
@@ -512,39 +538,52 @@ export class Sound {
     if (loc.drums) this._drums(s, swung, track, lift, churnFill);
   }
 
-  // Pick the arp note for this 16th step given the track's melodic `feel`. Keeping
-  // the contour per-track is what stops every lead from tracing the same up/down.
-  //   run      — the canned 4-note shape, with a mid-phrase reshuffle for variety.
-  //   climb    — steps up through the chord across the bar (a rising, hopeful line).
-  //   pendulum — zig-zags out from the middle note (in/out, never a straight run).
-  //   stab     — leans on the root with the occasional higher jab (funky/DnB).
-  //   sparse   — just the downbeat tone, alternating low/high across phrases (lo-fi).
+  // Pick the arp note for this 16th step given the track's melodic `feel`. Every
+  // entry of `seq` is already a CHORD TONE of the current bar's chord (verified in
+  // each track's `prog`), so whatever index we choose is in-harmony. The rule we
+  // follow from functional-melody writing: land a strong chord tone (the root,
+  // seq[0], or the 3rd/5th) on STRONG beats (the downbeat of each beat, s%4===0),
+  // and let the in-between steps walk the other chord tones. That makes the line
+  // OUTLINE the chord and resolve, instead of wandering. Per-track `feel` only
+  // changes the contour SHAPE — never whether a note is in the chord.
+  //   run      — ascends the chord across the beat, root on each downbeat.
+  //   climb    — steady stepwise rise through the chord tones, restarting per beat.
+  //   pendulum — gentle in/out bounce that returns to the root on the downbeat.
+  //   stab     — root on the beat, a higher chord tone on the syncopated jab.
+  //   sparse   — one chord tone per beat, walking root→3rd→5th→3rd across the bar.
   _arpNote(seq, s, phraseBar, songBar, feel) {
     const n = seq.length;
-    const eighth = Math.floor(s / 2); // 0..7 within the bar
+    const beat = Math.floor(s / 4);      // which quarter-note beat (0..3)
+    const inBeat = s % 4;                // 0 = strong downbeat of the beat
+    const eighth = Math.floor(s / 2);    // 0..7 within the bar
+
     if (feel === "climb") {
-      // Walk upward through the chord as the bar progresses; nudge the start each
-      // bar so successive bars don't all begin on the same note.
-      return seq[(eighth + phraseBar) % n];
+      // Rising chord-tone line: root on every downbeat, then step up the chord on
+      // the weaker eighths. Nudge the apex per beat so the climb keeps lifting.
+      if (inBeat === 0) return seq[0];
+      return seq[Math.min(n - 1, (eighth + beat) % n)];
     }
     if (feel === "pendulum") {
-      // Bounce outward from the center: middle → up → middle → down → ...
-      const order = [1, 2, 1, 0, 2, 3, 1, 0];
+      // In/out bounce that always returns home: root on the downbeat, reach up to
+      // the 3rd/5th between. Symmetric so it resolves rather than drifting off.
+      const order = [0, 1, 2, 1, 0, 2, 3, 2]; // root-anchored, fans outward and back
       return seq[order[eighth % order.length] % n];
     }
     if (feel === "stab") {
-      // Mostly the root (index 0); the off-beat jab grabs a higher chord tone.
-      return s % 4 === 0 ? seq[0] : seq[2 % n];
+      // Funky/DnB: root locked on the beat, a higher chord tone on the off jab.
+      return inBeat === 0 ? seq[0] : seq[2 % n];
     }
     if (feel === "sparse") {
-      // One note per beat, alternating a low and a high chord tone per phrase so the
-      // sparse line still drifts instead of repeating one pitch.
-      return seq[(phraseBar % 2 === 0 ? 0 : 2) % n];
+      // Lo-fi: one chord tone per beat, walking root→3rd→5th→3rd so the lazy line
+      // still outlines the chord across the bar instead of repeating one pitch.
+      const walk = [0, 1, 2, 1];
+      return seq[walk[beat % walk.length] % n];
     }
-    // "run" (default): canned shape, but every other phrase reshuffle so repeats
-    // don't sound identical bar-to-bar.
-    const vary = (songBar % 8) >= 4;
-    return vary ? seq[(eighth + phraseBar) % n] : seq[s % n];
+    // "run" (default): ascend the chord, but anchor the root on each downbeat so the
+    // line stays hooked to the harmony. Shift the run every other phrase for variety.
+    if (inBeat === 0) return seq[0];
+    const vary = (songBar % 8) >= 4 ? phraseBar : 0;
+    return seq[(eighth + vary) % n];
   }
 
   // --- Music voices ---------------------------------------------------------
