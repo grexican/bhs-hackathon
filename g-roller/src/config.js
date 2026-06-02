@@ -79,7 +79,7 @@ export const CONFIG = {
   // strength/tuning knobs only.)
   effects: {
     powerupChance: 0.3, // chance a path platform spawns a pickup
-    powerupAuraRadius: 5, // visible glowing trigger-cloud radius around each pickup
+    powerupAuraRadius: 6, // visible glowing trigger-cloud radius around each pickup (also the grab zone)
     magnetRadius: 32, // gems within this distance get sucked in
     magnetPull: 22, // how hard the magnet yanks gems
     slowFactor: 0.72, // forward speed multiplier while slowed
@@ -169,13 +169,16 @@ export const CONFIG = {
   //   openness(z) 0→1 over `opennessDistance` — how much the field has opened (the
   //               journey feel: wander, vertical reach, gap length, scatter spread).
   //   danger(z)   0→1 over `dangerDistance`   — how dangerous it's become (obstacle,
-  //               mover, sharp-turn, lean frequency; pads shrink).
+  //               mover, sharp-turn, lean frequency; pads shrink). Scaled per-tier by
+  //               the `danger` knob (how fast it ramps in).
   //
-  // FIVE per-tier knobs (`tiers`) scale that one ruleset. This is all Easy/Med/Hard
+  // Per-tier knobs (`tiers`) scale that one ruleset. This is all Easy/Med/Hard
   // are — no special-cases:
   //   pace      — base auto-run speed multiplier.
   //   hazard    — scales hazard CHANCES (the danger ramp's output) + how fast pads
   //               shrink. Higher = busier & a higher danger plateau.
+  //   danger    — scales how FAST the danger ramp climbs with distance (Hard gets
+  //               dangerous in fewer metres). `danger` sets WHEN, `hazard` sets HOW MUCH.
   //   openness  — scales how FAST the world opens (the openness ramp's input distance).
   //               NOTE: this only differentiates tiers during the RAMP — it saturates
   //               at 1.0 by ~opennessDistance, after which all tiers are "fully open".
@@ -245,8 +248,14 @@ export const CONFIG = {
     // tight enough that branches stay relevant/reachable, not flung off-screen.
     scatter: {
       count: [2, 3], // base extra platforms per step (× tier density → Easy many, Hard few)
-      radiusX: [40, 110], // how wide the cloud scatters (× tier sprawl) — wide from the start so it reads "go anywhere"
-      radiusY: [24, 68], // how tall the cloud scatters (× tier sprawl; parallax layers)
+      // SPREAD is kept inside JUMP REACH so a branch is a real ALTERNATE ROUTE, not
+      // unreachable backdrop. One jump strafes ~65 units laterally (jumpReach), so the
+      // radius (× the gentled sprawl factor below) tops out around there even on Hard —
+      // the farthest branch is a committed jump, most are comfortable. Was [40,110]×1.55
+      // ≈ ±170 on Hard, which flung every branch out of bounds ("might as well not move
+      // for it").
+      radiusX: [22, 50], // how wide the cloud scatters (× gentled sprawl) — within reach
+      radiusY: [16, 40], // how tall the cloud scatters (× gentled sprawl; parallax layers)
       zSpread: 54, // depth jitter around the front
       bouncyChance: 0.16, // chance a branch platform is a trampoline (at/above path height)
       bouncyDepthBoost: 0.55, // EXTRA trampoline chance for branches at the DEPTHS (lowest scatter):
@@ -347,12 +356,18 @@ export const CONFIG = {
       loadFactor: 0.4, // each active effect cuts the rune chance by this (1 - n*factor)
     },
 
-    // Easy / Medium / Hard — five knobs each. See the big note above for what they
-    // mean. The whole difficulty system is THESE THREE LINES.
+    // Easy / Medium / Hard — the whole difficulty system is THESE THREE LINES.
+    //   pace    — run speed.  hazard — hazard MAGNITUDE (how busy hazards get).
+    //   danger  — how FAST hazards ramp in with distance (the new lever: Hard used to
+    //             feel like "smooth sailing" for the first ~2km because the danger ramp
+    //             barely moved that early — this makes Hard get dangerous SOONER, not
+    //             just busier at the plateau).  openness — how fast the field opens.
+    //   sprawl  — how WIDE the route/decor roam.  density — how MANY branches (forgiveness).
+    //   drama   — spectacle (splines/ramps/curves/yaw/tunnels).
     tiers: [
-      { name: "Easy", pace: 0.92, hazard: 0.8, openness: 0.9, sprawl: 1.0, density: 1.6, drama: 0.7 },
-      { name: "Medium", pace: 1.0, hazard: 1.0, openness: 1.0, sprawl: 1.45, density: 1.0, drama: 1.0 },
-      { name: "Hard", pace: 1.15, hazard: 1.5, openness: 1.2, sprawl: 2.1, density: 0.45, drama: 1.4 },
+      { name: "Easy", pace: 0.92, hazard: 0.8, danger: 0.85, openness: 0.9, sprawl: 1.0, density: 1.6, drama: 0.7 },
+      { name: "Medium", pace: 1.0, hazard: 1.0, danger: 1.0, openness: 1.0, sprawl: 1.45, density: 1.0, drama: 1.0 },
+      { name: "Hard", pace: 1.15, hazard: 1.7, danger: 1.6, openness: 1.2, sprawl: 2.1, density: 0.45, drama: 1.4 },
     ],
     defaultDifficulty: 1, // index into tiers (Medium)
   },

@@ -18,7 +18,7 @@ export function makeCtx(profile, z, forwardSpeed, rng, itemMultiplier = 1) {
   return {
     profile,
     O: openness(z, profile),
-    D: danger(z),
+    D: danger(z, profile),
     budgets: budgets(forwardSpeed),
     rng,
     itemMultiplier,

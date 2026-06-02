@@ -323,10 +323,11 @@ export function planScatter(pathPlan, state, ctx) {
   const { profile, O, rng } = ctx;
   const g = G();
   // COUNT rides density (forgiveness). SPREAD (radius) rides openness × a GENTLED
-  // sprawl: the route sweeps the full sprawl, but the decor cloud widens only ~half as
-  // much, so branch pickups stay mostly within reach instead of being flung off to the
-  // backdrop (the old radius-110 "unreachable items" trap). Wide route, reachable cloud.
-  const sFactor = 1 + (profile.sprawl - 1) * 0.5;
+  // sprawl: the route sweeps the full sprawl, but the decor cloud widens only a FRACTION
+  // as much, so branch pickups stay within jump reach instead of being flung to the
+  // backdrop (the "unreachable items" trap). 0.35 keeps Hard's cloud (sprawl 2.1 →
+  // ~1.39×) inside one jump's lateral reach. Wide route, reachable cloud.
+  const sFactor = 1 + (profile.sprawl - 1) * 0.35;
   const count = Math.max(0, Math.round(ramp(g.scatter.count, O) * profile.density));
   const rx = ramp(g.scatter.radiusX, O) * sFactor;
   const ry = ramp(g.scatter.radiusY, O) * sFactor;

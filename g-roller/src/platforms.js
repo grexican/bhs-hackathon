@@ -672,7 +672,7 @@ export class PlatformField {
     // The two ramps: openness opens the journey FAST (scaled per-tier), danger ramps
     // threat SLOWLY (or is pinned by zen). Everything the generator does reads these.
     this._O = openness(playerZ, this.profile);
-    this._D = this.fixedDanger != null ? this.fixedDanger : danger(playerZ);
+    this._D = this.fixedDanger != null ? this.fixedDanger : danger(playerZ, this.profile);
     this._biomeTextures = BIOMES[biomeAt(playerZ)].textures; // platforms re-skin per biome
 
     // Light/extinguish every board's edge outline when blackout flips on/off.
