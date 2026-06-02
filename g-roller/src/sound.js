@@ -93,6 +93,7 @@ const TRACKS = [
       { name: "chorus", chords: ["C", "Em", "F#m7b5", "G"], lift: 0.45 },
       { name: "chorus", chords: ["C", "Am", "G", "C"],    lift: 0.5 },                 // big authentic cadence V-I
       { name: "outro",  chords: ["Am", "F#m7b5", "G", "C"], layers: { drums: false } },// final V-I home
+      { name: "settle", chords: ["C", "C"], layers: { bass: false, arp: false, drums: false } }, // pad-only on the tonic — matches the intro for a smooth loop
     ],
   },
 
@@ -136,6 +137,7 @@ const TRACKS = [
       { name: "hook",  chords: ["Dm9", "Bbmaj7", "Em7b5", "A7"], lift: 0.35 },
       { name: "hook",  chords: ["Cmaj9", "Gm9", "Em7b5", "A7"], lift: 0.4 },
       { name: "outro", chords: ["Gm9", "Em7b5", "A7", "Dm9"], layers: { drums: false } },           // full ii–V–i home
+      { name: "settle", chords: ["Dm9", "Dm9"], layers: { arp: false, drums: false } },             // pad+bass on the tonic — matches the intro, smooth loop
     ],
   },
 
@@ -150,7 +152,7 @@ const TRACKS = [
     name: "Lucid Drift", tempo: 62,
     bassWave: "sine", arpWave: "sine", padWave: "sine",
     gritty: false, bassCut: 240, arpCut: 1200, detune: 16, space: 0.68,
-    swing: 0, drums: "none", arpRate: 8, gain: 1.05, feel: "pendulum",
+    swing: 0, drums: "none", arpRate: 8, gain: 1.05, feel: "float",
     // A major / F#m family (A B C# D E F# G#) — wide and open, but now the chords
     // are voiced correctly so the wash is consonant. F#m (vi), A (I), E (V),
     // Bsus2 (ii colour), Dmaj7 (IV — D F# A C#), C#m (iii — C# E G#). The repeated
@@ -166,22 +168,25 @@ const TRACKS = [
     // Ambient tides, but harmonically anchored: each phrase falls onto F#m (vi, the
     // home colour) or A (I). E (V) → F#m is a deceptive cadence; Dmaj7 (IV) → A is
     // plagal. The whole arrangement opens and closes on F#m so it breathes home.
+    // Re-anchored to A MAJOR (the I) as home — bright and open, the opposite of
+    // Midnight Cruise's dark jazz minor, so the two never feel alike. F#m (vi) is a
+    // colour, not the home. Plagal (Dmaj7→A) and authentic (E→A) cadences land on A;
+    // the whole tide opens and closes on A, with a pad-only settle into the loop.
     arrangement: [
-      { name: "wash",  chords: ["F#m", "A"],                layers: { bass: false, arp: false } },
-      { name: "wash",  chords: ["Dmaj7", "A"],              layers: { arp: false } },              // IV-I plagal
-      { name: "drift", chords: ["F#m", "Dmaj7", "E", "A"],  layers: { arp: false } },              // vi-IV-V-I
-      { name: "drift", chords: ["F#m", "C#m", "Dmaj7", "A"] },                                     // resolves to I
-      { name: "drift", chords: ["Dmaj7", "Bsus", "E", "F#m"] },                                    // V-vi deceptive
-      { name: "rise",  chords: ["Dmaj7", "A", "Bsus", "E"], lift: 0.3 },                            // builds to V
-      { name: "rise",  chords: ["F#m", "Dmaj7", "E", "A"],  lift: 0.3 },                            // lands on I
-      { name: "rise",  chords: ["Dmaj7", "E", "C#m", "F#m"], lift: 0.4 },                           // V-... -vi home
-      { name: "ebb",   chords: ["C#m", "Dmaj7", "E", "A"],  layers: { arp: false } },               // resolves to I
-      { name: "ebb",   chords: ["Dmaj7", "F#m", "E", "A"],  layers: { arp: false } },
-      { name: "rise",  chords: ["F#m", "Dmaj7", "E", "A"],  lift: 0.35 },
-      { name: "rise",  chords: ["Dmaj7", "Bsus", "E", "F#m"], lift: 0.4 },                          // deceptive to vi
-      { name: "ebb",   chords: ["Dmaj7", "A", "E", "F#m"],  layers: { arp: false } },               // settles on vi
-      { name: "wash",  chords: ["Dmaj7", "A"],              layers: { arp: false } },               // plagal again
-      { name: "wash",  chords: ["E", "F#m"],                layers: { bass: false, arp: false } },  // final V-vi home
+      { name: "wash",  chords: ["A", "Dmaj7"],              layers: { bass: false, arp: false } }, // I-IV pad wash
+      { name: "wash",  chords: ["A", "E"],                  layers: { arp: false } },              // I-V
+      { name: "drift", chords: ["A", "Dmaj7", "E", "A"],    layers: { arp: false } },              // I-IV-V-I
+      { name: "drift", chords: ["A", "F#m", "Dmaj7", "A"] },                                       // I-vi-IV-I
+      { name: "drift", chords: ["F#m", "Dmaj7", "E", "A"] },                                       // vi-IV-V-I
+      { name: "rise",  chords: ["Dmaj7", "E", "F#m", "A"],  lift: 0.3 },                            // IV-V-vi-I
+      { name: "rise",  chords: ["A", "E", "Dmaj7", "A"],    lift: 0.3 },                            // I-V-IV-I
+      { name: "rise",  chords: ["Dmaj7", "C#m", "Bsus", "E"], lift: 0.4 },                          // builds to V
+      { name: "ebb",   chords: ["A", "Dmaj7", "E", "A"],    layers: { arp: false } },               // resolves I
+      { name: "ebb",   chords: ["F#m", "Dmaj7", "E", "A"],  layers: { arp: false } },
+      { name: "rise",  chords: ["A", "Dmaj7", "E", "A"],    lift: 0.35 },
+      { name: "ebb",   chords: ["Dmaj7", "A", "E", "A"],    layers: { arp: false } },               // plagal + auth to I
+      { name: "wash",  chords: ["Dmaj7", "A"],              layers: { arp: false } },               // IV-I plagal
+      { name: "settle",chords: ["A", "A"],                  layers: { bass: false, arp: false } },  // pad-only A — matches the intro, smooth loop
     ],
   },
 
@@ -226,6 +231,7 @@ const TRACKS = [
       { name: "drop",  chords: ["Am", "F", "Bb", "Am"],  lift: 0.55 },
       { name: "drop",  chords: ["Dm", "F", "Bb", "Am"],  lift: 0.6 },                     // full cadence to i
       { name: "outro", chords: ["Gm", "F", "Bb", "Am"] },                                // bVII-bVI-bII-i home
+      { name: "settle", chords: ["Am", "Am"], layers: { arp: false, pad: false } },       // drop lead+pad, hold the bass+drums groove on i — matches the intro so the beat carries through the loop
     ],
   },
 
@@ -270,6 +276,47 @@ const TRACKS = [
       { name: "drop",  chords: ["Em", "C", "G", "D"],  lift: 0.55 },
       { name: "drop",  chords: ["Em", "Am", "C", "D"], lift: 0.6 },
       { name: "outro", chords: ["C", "G", "D", "Em"] },                 // bVI-bIII-bVII-i home
+      { name: "settle", chords: ["Em", "Em"], layers: { arp: false, pad: false } }, // drop lead+pad, hold the four-on-the-floor on i — matches the intro so it no longer ends harsh
+    ],
+  },
+
+  // 6) SOLAR DRIVE — bright MAJOR synth-pop / house. *** Audiosurf-suitable ***
+  //    (steady four-on-the-floor, so the world can pulse on it too). 124bpm in C
+  //    major — the upbeat, happy, daytime counterpart to Pulse Runner's darker
+  //    minor outrun. Classic I–V–vi–IV pop engine, bright saw bass + square stabs.
+  //    What sets it apart: the only fast MAJOR track — sunny and anthemic where the
+  //    others are dreamy, jazzy, ambient, dark, or moody-minor.
+  {
+    name: "Solar Drive", tempo: 124,
+    bassWave: "sawtooth", arpWave: "square", padWave: "sawtooth",
+    gritty: true, bassCut: 520, arpCut: 2400, detune: 7, space: 0.22,
+    swing: 0, drums: "full", arpRate: 16, gain: 0.92, feel: "run", steady: true,
+    // C major (C D E F G A B). Diatonic triads: C(I) Dm(ii) Em(iii) F(IV) G(V) Am(vi).
+    // I-V-vi-IV pop/house; G(V)→C(I) is the resolution and sections land on C.
+    prog: {
+      C:  { bass: 65.41,  pad: [130.81, 164.81, 196.0],  arp: [261.63, 329.63, 392.0, 329.63] }, // C E G
+      G:  { bass: 98.0,   pad: [196.0, 246.94, 293.66],  arp: [392.0, 493.88, 587.33, 493.88] }, // G B D
+      Am: { bass: 110.0,  pad: [220.0, 261.63, 329.63],  arp: [440.0, 523.25, 659.25, 523.25] }, // A C E
+      F:  { bass: 87.31,  pad: [174.61, 220.0, 261.63],  arp: [349.23, 440.0, 523.25, 440.0] },  // F A C
+      Dm: { bass: 73.42,  pad: [146.83, 174.61, 220.0],  arp: [293.66, 349.23, 440.0, 349.23] }, // D F A
+      Em: { bass: 82.41,  pad: [164.81, 196.0, 246.94],  arp: [329.63, 392.0, 493.88, 392.0] },  // E G B
+    },
+    arrangement: [
+      { name: "intro", chords: ["C", "C"],            layers: { arp: false, pad: false } }, // four-on-the-floor groove start
+      { name: "A",     chords: ["C", "G", "Am", "F"] },                 // I-V-vi-IV
+      { name: "A",     chords: ["C", "G", "F", "C"] },                  // resolves to I
+      { name: "A2",    chords: ["Am", "F", "C", "G"] },                 // vi-IV-I-V
+      { name: "build", chords: ["F", "G", "Am", "G"] },                 // builds to V
+      { name: "drop",  chords: ["C", "G", "Am", "F"],  lift: 0.5 },
+      { name: "drop",  chords: ["C", "G", "F", "C"],   lift: 0.5 },     // resolves to I
+      { name: "break", chords: ["Am", "F", "C", "G"],  layers: { drums: false } },
+      { name: "break", chords: ["Dm", "G", "C", "C"],  layers: { drums: false } }, // ii-V-I
+      { name: "A2",    chords: ["C", "Em", "Am", "F"] },
+      { name: "build", chords: ["F", "G", "Am", "G"] },
+      { name: "drop",  chords: ["C", "G", "Am", "F"],  lift: 0.55 },
+      { name: "drop",  chords: ["Dm", "G", "C", "C"],  lift: 0.6 },     // ii-V-I big resolve
+      { name: "outro", chords: ["Am", "F", "G", "C"] },                 // vi-IV-V-I home
+      { name: "settle", chords: ["C", "C"], layers: { arp: false, pad: false } }, // hold the groove on I — matches the intro, smooth loop
     ],
   },
 ];
@@ -384,7 +431,10 @@ export class Sound {
       this._lfo.start();
     }
     if (this.ctx.state === "suspended") this.ctx.resume();
-    this._startMusic();
+    // Only kick off the sequencer if it isn't already running, so restarting the
+    // LEVEL doesn't restart the SONG — it keeps playing from where it was. (Track
+    // switches still restart, via nextTrack/setTrack.)
+    if (!this._musicOn) this._startMusic();
   }
 
   // --- Reactive music (effect layering, toggleable) -------------------------
@@ -438,6 +488,12 @@ export class Sound {
 
   trackIndex() {
     return this._trackIndex;
+  }
+
+  // Is the current track beat-locked (safe for Audiosurf's on-beat pulsing)?
+  // Lets Audiosurf run on ANY steady track, not just the one default — variety.
+  currentSteady() {
+    return !!TRACKS[this._trackIndex].steady;
   }
 
   toggleMute() {
@@ -523,6 +579,7 @@ export class Sound {
       // "stab"/"sparse" leads sit out most slots so they read as syncopated jabs /
       // laid-back downbeats instead of a constant stream.
       const playSlot =
+        feel === "float"  ? (s === 0 || s === 6 || s === 12) : // 3 long, irregularly-spaced ambient tones (no pulse)
         feel === "sparse" ? s % 4 === 0 :
         feel === "stab"    ? (s % 4 === 0 || s % 8 === 3) : // downbeat + an off-the-beat jab
         s % every === 0;
@@ -558,16 +615,22 @@ export class Sound {
     const eighth = Math.floor(s / 2);    // 0..7 within the bar
 
     if (feel === "climb") {
-      // Rising chord-tone line: root on every downbeat, then step up the chord on
-      // the weaker eighths. Nudge the apex per beat so the climb keeps lifting.
-      if (inBeat === 0) return seq[0];
-      return seq[Math.min(n - 1, (eighth + beat) % n)];
+      // Gentle STEPWISE rise — only ever moves to an ADJACENT chord tone (no leaps,
+      // which read as "random hopping"). Each beat picks a base tone that rises then
+      // eases back, and the off-eighth is the very next tone up. Always resolves.
+      const base = [0, 1, 2, 1][beat % 4];          // rise 0→1→2 then settle to 1
+      return inBeat === 0 ? seq[base % n] : seq[(base + 1) % n];
     }
     if (feel === "pendulum") {
-      // In/out bounce that always returns home: root on the downbeat, reach up to
-      // the 3rd/5th between. Symmetric so it resolves rather than drifting off.
-      const order = [0, 1, 2, 1, 0, 2, 3, 2]; // root-anchored, fans outward and back
-      return seq[order[eighth % order.length] % n];
+      // Gentle in/out that always returns home, moving by single steps (no jumps):
+      // root → 3rd → 5th → 3rd → root … so it breathes rather than bouncing around.
+      const order = [0, 1, 2, 1]; // one step at a time, symmetric
+      return seq[order[beat % order.length] % n];
+    }
+    if (feel === "float") {
+      // Ultra-sparse ambient drift (see playSlot: only ~3 long tones a bar) — a slow
+      // wide arc through root → 5th → 3rd that outlines the chord without any pulse.
+      return s < 6 ? seq[0] : s < 12 ? seq[2 % n] : seq[1 % n];
     }
     if (feel === "stab") {
       // Funky/DnB: root locked on the beat, a higher chord tone on the off jab.
@@ -763,6 +826,10 @@ export class Sound {
   _blip(f0, f1, dur, type, peak, target = this.sfxGain) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
+    // Small random pitch + level spread so a sound played many times in a row
+    // (gems, jumps) never feels mechanical — each instance is a touch different.
+    const j = 0.97 + Math.random() * 0.06; // ±3% pitch
+    f0 *= j; f1 *= j; peak *= 0.9 + Math.random() * 0.2; // ±10% level
     const o = this.ctx.createOscillator();
     const g = this.ctx.createGain();
     const lp = this.ctx.createBiquadFilter();

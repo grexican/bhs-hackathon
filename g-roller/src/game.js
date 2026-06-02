@@ -407,7 +407,9 @@ export class Game {
     this._audiosurf = !this._audiosurf;
     if (this._audiosurf) {
       this.sound.start(); // a toggle is a user gesture, so audio is allowed to start
-      this.sound.setTrack(CONFIG.audiosurfTrack); // force the driving rhythmic track
+      // Keep the current track if it's already beat-steady (Pulse Runner OR Solar
+      // Drive); only switch to the default rhythmic track if the pick can't carry it.
+      if (!this.sound.currentSteady()) this.sound.setTrack(CONFIG.audiosurfTrack);
       this._installBeatHook();
       this._toast("🎵 AUDIOSURF: On", "#ff4bd6");
     } else {
@@ -542,7 +544,9 @@ export class Game {
     const audiosurf = get("gr_audiosurf");
     if (audiosurf !== null) this._audiosurf = audiosurf === "1";
     // Play audiosurf's rhythmic track while it's on, otherwise the saved manual choice.
-    this.sound.setTrack(this._audiosurf ? CONFIG.audiosurfTrack : this._userTrack);
+    this.sound.setTrack(this._userTrack);
+    // Audiosurf needs a steady beat; keep the saved pick if it's steady, else default.
+    if (this._audiosurf && !this.sound.currentSteady()) this.sound.setTrack(CONFIG.audiosurfTrack);
     this._applyDifficultyMult(); // apply restored (or default) level — forced to 0 in zen
     document.body.classList.toggle("is-zen", this._zen); // hide HUD counters if restored into zen
     this._diffSpeedMult = CONFIG.difficultyLevels[this._diffLevel].speedMult ?? 1;
@@ -642,7 +646,7 @@ export class Game {
     // If Audiosurf is on (e.g. restored from a saved pref before audio existed), make
     // sure the rhythmic track is forced and the beat hook is live now that audio runs.
     if (this._audiosurf) {
-      if (this.sound.trackIndex() !== CONFIG.audiosurfTrack) this.sound.setTrack(CONFIG.audiosurfTrack);
+      if (!this.sound.currentSteady()) this.sound.setTrack(CONFIG.audiosurfTrack); // any steady track is fine for the on-beat pulse
       if (!this.sound.onBeat) this._installBeatHook();
     }
     if (this.state === "dead") this._resetWorld();
