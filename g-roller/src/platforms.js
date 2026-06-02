@@ -121,6 +121,7 @@ export class PlatformField {
     // Cheat-mode test tool: which powerup types are allowed to spawn. Default = all.
     this.enabledPowerups = new Set(Object.keys(POWERUP_DEFS));
     this._biomeTextures = BIOMES[0].textures;
+    this._biomeBoardMat = BIOMES[0].boardMat;
 
     // The generator's walking state — a cursor plus a few counters. Bundled so it can
     // be handed straight to planStep(). Initialized in reset().
@@ -222,13 +223,20 @@ export class PlatformField {
       emissiveIntensity: type === "rune" ? 0.6 : type === "bouncy" ? 0.5 : type === "boost" ? 0.32 : type === "flipper" ? 0.55 : 0,
     });
 
-    // Opaque, lightly-reflective deck: the neon grid texture stays solid (reads clearly,
-    // esp. on mobile — the old glass was too low-contrast) with a glossy sheen that catches
-    // the sun + neon as highlights. Light reflective, not a mirror.
+    // Opaque deck whose SURFACE FEEL comes from the active biome (matte sandstone /
+    // glossy ice / inner-glowing void rock) instead of one fixed look — so boards
+    // read as a different material per zone, not the same slab re-tinted. Falls back
+    // to the glossy neon default if a biome omits boardMat. Only normal decks take it;
+    // bouncy/boost/flipper keep the identity glow set above.
     const alphaTex = null;
     if (type === "normal") {
-      mat.roughness = 0.36;
-      mat.metalness = 0.16;
+      const bm = this._biomeBoardMat;
+      mat.roughness = bm ? bm.roughness : 0.36;
+      mat.metalness = bm ? bm.metalness : 0.16;
+      if (bm && bm.emissiveIntensity > 0) {
+        mat.emissive.setHex(bm.emissive);
+        mat.emissiveIntensity = bm.emissiveIntensity;
+      }
     }
 
     let visual, ownGeo = null;
@@ -673,7 +681,9 @@ export class PlatformField {
     // threat SLOWLY (or is pinned by zen). Everything the generator does reads these.
     this._O = openness(playerZ, this.profile);
     this._D = this.fixedDanger != null ? this.fixedDanger : danger(playerZ, this.profile);
-    this._biomeTextures = BIOMES[biomeAt(playerZ)].textures; // platforms re-skin per biome
+    const _bi = BIOMES[biomeAt(playerZ)];
+    this._biomeTextures = _bi.textures;   // platforms re-skin per biome
+    this._biomeBoardMat = _bi.boardMat;   // …and take on the zone's surface feel (matte/glossy/glowing)
 
     // Light/extinguish every board's edge outline when blackout flips on/off.
     if (this.blackout !== this._edgeVis) {

@@ -396,6 +396,11 @@ export const CONFIG = {
 //                   sway     — lateral sine-sway amplitude; swaySpeed its rate
 //                   twinkle  — 1 = per-particle opacity flicker (sparks/stars)
 //                   opacity  — base material opacity
+//   boardMat    — the SURFACE FEEL of the zone's normal decks, so boards aren't all
+//                 the same slab in a different tint: matte sandstone vs glossy ice vs
+//                 inner-glowing void rock. {roughness, metalness, emissive(hex),
+//                 emissiveIntensity}. Only normal boards take it — bouncy/boost/
+//                 flipper keep their identity glow. (Applied in platforms.js _addBoard.)
 export const BIOMES = [
   // Neon City — cool blue dusk, teal + magenta window glow (the baseline city).
   {
@@ -414,6 +419,8 @@ export const BIOMES = [
     tagline: "where the climb begins",
     // Neon embers/sparks drifting UP off the city — electric, alive.
     weather: { color: 0xff6bd6, count: 55, size: 2.2, vx: 0, vy: 9, vz: -2, sway: 7, swaySpeed: 1.3, twinkle: 1, opacity: 0.5 },
+    // Baseline deck: glossy neon-grid that catches the sun + neon as highlights.
+    boardMat: { roughness: 0.36, metalness: 0.16, emissive: 0x000000, emissiveIntensity: 0 },
   },
   // Sunset Dunes — warm rose-amber haze, golden windows, an amber moon.
   {
@@ -432,6 +439,9 @@ export const BIOMES = [
     tagline: "into the warm horizon",
     // Sand & dust BLOWING sideways on a hot wind — the desert reads instantly.
     weather: { color: 0xffd29a, count: 140, size: 1.9, vx: 28, vy: -3, vz: -7, sway: 3, swaySpeed: 2.0, twinkle: 0, opacity: 0.34 },
+    // Matte, sun-baked sandstone — no sheen (the opposite of the glossy city deck).
+    // emissive 0 keeps the audiosurf tile-pulse working here (it skips self-lit decks).
+    boardMat: { roughness: 0.96, metalness: 0.0, emissive: 0x000000, emissiveIntensity: 0 },
   },
   // Ice Caverns — cold cyan + white, frozen window light, a pale-blue moon.
   {
@@ -450,6 +460,8 @@ export const BIOMES = [
     tagline: "the frozen deep",
     // Snow FALLING with a gentle drift — cold and quiet.
     weather: { color: 0xeaffff, count: 150, size: 2.7, vx: 2, vy: -15, vz: -3, sway: 9, swaySpeed: 0.9, twinkle: 0, opacity: 0.6 },
+    // Glassy, polished ice — high gloss + a faint cold inner glow.
+    boardMat: { roughness: 0.1, metalness: 0.45, emissive: 0x0e3247, emissiveIntensity: 0.18 },
   },
   // The Void — deep violet + blue, eerie violet glow, dim flare.
   {
@@ -468,6 +480,8 @@ export const BIOMES = [
     tagline: "beyond the edge",
     // Stars / void-motes HANGING in space, drifting up slowly and twinkling — eerie, weightless.
     weather: { color: 0xd9c2ff, count: 95, size: 2.3, vx: 0, vy: 4, vz: 0, sway: 4, swaySpeed: 0.35, twinkle: 1, opacity: 0.72 },
+    // Dark void rock that GLOWS violet from within — boards read as lit, floating slabs.
+    boardMat: { roughness: 0.55, metalness: 0.18, emissive: 0x3a1f7a, emissiveIntensity: 0.4 },
   },
 ];
 
