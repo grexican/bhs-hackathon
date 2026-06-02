@@ -239,15 +239,17 @@ export class PlatformField {
     // bouncy/boost/flipper keep the identity glow set above.
     const alphaTex = null;
     if (type === "normal") {
-      // Colour comes from the zone's baked SKIN texture (set as the map); boardMat only
-      // sets the surface FEEL (matte/glossy) + an optional inner glow.
       const bm = this._biomeBoardMat;
       mat.roughness = bm ? bm.roughness : 0.36;
       mat.metalness = bm ? bm.metalness : 0.16;
-      if (bm && bm.emissiveIntensity > 0) {
-        mat.emissive.setHex(bm.emissive);
-        mat.emissiveIntensity = bm.emissiveIntensity;
-      }
+      // NEON: the deck SELF-ILLUMINATES. Reuse the diffuse skin clone as the emissive map
+      // (same UVs + repeat) with white emissive, so the glowing pattern + tinted body emit
+      // the zone's colour and catch the bloom pass. THIS is what makes a deck read as neon
+      // rather than a dark slab lit by dim scene light. `glow` is the per-zone strength
+      // (Neon City/Void blaze; Sunset Dunes stays nearly matte — the contrast is the point).
+      mat.emissiveMap = tex;
+      mat.emissive.setHex(0xffffff);
+      mat.emissiveIntensity = bm && bm.glow != null ? bm.glow : 0.7;
     }
 
     let visual, ownGeo = null;

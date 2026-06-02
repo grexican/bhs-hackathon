@@ -393,9 +393,11 @@ export const CONFIG = {
 //                 TRACK read as the zone): {pattern, neon, neon2?, panel?}. See
 //                 textures.js makeSkinTexture for patterns. THIS replaced the old albedo
 //                 tint — the colour is now painted into the texture, not multiplied on.
-//   boardMat      — surface FEEL of normal decks {roughness, metalness, emissive,
-//                 emissiveIntensity}: matte sand vs glossy ice vs glowing void. (No
-//                 tint — the skin carries colour.) Special plates keep their own glow.
+//   boardMat      — surface of normal decks {roughness, metalness, glow}. `glow` is how
+//                 hard the skin SELF-ILLUMINATES (emissive map): high = the deck reads as
+//                 NEON and blooms (Neon City, Void, Cobalt); low = nearly matte
+//                 (Sunset Dunes). The contrast between blazing and matte zones is a big
+//                 part of the differentiation. Special plates keep their own glow.
 //   genBias       — how the zone PLAYS: {tunnel, ramp, curve, yaw} frequency multipliers
 //                 so each zone has a signature SHAPE (ramps in dunes, tunnels+curves in
 //                 ice, twists in void). Capped at 1 → never breaks reachability.
@@ -420,8 +422,10 @@ export const BIOMES = [
     tagline: "where it all begins",
     skylineStyle: "towers",
     skylineVar: { density: 1.2, heightScale: 1.12, gapScale: 0.85 }, // dense, tall downtown
-    skin: { pattern: "grid", neon: 0x36d6ff, neon2: 0xff4bd6, panel: 0x10162e },
-    boardMat: { roughness: 0.34, metalness: 0.18, emissive: 0x0c1630, emissiveIntensity: 0.12 },
+    skin: { pattern: "grid", neon: 0x36e6ff, neon2: 0xff4bd6, panel: 0x123a6e },
+    // glow = how hard the skin SELF-ILLUMINATES (emissive map). High here → the grid
+    // actually reads as NEON and blooms. (See platforms _addBoard.)
+    boardMat: { roughness: 0.34, metalness: 0.18, glow: 0.95 },
     genBias: { tunnel: 1, ramp: 1, curve: 1, yaw: 1 },
   },
   // 1 — SUNSET DUNES: warm amber desert. Matte sandstone planks, golden light. HARD amber.
@@ -440,8 +444,8 @@ export const BIOMES = [
     tagline: "into the warm horizon",
     skylineStyle: "mesas",
     skylineVar: { heightScale: 0.85 },
-    skin: { pattern: "planks", neon: 0xffa838, neon2: 0xffd24a, panel: 0x231006 }, // gold, nudged off the orange flipper pad
-    boardMat: { roughness: 0.92, metalness: 0.02, emissive: 0x2a1000, emissiveIntensity: 0.14 },
+    skin: { pattern: "planks", neon: 0xffb24a, neon2: 0xffd24a, panel: 0x3a1c04 }, // gold, off the orange flipper pad
+    boardMat: { roughness: 0.92, metalness: 0.02, glow: 0.34 }, // matte, low glow — sun-baked desert, NOT neon (the contrast sells it)
     genBias: { tunnel: 0.5, ramp: 1.8, curve: 0.8, yaw: 1.4 },
   },
   // 2 — ICE CAVERNS: cold crystalline cyan-white. Glassy veined decks, high gloss. HARD icy.
@@ -460,8 +464,8 @@ export const BIOMES = [
     tagline: "the frozen deep",
     skylineStyle: "spires",
     skylineVar: { heightScale: 1.15 },
-    skin: { pattern: "veins", neon: 0xbdf2ff, neon2: 0x6fd0ff, panel: 0x07202e },
-    boardMat: { roughness: 0.12, metalness: 0.45, emissive: 0x103a52, emissiveIntensity: 0.26 },
+    skin: { pattern: "veins", neon: 0xd6faff, neon2: 0x6fd0ff, panel: 0x0a3850 },
+    boardMat: { roughness: 0.12, metalness: 0.45, glow: 0.7 }, // glassy ice — bright cold cracks
     genBias: { tunnel: 2.0, ramp: 0.8, curve: 1.8, yaw: 0.9 },
   },
   // 3 — THE VOID: eerie violet nothingness. Dark rock glowing from within. HARD violet.
@@ -482,8 +486,8 @@ export const BIOMES = [
     skylineStyle: "none", // NO buildings — the void is truly empty (no city flanking the track)
     cloudLevel: 0,        // …and no nebula clouds either — empty sky. (The glowing floor stays — it's nice.)
     skylineVar: {},
-    skin: { pattern: "pebbles", neon: 0xb060ff, neon2: 0x7a3bff, panel: 0x0a0614 }, // glowing void-rubble; rim is deep violet (was hot pink — too close to the bouncy pads + off-theme)
-    boardMat: { roughness: 0.5, metalness: 0.2, emissive: 0x3a1f7a, emissiveIntensity: 0.42 },
+    skin: { pattern: "pebbles", neon: 0xc070ff, neon2: 0x7a3bff, panel: 0x1c0a3e }, // glowing void-rubble
+    boardMat: { roughness: 0.5, metalness: 0.2, glow: 1.0 }, // strongest inner glow — lit slabs floating in the dark
     genBias: { tunnel: 1.4, ramp: 0.7, curve: 1.2, yaw: 1.6 },
   },
   // 4 — COBALT GROOVE (after the track): deep electric cobalt-blue, a tiled plaza that
@@ -504,8 +508,8 @@ export const BIOMES = [
     tagline: "deep in the groove",
     skylineStyle: "towers",
     skylineVar: { density: 0.9, heightScale: 1.0, gapScale: 1.15 }, // distinct from Neon City's dense downtown
-    skin: { pattern: "plaza", neon: 0x2f6bff, neon2: 0x00d0ff, panel: 0x060c22 },
-    boardMat: { roughness: 0.28, metalness: 0.3, emissive: 0x0a1a44, emissiveIntensity: 0.2 },
+    skin: { pattern: "plaza", neon: 0x3f8bff, neon2: 0x00d0ff, panel: 0x0a2060 },
+    boardMat: { roughness: 0.28, metalness: 0.3, glow: 0.92 }, // electric cobalt dancefloor
     genBias: { tunnel: 1.1, ramp: 1.0, curve: 1.5, yaw: 1.1 },
   },
   // 5 — VELVET HORIZON (after the track): lush magenta-rose twilight, brick-lit walls.
@@ -529,8 +533,8 @@ export const BIOMES = [
     // shares the rose-PINK of the bouncy pads (0xff5f9e) — readability fix. The sky/fog
     // stay rose, so the zone still reads "velvet". Magenta (~hue .87) also sits clear of
     // the Void's violet (~.76), keeping the two distinct.
-    skin: { pattern: "brick", neon: 0xe24fd0, neon2: 0xffb070, panel: 0x1c0816 },
-    boardMat: { roughness: 0.4, metalness: 0.18, emissive: 0x2e0a22, emissiveIntensity: 0.2 },
+    skin: { pattern: "brick", neon: 0xf45fe0, neon2: 0xffb070, panel: 0x36092c },
+    boardMat: { roughness: 0.4, metalness: 0.18, glow: 0.78 }, // warm magenta glow
     genBias: { tunnel: 0.8, ramp: 1.3, curve: 1.4, yaw: 1.0 },
   },
 ];
