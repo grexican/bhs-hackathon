@@ -269,6 +269,7 @@ export class Game {
     this._biomeBloom = BIOMES[0].bloom || 0;
     this._biomeFlash = 0;
     this.background.setBiome(BIOMES[0]);
+    this.sound.setBiomeAudio(BIOMES[0].audio); // park the soundtrack tone on the opening zone
     this.field.reset();
     this.player.reset();
     this._cameraFrozen = false; // un-freeze after a cinematic fall-death
@@ -1040,8 +1041,10 @@ export class Game {
     this._biomeFlash = this._reducedMotion ? 0.35 : 0.8;
     if (!this._reducedMotion) this._fovKick = 7;
 
-    // 4) The audio half — an airy whoosh (no chime; it clashed with the music).
+    // 4) The audio half — an airy whoosh (no chime; it clashed with the music), plus
+    //    morphing the soundtrack's tone to the zone (warm dunes, airy ice, dark void).
     this.sound.portal();
+    this.sound.setBiomeAudio(b.audio);
   }
 
   _applyPowerup(u) {

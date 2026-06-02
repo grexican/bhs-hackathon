@@ -640,6 +640,29 @@ export class Sound {
     this._timer = null;
     this._trackIndex = 0;
     this.onBeat = null; // optional per-beat callback (set by Audiosurf mode; null = no cost)
+    this._biomeAudio = null; // {lowpass, air} tone shaping for the active zone (see setBiomeAudio)
+  }
+
+  // Colour the soundtrack for a biome: morph the music-bus lowpass + air shelf so each
+  // zone SOUNDS different (warm dunes, airy ice, dark void), eased over ~`ease` seconds
+  // so a crossing is a smooth tonal shift. Called by game.js on a zone change. Stored
+  // so a zone set before the audio graph exists is applied when start() builds it.
+  setBiomeAudio(audio) {
+    if (!audio) return;
+    this._biomeAudio = audio;
+    if (this.ctx) this._applyBiomeAudio(audio, 0.7);
+  }
+
+  _applyBiomeAudio({ lowpass = 20000, air = 0 }, ease) {
+    const t = this.ctx.currentTime;
+    // setTargetAtTime eases exponentially; ease=0 (audio just started) → snap.
+    if (ease > 0) {
+      this._bLow.frequency.setTargetAtTime(lowpass, t, ease);
+      this._bAir.gain.setTargetAtTime(air, t, ease);
+    } else {
+      this._bLow.frequency.value = lowpass;
+      this._bAir.gain.value = air;
+    }
   }
 
   // Lazily create the audio graph. Safe to call repeatedly; only builds once.
@@ -670,7 +693,17 @@ export class Sound {
 
       this.musicGain = this.ctx.createGain();
       this.musicGain.gain.value = 0.26; // music sits softer in the mix now
-      this.musicGain.connect(this.dynGain);
+
+      // Per-BIOME tone shaping (the music's "filter per zone", like the powerup morph).
+      // The whole music sum passes musicGain -> lowpass -> air-shelf -> dynGain, so each
+      // zone can colour the soundtrack: open city, warm/muffled dunes, bright airy ice,
+      // deep dark void. SFX bypass this (they stay crisp). Defaults = transparent.
+      this._bLow = this.ctx.createBiquadFilter();
+      this._bLow.type = "lowpass"; this._bLow.frequency.value = 20000; this._bLow.Q.value = 0.4;
+      this._bAir = this.ctx.createBiquadFilter();
+      this._bAir.type = "highshelf"; this._bAir.frequency.value = 4500; this._bAir.gain.value = 0;
+      this.musicGain.connect(this._bLow); this._bLow.connect(this._bAir); this._bAir.connect(this.dynGain);
+      if (this._biomeAudio) this._applyBiomeAudio(this._biomeAudio, 0); // honour a zone set before audio started
 
       // Sidechain "pump" bus: the sustained bed (pad + bass) routes through here so it
       // can DUCK on every kick, then breathe back up — the signature pumping groove of

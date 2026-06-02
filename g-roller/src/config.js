@@ -387,6 +387,10 @@ export const CONFIG = {
 //   skylineStyle — the SHAPE of the side buildings: "towers" (city) | "mesas" (dunes
 //                 buttes+pyramids) | "spires" (ice crystals) | "monoliths" (void
 //                 slabs). background.js regenerates the flanking walls on crossing.
+//   audio       — per-zone SOUNDTRACK tone {lowpass(Hz), air(dB high-shelf)} morphed
+//                 on the music bus (sound.setBiomeAudio): open city, warm/muffled
+//                 dunes, bright airy ice, deep dark void. Same idea as the powerup
+//                 music morph, but per zone. SFX bypass it (stay crisp).
 //   weather     — the AMBIENT PARTICLE field that fills the air for the whole zone, and
 //                 the single biggest "this is a different world" cue. It's the MOTION
 //                 that reads, not the colour: embers RISE, desert dust BLOWS sideways,
@@ -428,6 +432,7 @@ export const BIOMES = [
     accent: 0xff4bd6,
     tagline: "where the climb begins",
     skylineStyle: "towers", // tall city towers
+    audio: { lowpass: 20000, air: 0 }, // open + neutral (the baseline soundtrack)
 
     // Neon embers/sparks drifting UP off the city — electric, alive.
     weather: { color: 0xff6bd6, count: 55, size: 2.2, vx: 0, vy: 9, vz: -2, sway: 7, swaySpeed: 1.3, twinkle: 1, opacity: 0.5 },
@@ -453,6 +458,7 @@ export const BIOMES = [
     accent: 0xffb04a,
     tagline: "into the warm horizon",
     skylineStyle: "mesas", // low desert buttes + pyramids
+    audio: { lowpass: 4500, air: -2 }, // warm + muffled, like heat haze
 
     // Sand & dust BLOWING sideways on a hot wind — the desert reads instantly.
     weather: { color: 0xffd29a, count: 140, size: 1.9, vx: 28, vy: -3, vz: -7, sway: 3, swaySpeed: 2.0, twinkle: 0, opacity: 0.34 },
@@ -478,6 +484,7 @@ export const BIOMES = [
     accent: 0x9af0ff,
     tagline: "the frozen deep",
     skylineStyle: "spires", // jagged ice crystal spires
+    audio: { lowpass: 20000, air: 6 }, // bright + airy, crystalline top end
 
     // Snow FALLING with a gentle drift — cold and quiet.
     weather: { color: 0xeaffff, count: 150, size: 2.7, vx: 2, vy: -15, vz: -3, sway: 9, swaySpeed: 0.9, twinkle: 0, opacity: 0.6 },
@@ -502,6 +509,7 @@ export const BIOMES = [
     accent: 0xa05bff,
     tagline: "beyond the edge",
     skylineStyle: "monoliths", // sparse floating monoliths
+    audio: { lowpass: 2200, air: -3 }, // deep + dark, cavernous and distant
 
     // Stars / void-motes HANGING in space, drifting up slowly and twinkling — eerie, weightless.
     weather: { color: 0xd9c2ff, count: 95, size: 2.3, vx: 0, vy: 4, vz: 0, sway: 4, swaySpeed: 0.35, twinkle: 1, opacity: 0.72 },
