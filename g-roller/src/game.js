@@ -1110,6 +1110,11 @@ export class Game {
   _togglePause() {
     if (this.state === "playing") {
       this.state = "paused"; // the loop stops ticking gameplay while paused
+      // Sync the start-press counter NOW. During play we never advance _seenStart, so
+      // every jump you made this run has left input.startPresses ahead of it. Without
+      // this, the paused branch in _loop sees that stale delta on the very next frame
+      // and instantly "resumes" — which is why a pause press looked like it did nothing.
+      this._seenStart = this.input.startPresses;
       this._hud.subtitle.textContent = "⏸ Paused";
       this._hud.hint.textContent = this._isTouch ? "Tap JUMP to resume" : "Esc or JUMP to resume";
       if (this._hud.restart) this._hud.restart.classList.remove("is-hidden"); // offer Restart right here
