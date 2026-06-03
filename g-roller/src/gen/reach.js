@@ -3,7 +3,7 @@
 // difficulty: a step may never ask for more gap/rise/strafe than a well-timed jump
 // at the current speed can deliver (times the safety fractions in gen.reach).
 
-import { CONFIG, jumpReach } from "../config.js";
+import { CONFIG, jumpReach, sideSpeedAt } from "../config.js";
 
 export { jumpReach };
 
@@ -18,6 +18,6 @@ export function budgets(forwardSpeed) {
     airTime: reach.airTime,
     maxRise: reach.height * r.rise,
     maxGap: forwardSpeed * reach.airTime * r.gap,
-    maxLateral: CONFIG.player.sideSpeed * reach.airTime * r.lateral,
+    maxLateral: sideSpeedAt(forwardSpeed) * reach.airTime * r.lateral, // strafe scales with speed too
   };
 }

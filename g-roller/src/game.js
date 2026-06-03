@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { CONFIG, BIOMES, biomeAt, ZoneSeq } from "./config.js";
+import { CONFIG, BIOMES, biomeAt, ZoneSeq, sideSpeedAt } from "./config.js";
 import { Input } from "./input.js";
 import { Player, BALL_SKINS, ballSwatchURL } from "./player.js";
 import { PlatformField, POWERUP_DEFS } from "./platforms.js";
@@ -279,6 +279,7 @@ export class Game {
     this.background.setBiome(startBiome);
     this.field.reset(this._startDistance);
     this.player.reset(this._startDistance);
+    this._worldStartDistance = this._startDistance; // what the current world was built at (see _startGame)
     // A "jump to distance" cheat start should also begin at the SPEED that context would have reached
     // (speed plateaus by ~650m), so gaps/reach match the difficulty.
     if (this._startDistance > 0) {
@@ -787,7 +788,14 @@ export class Game {
     // audiosurf is on so the beat-pulse still has a kick to ride. _startGame is the
     // fresh-run entry (resume goes through _resume), so this only fires on a real respawn.
     if (this._randomTrack) this._toast(`🎲 ${this.sound.randomTrack(this._audiosurf)}`, "#a94bff");
-    if (this.state === "dead") this._resetWorld();
+    // Cheat "start at distance": adopt the input value NOW (the browser may have pre-filled it, so the
+    // change event never fired) and rebuild the world if it no longer matches — so it applies on the
+    // FIRST run, not only after nudging the field.
+    if (this._cheat) {
+      const sd = document.getElementById("set-startdist");
+      if (sd) this._startDistance = Math.max(0, Math.round(Number(sd.value) || 0));
+    }
+    if (this.state === "dead" || this._startDistance !== this._worldStartDistance) this._resetWorld();
     this.player.jumpCount = 0;
     this.player._seenPresses = this.input.jumpPresses; // don't let the start press auto-jump
     this.gems = 0;
@@ -944,6 +952,7 @@ export class Game {
 
     const ctx = {
       forwardSpeed: speed,
+      sideSpeed: sideSpeedAt(genSpeed), // strafe nudges up with the sustainable speed (track meanders)
       steerMult: this._effects.reverse > 0 ? -1 : 1,
       invuln: this._invuln > 0,
       shield: this._effects.shield,

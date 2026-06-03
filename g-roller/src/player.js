@@ -700,6 +700,7 @@ export class Player {
 
     // Steering (steerMult flips for the "reverse" powerdown). When morphed, the
     // ball rolls weird — loosen control and add a wobble that fights your line.
+    const sideSpeed = ctx.sideSpeed ?? CONFIG.player.sideSpeed; // nudges up with forward speed
     let steer = -input.steer * ctx.steerMult;
     if (ctx.morph) {
       // Haphazard wobble: three non-harmonic sines plus a smoothed random walk, so
@@ -709,9 +710,9 @@ export class Player {
                 + 0.30 * Math.sin(this._t * 5.3 + 2.1)
                 + 0.25 * Math.sin(this._t * 14.7 + 0.7)
                 + this._morphDrift;
-      steer = steer * 0.55 + wob * (CONFIG.effects.morphWobble / CONFIG.player.sideSpeed); // less of your own control, too
+      steer = steer * 0.55 + wob * (CONFIG.effects.morphWobble / sideSpeed); // less of your own control, too
     }
-    v.x = steer * CONFIG.player.sideSpeed;
+    v.x = steer * sideSpeed;
     v.z = ctx.forwardSpeed;
     // Asymmetric gravity: float UP gently (riseGravity), fall DOWN fast (full gravity).
     // That's the "swinging from the rooftops" feel — long, floaty hang on the way up,

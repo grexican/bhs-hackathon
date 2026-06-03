@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { jumpReach, budgets } from "../src/gen/reach.js";
-import { CONFIG } from "../src/config.js";
+import { CONFIG, sideSpeedAt } from "../src/config.js";
 
 describe("jumpReach", () => {
   it("returns a positive peak height and air time", () => {
@@ -30,6 +30,6 @@ describe("budgets", () => {
     const r = jumpReach();
     expect(b.maxRise).toBeCloseTo(r.height * CONFIG.gen.reach.rise, 5);
     expect(b.maxGap).toBeCloseTo(30 * r.airTime * CONFIG.gen.reach.gap, 5);
-    expect(b.maxLateral).toBeCloseTo(CONFIG.player.sideSpeed * r.airTime * CONFIG.gen.reach.lateral, 5);
+    expect(b.maxLateral).toBeCloseTo(sideSpeedAt(30) * r.airTime * CONFIG.gen.reach.lateral, 5);
   });
 });

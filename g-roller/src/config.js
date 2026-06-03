@@ -25,7 +25,10 @@
 export const CONFIG = {
   // --- The ball -------------------------------------------------------------
   player: {
-    sideSpeed: 20, // left/right strafe (units per second)
+    sideSpeed: 20, // BASE left/right strafe (units per second) at the start speed.
+    sideRampFactor: 0.5, // strafe NUDGES up with forward speed (so you can still track a meandering
+    //                      spline as the run speeds up), but at this fraction of the forward growth —
+    //                      gentler than forward. See sideSpeedAt(). Never drops below the base.
     forwardSpeed: 26, // starting auto-run speed (eases up from here) — × tier pace
     maxForwardSpeed: 48, // the auto-run speed PLATEAU (× pace → Easy 42 / Med 48 / Hard 55). Trimmed
     //                      from 63 (Hard's old 72.5 was "absolutely brutal"). Speed climbs steadily
@@ -684,6 +687,15 @@ export function jumpReach() {
   const h = (v * v) / (2 * gUp); // peak rise (taller than a symmetric jump)
   const airTime = v / gUp + Math.sqrt((2 * h) / gDown); // slow rise + faster fall back to launch height
   return { height: h, airTime };
+}
+
+// Strafe speed at a given forward speed. It NUDGES up with forward speed (so a meandering spline
+// stays trackable as the run speeds up) at sideRampFactor of the forward growth — gentler than
+// forward — and never drops below the base sideSpeed. Used by the player AND the generator's lateral
+// reach so they stay consistent.
+export function sideSpeedAt(forwardSpeed) {
+  const p = CONFIG.player;
+  return Math.max(p.sideSpeed, p.sideSpeed + (forwardSpeed - p.forwardSpeed) * p.sideRampFactor);
 }
 
 // Linear interpolate an [lo, hi] pair by a 0..1 ramp value.
