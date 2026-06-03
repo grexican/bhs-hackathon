@@ -27,9 +27,9 @@ export const CONFIG = {
   player: {
     sideSpeed: 20, // left/right strafe (units per second)
     forwardSpeed: 26, // starting auto-run speed (eases up from here) — × tier pace
-    maxForwardSpeed: 50, // the auto-run speed PLATEAU (× pace → Easy 46 / Med 50 / Hard ~58). Trimmed
-    //                      from 63: Hard's old 72.5 was "absolutely brutal". Speed maxes out EARLY
-    //                      (see speedRampEvery) and DIFFICULTY then comes from hazards, not raw pace.
+    maxForwardSpeed: 48, // the auto-run speed PLATEAU (× pace → Easy 42 / Med 48 / Hard 55). Trimmed
+    //                      from 63 (Hard's old 72.5 was "absolutely brutal"). Speed climbs steadily
+    //                      over the first ~5km, THEN plateaus; the rest of the climb is hazards.
     minSpeed: 15, // speed never eases below this (so you can't stall)
     manualSpeed: 8, // Up/Down arrows nudge speed this much (kept small so gaps stay reachable)
 
@@ -144,9 +144,9 @@ export const CONFIG = {
     starterLength: 64,
     starterWidth: 18,
     // Base auto-run speed nudges up slowly with distance (keeps the early game relaxed).
-    speedRampEvery: 40, // METRES between speed nudges (now genuinely distance-based — see game.js).
-    //                     base 26 → max 50 in (50-26)/1.2 = 20 nudges × 40m ≈ 800m, so the speed
-    //                     plateaus EARLY and the rest of the run's difficulty is hazards, not pace.
+    speedRampEvery: 270, // METRES between speed nudges (distance-based — see game.js). base 26 → max
+    //                      48 in (48-26)/1.2 ≈ 18 nudges × 270m ≈ 5000m: speed climbs steadily over
+    //                      the first ~5km, THEN plateaus while the danger ramp keeps hazards rising.
     speedRampAmount: 1.2,
   },
 
@@ -223,7 +223,10 @@ export const CONFIG = {
   gen: {
     // Progression ramps
     opennessDistance: 650, // metres for the field to fully open (scaled per-tier by `openness`)
-    dangerDistance: 8000, // metres for hazards to peak — long & gentle so a run is a "mood", not a panic
+    dangerDistance: 18000, // metres for the DANGER ramp to peak (before the tier `danger` mult). Long
+    //                        on purpose — the difficulty keeps climbing the whole run, never a quick
+    //                        plateau ("8000 was nothing"). Per-tier peak = this / tier.danger → Hard
+    //                        ~11.25km, Med 18km, Easy ~21km. One-line knob: raise for a longer climb.
     hazardCeil: 0.92, // global cap on any hazard chance after the tier's `hazard` mult (so Hard stays < 100%)
     safeStraight: 2, // the first N steps run straight ahead (ease-in) before anything opens up
 
@@ -455,7 +458,7 @@ export const CONFIG = {
     //                 early & on easier tiers (period is a master difficulty knob); 2–4s keeps a
     //                 catch window recurring within an airtime for an auto-roller.
     tiers: [
-      { name: "Easy",   rank: 0, pace: 0.92, hazard: 0.8, danger: 0.85, openness: 0.9, sprawl: 1.0,  density: 1.6,  drama: 0.7, diffFloor: 0.15, diffSpan: 0.35, motionChance: [0.10, 0.20], motionPeriod: [5.0, 4.0] },
+      { name: "Easy",   rank: 0, pace: 0.875, hazard: 0.8, danger: 0.85, openness: 0.9, sprawl: 1.0,  density: 1.6,  drama: 0.7, diffFloor: 0.15, diffSpan: 0.35, motionChance: [0.10, 0.20], motionPeriod: [5.0, 4.0] },
       { name: "Medium", rank: 1, pace: 1.0,  hazard: 1.0, danger: 1.0,  openness: 1.0, sprawl: 1.45, density: 1.0,  drama: 1.0, diffFloor: 0.25, diffSpan: 0.5,  motionChance: [0.13, 0.28], motionPeriod: [4.5, 3.5] },
       { name: "Hard",   rank: 2, pace: 1.15, hazard: 1.7, danger: 1.6,  openness: 1.2, sprawl: 2.1,  density: 0.45, drama: 1.4, diffFloor: 0.35, diffSpan: 0.6,  motionChance: [0.16, 0.40], motionPeriod: [4.0, 3.0] },
     ],
