@@ -708,6 +708,7 @@ export class Player {
         if (best.type === "bouncy") {
           // Trampoline: a MASSIVE auto-launch (not chopped — see _controlledJump).
           v.y = CONFIG.player.jumpSpeed * CONFIG.plates.bounce.boost; this.airJumps = 0; this._controlledJump = false;
+          best._springT = CONFIG.plates.bounce.springTime; // kick the deck's dip-then-spring animation
         } else if (best.type === "flipper") {
           // Flipper: hinged springboard. Big vertical AND a forward blast (added in
           // game._onLanded). Kicks the plate's flip animation. SENDS you — survive the landing.

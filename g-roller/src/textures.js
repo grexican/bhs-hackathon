@@ -404,15 +404,26 @@ function tintedPanel(ctx, s, panelHex) {
 // (c2). They mirror the look of the original named painters but take the colour as a
 // parameter, so the SAME pattern can be any zone's colour.
 const SKIN_PATTERNS = {
-  // Clean blueprint grid (the City/Neutral default). c2 paints alternating cross-lines.
+  // NEON CITY's signature deck: a patterned-NEON grid — glowing two-tone (cyan + magenta) division
+  // lines plus glowing inset neon squares in each cell, so the home-zone boards read as lit neon
+  // panels (the "more neon" the zone name promises). Deliberately distinct from the AMBER emergency
+  // wireframe that only appears during a blackout — this is colourful, always-on surface detail.
   grid(ctx, s, c1, c2) {
     const n = 2, t = s / n;
     ctx.save();
-    ctx.globalAlpha = 0.1; ctx.lineWidth = 1;
+    // Glowing division lines (halo + bright core), alternating the two zone hues.
     for (let i = 1; i < n; i++) {
-      ctx.strokeStyle = c1;
-      ctx.beginPath(); ctx.moveTo(i * t, 0); ctx.lineTo(i * t, s); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, i * t); ctx.lineTo(s, i * t); ctx.stroke();
+      neonLine(ctx, c1, i * t, 0, i * t, s, 1.5);
+      neonLine(ctx, c2 || c1, 0, i * t, s, i * t, 1.5);
+    }
+    // Inset neon squares — the patterned-neon surface detail, alternating cyan / magenta per cell.
+    const inset = s * 0.14;
+    for (let gy = 0; gy < n; gy++) for (let gx = 0; gx < n; gx++) {
+      const col = (gx + gy) % 2 === 0 ? c1 : (c2 || c1);
+      const x0 = gx * t + inset, y0 = gy * t + inset, sz = t - inset * 2;
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.16; ctx.lineWidth = 5; ctx.strokeRect(x0, y0, sz, sz);   // soft halo
+      ctx.globalAlpha = 0.85; ctx.lineWidth = 1.4; ctx.strokeRect(x0, y0, sz, sz); // bright core
     }
     ctx.restore();
   },

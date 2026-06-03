@@ -52,6 +52,7 @@ export class Game {
     this._deathLook = new THREE.Vector3(); // eased camera gaze target while watching the ball fall
     this.gems = 0;
     this.score = 0;
+    this._airborne = 0; // metres travelled while OFF the ground this run (the "airborne meters" stat)
     this.multiplier = 1;
     this._comboTimer = 0;
     this._freeze = 0;      // hit-stop timer
@@ -82,12 +83,13 @@ export class Game {
       mult: document.getElementById("mult"),
       distance: document.getElementById("distance"),
       speed: document.getElementById("speed"),
-      diff: document.getElementById("hud-diff"),
+      airborne: document.getElementById("airborne"),
       jumps: document.getElementById("jumps"),
       gems: document.getElementById("gems"),
       bestScore: document.getElementById("best-score"),
       bestDistance: document.getElementById("best-distance"),
       bestJumps: document.getElementById("best-jumps"),
+      bestAirborne: document.getElementById("best-airborne"),
       overlay: document.getElementById("overlay"),
       subtitle: document.getElementById("overlay-subtitle"),
       hint: document.getElementById("overlay-hint"),
@@ -101,9 +103,9 @@ export class Game {
     // The pause-screen Restart button (promoted out of the ⚙️ panel).
     if (this._hud.restart) this._hud.restart.addEventListener("click", () => this._restartToTitle());
 
-    this.bestScore = Number(localStorage.getItem("gr_bestScore") || 0);
-    this.bestDistance = Number(localStorage.getItem("gr_bestDistance") || 0);
-    this.bestJumps = Number(localStorage.getItem("gr_bestJumps") || 0);
+    // Records are kept PER DIFFICULTY now — loaded for the active tier in _loadSettings (after the
+    // saved difficulty is restored). Default to zero until then.
+    this.bestScore = 0; this.bestDistance = 0; this.bestJumps = 0; this.bestAirborne = 0;
 
     // Restore the player's saved preferences before anything reads them (camera
     // view, audio mute/track/fx, reduced motion). Must run after this.sound exists.
@@ -117,20 +119,18 @@ export class Game {
     if (this._isTouch) this._hud.hint.textContent = "Tap JUMP to roll";
     window.addEventListener("keydown", (e) => {
       if (e.repeat) return;
-      // Settings shortcuts (desktop): M sound · V view · N track · X music-fx ·
-      // G reduced-motion · K ball skin · L difficulty · Z zen.
+      // Settings shortcuts (desktop): M sound · V view · N track · X music-fx · G reduced-motion ·
+      // K ball skin. Difficulty / Zen / Audiosurf are HOME-SCREEN choices now (no keybind) — this
+      // also frees A, which was colliding with steer-left (A/D) during play.
       if (e.code === "KeyM") this._toggleSound();
       if (e.code === "KeyV") this._toggleView();
       if (e.code === "KeyN") this._cycleTrack();
       if (e.code === "KeyX") this._toggleMusicFx();
       if (e.code === "KeyG") this._toggleReduced();
       if (e.code === "KeyK") this._cycleSkin();
-      if (e.code === "KeyL") this._cycleDifficulty();
       // Pause/resume. Esc works, but browsers often swallow the FIRST Esc (it's
       // reserved for exiting fullscreen/pointer-lock), so P is a reliable alternative.
       if (e.code === "Escape" || e.code === "KeyP") this._togglePause();
-      if (e.code === "KeyZ") this._toggleZen();
-      if (e.code === "KeyA") this._toggleAudiosurf();
       if (this._cheat && e.code === "KeyI") this._toggleGod(); // cheat-only: immortal (still escalates)
       if (this._cheat && e.code === "KeyC") this._cycleForcedZone(); // cheat-only: pin/cycle the zone to study it
       // Cheat-only desktop testing: instantly fire a powerdown on yourself.
@@ -247,6 +247,7 @@ export class Game {
     this._accelHold = 0;
     this.gems = 0;
     this.score = 0;
+    this._airborne = 0;
     this.multiplier = 1;
     this._comboTimer = 0;
     ZoneSeq.build(); // reshuffle the themed-zone order for this run (forced/enabled persist)
@@ -385,13 +386,26 @@ export class Game {
     }
   }
 
-  _cycleDifficulty() {
-    this._diffLevel = (this._diffLevel + 1) % CONFIG.gen.tiers.length;
-    const lvl = CONFIG.gen.tiers[this._diffLevel];
-    this._applyDifficultyMult(); // takes effect on platforms generated from here on
-    this._diffSpeedMult = lvl.pace; // Hard runs faster, Easy slower
+  // Pick a difficulty on the HOME screen (U1: NOT mid-run — difficulty defines the whole run, and
+  // records are kept per-difficulty). Switches the active tier's records too.
+  _setDifficulty(level) {
+    if (this.state === "playing" || this.state === "paused") {
+      this._toast("🎚️ Set difficulty on the title screen", "#ffd34e");
+      return;
+    }
+    if (level < 0 || level >= CONFIG.gen.tiers.length || level === this._diffLevel) {
+      this._syncHomeControls();
+      return;
+    }
+    this._diffLevel = level;
+    const lvl = CONFIG.gen.tiers[level];
+    this._applyDifficultyMult();
+    this._diffSpeedMult = lvl.pace;
+    this._loadRecords();      // swap to this tier's records
+    this._saveSettings();     // remember the pick (gr_diff)
     this._toast(`🎚️ ${lvl.name.toUpperCase()}`, "#ffd34e");
-    this._syncSettings();
+    this._syncHomeControls();
+    this._refreshHud();
   }
 
   // Zen mode: a calm, no-pressure toggle. Flips no-death (power-bounce), scoring/gems
@@ -408,6 +422,7 @@ export class Game {
     document.body.classList.toggle("is-zen", this._zen); // CSS hides the HUD counters — clean, just-zen'ing
     this._toast(this._zen ? "🧘 ZEN: On" : "🧘 ZEN: Off", "#9affd6");
     this._syncSettings();
+    this._syncHomeControls();
   }
 
   // God mode (cheat-only, key I): you can't die — a fatal fall power-bounces you back up
@@ -458,6 +473,7 @@ export class Game {
       this._toast("🎵 AUDIOSURF: Off", "#ff4bd6");
     }
     this._syncSettings();
+    this._syncHomeControls();
   }
 
   // Install the per-beat callback. Schedules each pulse to land ON the audible beat:
@@ -485,6 +501,7 @@ export class Game {
     this._skinIndex = this.player.setSkin((this._skinIndex ?? 0) + 1); // applies + wraps + returns the new index
     this._toast(`🎨 ${BALL_SKINS[this._skinIndex].name}`, "#ffd34e");
     this._syncSettings();
+    this._syncHomeControls();
   }
 
   // Desktop testing (cheat hotkeys): apply a powerup/powerdown to yourself by type.
@@ -495,7 +512,8 @@ export class Game {
 
   _buildSettings() {
     const $ = (id) => document.getElementById(id);
-    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), difficulty: $("set-difficulty"), skin: $("set-skin"), zen: $("set-zen"), audiosurf: $("set-audiosurf"), endrun: $("set-endrun"), powerups: $("set-powerups") };
+    // Difficulty / Zen / Audiosurf are NO LONGER here — they moved to the home screen (run-defining).
+    this._settings = { sound: $("set-sound"), track: $("set-track"), fx: $("set-fx"), motion: $("set-motion"), view: $("set-view"), skin: $("set-skin"), endrun: $("set-endrun"), powerups: $("set-powerups") };
 
     // Build the cheat-only per-powerup spawn-pool chips (one toggle per type).
     const grid = $("set-powerups-grid");
@@ -519,12 +537,41 @@ export class Game {
     this._settings.fx.addEventListener("click", () => this._toggleMusicFx());
     this._settings.motion.addEventListener("click", () => this._toggleReduced());
     this._settings.view.addEventListener("click", () => this._toggleView());
-    this._settings.difficulty.addEventListener("click", () => this._cycleDifficulty());
     this._settings.skin.addEventListener("click", () => this._cycleSkin());
-    this._settings.zen.addEventListener("click", () => this._toggleZen());
-    if (this._settings.audiosurf) this._settings.audiosurf.addEventListener("click", () => this._toggleAudiosurf());
     this._settings.endrun.addEventListener("click", () => { this._restartToTitle(); open(false); }); // mobile way out of a run / zen
+    this._buildHomeControls();
     this._syncSettings();
+  }
+
+  // The HOME-screen run controls: difficulty buttons + Zen / Audiosurf / change-Ball. These set the
+  // run BEFORE it starts (difficulty/zen/audiosurf can't change mid-run); the cluster hides while
+  // playing/paused (see _showHomeControls).
+  _buildHomeControls() {
+    const $ = (id) => document.getElementById(id);
+    this._home = { controls: $("home-controls"), zen: $("home-zen"), audiosurf: $("home-audiosurf"), skin: $("home-skin") };
+    this._diffButtons = Array.from(document.querySelectorAll(".home-diff__btn"));
+    for (const b of this._diffButtons) b.addEventListener("click", () => this._setDifficulty(Number(b.dataset.diff)));
+    if (this._home.zen) this._home.zen.addEventListener("click", () => this._toggleZen());
+    if (this._home.audiosurf) this._home.audiosurf.addEventListener("click", () => this._toggleAudiosurf());
+    if (this._home.skin) this._home.skin.addEventListener("click", () => this._cycleSkin());
+    this._syncHomeControls();
+  }
+
+  // Reflect the active difficulty + mode state on the home buttons.
+  _syncHomeControls() {
+    if (this._diffButtons) {
+      for (const b of this._diffButtons) b.classList.toggle("is-active", Number(b.dataset.diff) === this._diffLevel);
+    }
+    if (this._home) {
+      if (this._home.zen) this._home.zen.classList.toggle("is-on", this._zen);
+      if (this._home.audiosurf) this._home.audiosurf.classList.toggle("is-on", this._audiosurf);
+      if (this._home.skin) this._home.skin.textContent = `🎨 ${BALL_SKINS[this._skinIndex ?? 0].name}`;
+    }
+  }
+
+  // Show the home controls on the start / game-over overlay; hide them while playing or paused.
+  _showHomeControls(show) {
+    if (this._home && this._home.controls) this._home.controls.classList.toggle("is-hidden", !show);
   }
 
   _syncSettings() {
@@ -535,10 +582,8 @@ export class Game {
     s.fx.textContent = `🎚️ Music FX: ${this.sound.reactive ? "On" : "Off"}`;
     s.motion.textContent = `🌿 Reduced Motion: ${this._reducedMotion ? "On" : "Off"}`;
     s.view.textContent = `👁 View: ${this._firstPerson ? "First-person" : "Third-person"}`;
-    s.difficulty.textContent = `🎚️ Difficulty: ${CONFIG.gen.tiers[this._diffLevel].name}`;
     if (s.skin) s.skin.textContent = `🎨 Ball Skin: ${BALL_SKINS[this._skinIndex ?? 0].name}`;
-    if (s.zen) s.zen.textContent = "🧘 Zen Mode: " + (this._zen ? "On" : "Off");
-    if (s.audiosurf) s.audiosurf.textContent = "🎵 Audiosurf: " + (this._audiosurf ? "On" : "Off");
+    // Difficulty / Zen / Audiosurf live on the home screen now — _syncHomeControls reflects them.
     // Per-powerup spawn pool is a cheat-only tool — only show it when cheat is on.
     if (s.powerups) s.powerups.style.display = this._cheat ? "" : "none";
     if (this._puButtons) {
@@ -552,6 +597,26 @@ export class Game {
       }
     }
     this._saveSettings(); // every toggle routes through here, so this captures all changes
+  }
+
+  // --- Per-difficulty records ----------------------------------------------
+  // Best score/distance/jumps/airborne are kept SEPARATELY for each difficulty (a Hard run and an
+  // Easy run no longer share one leaderboard). Stored as one JSON blob per tier under gr_best_<name>.
+  _recordKey(level = this._diffLevel) {
+    return "gr_best_" + CONFIG.gen.tiers[level].name.toLowerCase();
+  }
+  _loadRecords() {
+    let r = {};
+    try { r = JSON.parse(localStorage.getItem(this._recordKey()) || "{}"); } catch { r = {}; }
+    this.bestScore = r.score || 0;
+    this.bestDistance = r.distance || 0;
+    this.bestJumps = r.jumps || 0;
+    this.bestAirborne = r.airborne || 0;
+  }
+  _saveRecords() {
+    localStorage.setItem(this._recordKey(), JSON.stringify({
+      score: this.bestScore, distance: this.bestDistance, jumps: this.bestJumps, airborne: this.bestAirborne,
+    }));
   }
 
   // --- Persisted preferences (survive a reload) ----------------------------
@@ -592,6 +657,7 @@ export class Game {
     this._applyDifficultyMult(); // apply restored (or default) level — forced to 0 in zen
     document.body.classList.toggle("is-zen", this._zen); // hide HUD counters if restored into zen
     this._diffSpeedMult = CONFIG.gen.tiers[this._diffLevel].pace;
+    this._loadRecords(); // load the active tier's per-difficulty records
     const skin = get("gr_skin");
     this._skinIndex = this.player.setSkin(skin !== null ? Number(skin) : 0); // apply saved (or default) skin
   }
@@ -705,6 +771,7 @@ export class Game {
     this.player._seenPresses = this.input.jumpPresses; // don't let the start press auto-jump
     this.gems = 0;
     this.state = "playing";
+    this._showHomeControls(false); // difficulty/modes are locked once a run starts
     this._hud.overlay.classList.add("is-hidden");
     this._refreshHud();
   }
@@ -863,6 +930,10 @@ export class Game {
       flubber: this._effects.flubber > 0,
     };
     const ev = this.player.update(dt, this.input, ctx, this.field);
+
+    // Airborne meters (just-for-fun stat): how much of the run's forward distance is spent in the
+    // air. Accumulate the forward advance whenever the ball isn't grounded.
+    if (!this.player.grounded) this._airborne += speed * dt;
 
     // Acceleration plates feel like a launch: while you ride, the build COMPOUNDS
     // (rate grows with the bonus already gathered) so it curves upward the longer
@@ -1118,6 +1189,7 @@ export class Game {
       this._hud.subtitle.textContent = "⏸ Paused";
       this._hud.hint.textContent = this._isTouch ? "Tap JUMP to resume" : "Esc or JUMP to resume";
       if (this._hud.restart) this._hud.restart.classList.remove("is-hidden"); // offer Restart right here
+      this._showHomeControls(false); // can't change difficulty mid-run, even paused
       this._hud.overlay.classList.remove("is-hidden");
     } else if (this.state === "paused") {
       this._resume();
@@ -1147,6 +1219,8 @@ export class Game {
     if (this._hud.restart) this._hud.restart.classList.add("is-hidden"); // hide the pause-screen button
     this._hud.subtitle.textContent = "Roll the gauntlet of floating blocks";
     this._hud.hint.textContent = this._isTouch ? "Tap JUMP to roll" : "Press JUMP to roll";
+    this._showHomeControls(true);  // back on the title — difficulty/modes pickable again
+    this._syncHomeControls();
     this._hud.overlay.classList.remove("is-hidden");
     this._refreshHud();
   }
@@ -1204,14 +1278,23 @@ export class Game {
     const dist = Math.max(0, Math.floor(this.player.position.z));
     const score = Math.floor(this.score);
     const jumps = Math.max(0, this.player.jumpCount);
-    if (score > this.bestScore) { this.bestScore = score; localStorage.setItem("gr_bestScore", String(score)); }
-    if (dist > this.bestDistance) { this.bestDistance = dist; localStorage.setItem("gr_bestDistance", String(dist)); }
-    if (jumps > this.bestJumps) { this.bestJumps = jumps; localStorage.setItem("gr_bestJumps", String(jumps)); }
-
-    const best = score >= this.bestScore ? " · 🏆 NEW BEST!" : "";
-    this._hud.subtitle.innerHTML = `Score <b>${score.toLocaleString()}</b>${best}<br>${dist} m · ${jumps} jumps · ${this.gems} 💎`;
-    this._hud.hint.textContent = this._isTouch ? "Tap JUMP to roll again" : "Press SPACE to roll again";
+    const air = Math.floor(this._airborne);
+    // Records are PER-DIFFICULTY (zen runs don't score, so they don't set records).
+    let isBest = false;
+    if (!this._zen) {
+      if (score > this.bestScore) { this.bestScore = score; isBest = true; }
+      if (dist > this.bestDistance) this.bestDistance = dist;
+      if (jumps > this.bestJumps) this.bestJumps = jumps;
+      if (air > this.bestAirborne) this.bestAirborne = air;
+      this._saveRecords();
+    }
+    const tierName = CONFIG.gen.tiers[this._diffLevel].name;
+    const best = isBest ? " · 🏆 NEW BEST!" : "";
+    this._hud.subtitle.innerHTML = `<b>${tierName}</b> · Score <b>${score.toLocaleString()}</b>${best}<br>${dist} m · ${jumps} jumps · ${this.gems} 💎 · ${air} m ✈`;
+    this._hud.hint.textContent = this._isTouch ? "Tap JUMP to roll again" : "Press JUMP to roll again";
+    this._showHomeControls(true);  // change difficulty / ball before the next run
     this._hud.overlay.classList.remove("is-hidden");
+    this._syncHomeControls();
     this._refreshHud();
   }
 
@@ -1251,12 +1334,13 @@ export class Game {
     this._hud.mult.textContent = danger > 0 ? `×${this.multiplier + danger}🔥` : `×${this.multiplier}`;
     this._hud.distance.textContent = Math.max(0, Math.floor(this.player.position.z));
     this._hud.speed.textContent = Math.round(this._speed); // smoothed actual speed — spikes when you ride an accel plate
-    if (this._hud.diff) this._hud.diff.textContent = CONFIG.gen.tiers[this._diffLevel].name;
+    if (this._hud.airborne) this._hud.airborne.textContent = Math.floor(this._airborne);
     this._hud.jumps.textContent = Math.max(0, this.player.jumpCount);
     this._hud.gems.textContent = this.gems;
     this._hud.bestScore.textContent = this.bestScore.toLocaleString();
     this._hud.bestDistance.textContent = this.bestDistance;
     this._hud.bestJumps.textContent = this.bestJumps;
+    if (this._hud.bestAirborne) this._hud.bestAirborne.textContent = this.bestAirborne;
   }
 
   _followCamera(snap) {

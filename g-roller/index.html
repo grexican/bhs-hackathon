@@ -332,6 +332,34 @@
       .hud__restart:hover { background: rgba(255, 63, 122, 0.32); border-color: var(--pink); color: #fff; }
       .hud__restart.is-hidden { display: none; }
 
+      /* Small unit suffix after a HUD stat (e.g. "m air" on the airborne counter). */
+      .hud__unit { font-size: 11px; opacity: 0.6; margin-left: 2px; font-weight: 600; }
+
+      /* Home-screen run controls (difficulty + modes + change-ball). Shown on the start / game-over
+         overlay only — hidden while playing or paused (game.js toggles .is-hidden). The overlay is
+         click-through, so these opt back into pointer events. */
+      .home-controls { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: auto; }
+      .home-controls.is-hidden { display: none; }
+      .home-diff { display: flex; gap: 8px; }
+      .home-diff__btn {
+        font: 800 16px "Trebuchet MS", system-ui, sans-serif; color: #fff; cursor: pointer;
+        padding: 9px 20px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.22);
+        background: rgba(14, 20, 44, 0.55); backdrop-filter: blur(6px); letter-spacing: 0.5px;
+      }
+      .home-diff__btn:hover { border-color: var(--accent); }
+      .home-diff__btn.is-active {
+        background: var(--accent); color: #1a1206; border-color: var(--accent);
+        box-shadow: 0 0 22px rgba(255, 211, 78, 0.45);
+      }
+      .home-modes { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+      .home-mode {
+        font: 700 14px "Trebuchet MS", system-ui, sans-serif; color: #fff; cursor: pointer;
+        padding: 8px 14px; border-radius: 10px; border: 2px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.06); pointer-events: auto;
+      }
+      .home-mode:hover { border-color: var(--cyan); }
+      .home-mode.is-on { border-color: var(--cyan); color: var(--cyan); background: rgba(43, 214, 255, 0.14); }
+
       .hud__controls { font-size: 14px; opacity: 0.75; line-height: 1.7; max-width: 460px; }
       .hud__controls kbd {
         background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
@@ -424,13 +452,13 @@
         <div class="hud__score"><span id="score">0</span> <span class="hud__mult" id="mult">×1</span></div>
         <div class="hud__dist"><span id="distance">0</span> <span>m</span></div>
         <div class="hud__stats">
-          <div>⚡ <b id="speed">0</b></div>
+          <div>⏩ <b id="speed">0</b></div>
           <div>🦘 <b id="jumps">0</b></div>
           <div>💎 <b id="gems">0</b></div>
-          <div>🎚️ <b id="hud-diff">Medium</b></div>
+          <div>✈ <b id="airborne">0</b><span class="hud__unit">m air</span></div>
         </div>
         <div class="hud__best">
-          Best: <span id="best-score">0</span> pts · <span id="best-distance">0</span> m · <span id="best-jumps">0</span> jumps
+          Best: <span id="best-score">0</span> pts · <span id="best-distance">0</span> m · <span id="best-jumps">0</span> jumps · <span id="best-airborne">0</span> m air
         </div>
       </div>
 
@@ -445,15 +473,14 @@
       <div id="settings-panel">
         <div class="settings__card">
           <div class="settings__title">⚙️ Settings</div>
-          <button class="settings__row" id="set-difficulty">🎚️ Difficulty</button>
+          <!-- Difficulty, Zen & Audiosurf moved to the HOME screen (they define the run, so they're
+               set before you roll, not mid-run). Settings holds only the always-safe toggles. -->
           <button class="settings__row" id="set-sound">🔊 Sound</button>
           <button class="settings__row" id="set-track">🎵 Track</button>
           <button class="settings__row" id="set-fx">🎚️ Music FX</button>
           <button class="settings__row" id="set-motion">🌿 Reduced Motion</button>
           <button class="settings__row" id="set-view">👁 View</button>
           <button class="settings__row" id="set-skin">🎨 Ball Skin</button>
-          <button class="settings__row" id="set-zen">🧘 Zen Mode</button>
-          <button class="settings__row" id="set-audiosurf">🎵 Audiosurf</button>
           <button class="settings__row" id="set-endrun">↺ Restart</button>
           <div id="set-powerups" style="display:none">
             <div class="settings__puhdr">
@@ -478,16 +505,31 @@
       <div class="hud__center" id="overlay">
         <div class="hud__title" id="overlay-title">G&#8209;ROLLER</div>
         <div class="hud__subtitle" id="overlay-subtitle">Roll the gauntlet of floating blocks</div>
+
+        <!-- Home controls — the run-DEFINING choices, set before you roll (NOT mid-run): which
+             difficulty, and the run modes. Hidden while playing/paused (see game.js). -->
+        <div class="home-controls" id="home-controls">
+          <div class="home-diff" id="home-diff">
+            <button class="home-diff__btn" data-diff="0" type="button">Easy</button>
+            <button class="home-diff__btn" data-diff="1" type="button">Medium</button>
+            <button class="home-diff__btn" data-diff="2" type="button">Hard</button>
+          </div>
+          <div class="home-modes">
+            <button class="home-mode" id="home-zen" type="button">🧘 Zen</button>
+            <button class="home-mode" id="home-audiosurf" type="button">🎵 Audiosurf</button>
+            <button class="home-mode" id="home-skin" type="button">🎨 Ball</button>
+          </div>
+        </div>
+
         <div class="hud__hint" id="overlay-hint">Press JUMP to roll</div>
         <button class="hud__restart is-hidden" id="overlay-restart" type="button">↺ Restart</button>
+
+        <!-- Jump keys only, desktop only — players already know asdf / arrows. -->
         <div class="hud__controls hud__controls--keys">
-          <kbd>Space</kbd> / <kbd>W</kbd> jump — hold for height, release early to drop fast<br />
-          <kbd>A</kbd><kbd>D</kbd> / <kbd>&larr;</kbd><kbd>&rarr;</kbd> steer &nbsp;·&nbsp; <kbd>&uarr;</kbd><kbd>&darr;</kbd> speed up / down<br />
-          <kbd>M</kbd> mute &nbsp;·&nbsp; <kbd>N</kbd> next track &nbsp;·&nbsp; <kbd>V</kbd> 1st-person &nbsp;·&nbsp; <kbd>X</kbd> music FX &nbsp;·&nbsp; <kbd>G</kbd> reduced motion &nbsp;·&nbsp; <kbd>Z</kbd> zen &nbsp;·&nbsp; <kbd>A</kbd> audiosurf &nbsp;·&nbsp; ⚙️ for settings
+          <kbd>Space</kbd> or <kbd>Shift</kbd> to jump — hold for height, release to drop fast
         </div>
         <div class="hud__controls hud__controls--touch">
-          <b>Left stick</b> to steer · push it <b>up/down</b> for speed<br />
-          <b>JUMP</b> button (bottom-right) to jump · ⚙️ top for settings
+          <b>Left stick</b> to steer · <b>JUMP</b> button to jump · ⚙️ for settings
         </div>
         <div class="legend">
           <span><i style="background:#66f0ff"></i>gem</span>

@@ -59,7 +59,7 @@ export const CONFIG = {
       ease: 0.09, // while ON a plate, speed chases its target this fast (small = snappy, so the gain happens before you lift off)
     },
     // Trampoline boards (pink): launch you up like a boosted jump.
-    bounce: { boost: 1.7 }, // launch velocity = player.jumpSpeed * this
+    bounce: { boost: 1.7, springTime: 0.4 }, // launch velocity = player.jumpSpeed*boost; springTime = the deck's dip-then-spring animation length
     // Flipper plate (orange): a hinged springboard that sends you up AND forward.
     flipper: {
       vertical: 1.45, // launch v.y = player.jumpSpeed * this (big air — it's a CANNON). Trimmed only

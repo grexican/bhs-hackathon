@@ -78,6 +78,7 @@ class Platform {
     this.curve = 0;              // curved board: + concave (funnels in), - convex (rolls off)
     this.leanX = 0;              // sideways bank: top rises this much per unit of x (+ raises the +x edge); drags you to the low side
     this._flipT = 0;             // flipper plate: seconds left on the hinge-kick animation (0 = at rest)
+    this._springT = 0;           // bouncy plate: seconds left on the dip-then-spring animation (0 = at rest)
     this._tex = null;
     this._geo = null;            // own geometry to dispose (curved/spline boards only)
   }
@@ -305,8 +306,8 @@ export class PlatformField {
     edge.visible = this.blackout;
     visual.add(edge);
 
-    // Bouncy gets a subtle coil spring under the deck.
-    if (type === "bouncy") this._decorateLaunchPad(group, type, w, len, hy);
+    // Bouncy decks sell the spring via the rubber texture + emissive glow + the dip-then-spring
+    // animation on bounce (see update()) — no coil under the deck (it didn't fit the look).
 
     this.scene.add(group);
 
@@ -542,24 +543,6 @@ export class PlatformField {
     return this._sphereGeo;
   }
 
-  // A subtle coil spring beneath the bouncy deck. Material is per-board (NOT cached) —
-  // _disposePlatform traverses the group and disposes every mesh material on cull.
-  _decorateLaunchPad(group, type, w, len, hy) {
-    if (type !== "bouncy") return;
-    if (!this._coilGeo) this._coilGeo = new THREE.TorusGeometry(1, 0.12, 8, 18); // geometry is safe to share
-    const coilMat = new THREE.MeshStandardMaterial({
-      color: 0xff3f7a, emissive: 0xff1f5a, emissiveIntensity: 0.55, roughness: 0.4, metalness: 0.5,
-    });
-    const r = Math.min(w, len) * 0.26;
-    for (let i = 0; i < 3; i++) {
-      const ring = new THREE.Mesh(this._coilGeo, coilMat);
-      ring.rotation.x = Math.PI / 2;       // lie flat — stacked flat rings read as a coil
-      ring.scale.setScalar(r);
-      ring.position.y = -hy - 0.4 - i * r * 0.45;
-      group.add(ring);
-    }
-  }
-
   // Cached geometry per pickup shape.
   _powerGeo(shape) {
     if (!this._pgeo) this._pgeo = {};
@@ -778,6 +761,20 @@ export class PlatformField {
       m.position.y = p.hz * Math.sin(a);
       m.position.z = p.hz * (1 - Math.cos(a));
       if (p._flipT === 0) { m.rotation.x = 0; m.position.set(0, 0, 0); } // settle flat
+    }
+
+    // Bouncy plates: a quick DIP-then-SPRING on the deck when bounced — a trampoline rebound (pure
+    // juice; the launch already fired). Replaces the old coil-spring decoration under the board.
+    for (const p of this.platforms) {
+      if (p._springT <= 0) continue;
+      p._springT = Math.max(0, p._springT - dt);
+      const m = p.surfaceMesh;
+      if (!m) continue;
+      const phase = 1 - p._springT / CONFIG.plates.bounce.springTime; // 0 -> 1
+      const s = Math.sin(phase * Math.PI * 2);   // down (compress) → up (spring) → settle
+      m.position.y = -s * 0.7;
+      m.scale.y = (p.hy * 2) * (1 - s * 0.2);     // thinner mid-dip, fuller mid-spring
+      if (p._springT === 0) { m.position.y = 0; m.scale.y = p.hy * 2; } // settle to rest
     }
 
     // Patrolling obstacles: slide barriers/spikes along their platform. Move BOTH the

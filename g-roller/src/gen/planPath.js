@@ -433,9 +433,15 @@ export function planScatter(pathPlan, state, ctx) {
   // a tighter cloud. 0.92 base keeps Easy wide; +0.1·(sprawl-1) nudges Hard a touch wider.
   const sFactor = 0.92 + (profile.sprawl - 1) * 0.1;
   const count = Math.max(0, Math.round(ramp(g.scatter.count, O) * profile.density));
-  const rx = ramp(g.scatter.radiusX, O) * sFactor;
+  // DENSITY PRODUCES WIDTH (Eli's note): a dense section's MANY pieces fan OUT to keep spacing sane
+  // instead of piling into a fixed radius (which made Easy's count read as a tight, overlapping
+  // cluster — and _renderScatterPlan then SKIPPED the overlaps, the "3 stacked, can't reach" bug).
+  // spreadBoost grows with the count (never below 1, so sparse tiers stay put). Horizontal only —
+  // vertical spread stays modest so branches don't fling out of reach.
+  const spreadBoost = Math.max(1, Math.sqrt(count / 3));
+  const rx = ramp(g.scatter.radiusX, O) * sFactor * spreadBoost;
   const ry = ramp(g.scatter.radiusY, O) * sFactor;
-  const bandMax = (g.path.bandX[1] * profile.sprawl) + (g.scatter.radiusX[1] * sFactor) + 12;
+  const bandMax = (g.path.bandX[1] * profile.sprawl) + (g.scatter.radiusX[1] * sFactor * spreadBoost) + 12;
   const cx = pathPlan.x, cy = pathPlan.exitY, cz = pathPlan.z;
   const out = [];
   for (let i = 0; i < count; i++) {
