@@ -238,6 +238,8 @@ export class PlatformField {
     const tex = this._texFor(texName, w, len);
     const mat = new THREE.MeshStandardMaterial({
       map: tex,
+      transparent: true, // so a piece can FADE IN near the draw horizon (emerge from the backdrop)
+      //                    instead of popping its silhouette. opacity stays 1 except in the fade band.
       roughness: type === "bouncy" ? 0.4 : 0.85,
       metalness: 0.05,
       emissive: type === "rune" ? runeEmissive : type === "bouncy" ? 0xff1f5a : type === "boost" ? 0x1fbf4c : type === "flipper" ? 0xff7a1c : 0x000000,
@@ -490,13 +492,21 @@ export class PlatformField {
     const cluster = value > 1;
     let mesh;
     if (cluster) {
-      // A side-quest CLUSTER: a bigger GOLD gem with a "×N" label so the payoff reads at a glance.
+      // A side-quest CLUSTER reads as a BUNCH OF GEMS (not a gold nugget): several small gems packed
+      // together + a "×N" label. 5× = the same cyan gems; 10× = richer magenta (rarer = better).
       mesh = new THREE.Group();
-      const core = new THREE.Mesh(this._gemGeo, new THREE.MeshStandardMaterial({
-        color: 0xffd34e, emissive: 0xff9a1c, emissiveIntensity: 1.0, roughness: 0.2, metalness: 0.4,
-      }));
-      core.scale.setScalar(value >= 10 ? 1.9 : 1.5);
-      mesh.add(core, this._gemLabel(value));
+      const big = value >= 10;
+      const col = big ? 0xff5fe0 : 0x66f0ff, emis = big ? 0xc83cc0 : 0x33d0ff;
+      const gmat = new THREE.MeshStandardMaterial({ color: col, emissive: emis, emissiveIntensity: 1.0, roughness: 0.2, metalness: 0.3 });
+      const spots = big
+        ? [[0, 0, 0], [0.55, 0.15, 0.35], [-0.5, 0.2, -0.3], [0.25, 0.55, -0.25], [-0.3, 0.45, 0.45], [0.1, -0.25, 0.4]]
+        : [[0, 0.05, 0], [0.5, 0.2, 0.3], [-0.45, 0.18, -0.25], [0.15, 0.5, -0.2]];
+      for (const [px, py, pz] of spots) {
+        const gm = new THREE.Mesh(this._gemGeo, gmat);
+        gm.position.set(px, py, pz); gm.scale.setScalar(0.78);
+        mesh.add(gm);
+      }
+      mesh.add(this._gemLabel(value, col));
     } else {
       mesh = new THREE.Mesh(this._gemGeo, new THREE.MeshStandardMaterial({
         color: 0x66f0ff, emissive: 0x33d0ff, emissiveIntensity: 0.9, roughness: 0.2, metalness: 0.3,
@@ -508,14 +518,14 @@ export class PlatformField {
     this.gems.push({ mesh, baseY: y, phase: rand(0, Math.PI * 2), collected: false, value });
   }
 
-  // A camera-facing "×N" label sprite for a cluster gem.
-  _gemLabel(value) {
+  // A camera-facing "×N" label sprite for a cluster gem, glowing the gem's colour.
+  _gemLabel(value, color = 0x66f0ff) {
     const c = document.createElement("canvas"); c.width = c.height = 64;
     const ctx = c.getContext("2d");
     ctx.font = "bold 36px 'Trebuchet MS', system-ui, sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(10,8,2,0.85)"; ctx.strokeText("×" + value, 32, 34);
-    ctx.fillStyle = "#fff"; ctx.shadowColor = "#ff9a1c"; ctx.shadowBlur = 10;
+    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(6,10,20,0.9)"; ctx.strokeText("×" + value, 32, 34);
+    ctx.fillStyle = "#fff"; ctx.shadowColor = "#" + (color & 0xffffff).toString(16).padStart(6, "0"); ctx.shadowBlur = 12;
     ctx.fillText("×" + value, 32, 34);
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false }));
     s.scale.set(2.4, 2.4, 1); s.position.set(0, 1.5, 0);
@@ -852,10 +862,18 @@ export class PlatformField {
     const cullZ = playerZ - CONFIG.world.cullBehindDistance;
     const fogFar = (this.scene.fog && this.scene.fog.far) || 1e9;
     const drawZ = playerZ + Math.min(this.drawDistance, fogFar + 120);
+    const band = CONFIG.world.emergeBand;
     for (let i = this.platforms.length - 1; i >= 0; i--) {
       const p = this.platforms[i];
       if (p.pos.z + p.hz < cullZ) { this._disposePlatform(p); this.platforms.splice(i, 1); continue; }
-      p.mesh.visible = p.pos.z - p.hz < drawZ;
+      const nearEdge = p.pos.z - p.hz;
+      const vis = nearEdge < drawZ;
+      p.mesh.visible = vis;
+      // EMERGE: fade opacity in over the last `band` metres before the draw horizon, so the piece
+      // materialises out of the fog instead of popping its silhouette against the backdrop.
+      if (vis && p.surfaceMesh && p.surfaceMesh.material.transparent) {
+        p.surfaceMesh.material.opacity = Math.max(0, Math.min(1, (drawZ - nearEdge) / band));
+      }
     }
     for (let i = this.gems.length - 1; i >= 0; i--) {
       const g = this.gems[i];

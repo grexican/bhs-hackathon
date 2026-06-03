@@ -122,10 +122,10 @@ describe("branch (optional) routes MAY use the richer motions", () => {
 });
 
 describe("motion period is bounded AND jittered (not a static, formulaic rate)", () => {
-  it("every period is in a sane catch-window range (1.5–6s)", () => {
+  it("every period is in a sane catch-window range (2–8s)", () => {
     for (const profile of TIERS) {
       for (const { plan } of walk(profile, 808, 2000)) {
-        if (plan.motion) { expect(plan.motion.period).toBeGreaterThanOrEqual(1.5); expect(plan.motion.period).toBeLessThanOrEqual(6.0); }
+        if (plan.motion) { expect(plan.motion.period).toBeGreaterThanOrEqual(2.0); expect(plan.motion.period).toBeLessThanOrEqual(8.0); }
       }
     }
   });

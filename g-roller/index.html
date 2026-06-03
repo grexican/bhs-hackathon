@@ -345,6 +345,9 @@
       }
       .hud__restart:hover { background: rgba(255, 63, 122, 0.32); border-color: var(--pink); color: #fff; }
       .hud__restart.is-hidden { display: none; }
+      /* Cyan variant — the pause-screen "change track" button. */
+      .hud__restart--alt { background: rgba(43, 214, 255, 0.16); border-color: rgba(43, 214, 255, 0.65); }
+      .hud__restart--alt:hover { background: rgba(43, 214, 255, 0.32); border-color: var(--cyan); color: #fff; }
 
       /* Small unit suffix after a HUD stat (e.g. "m air" on the airborne counter). */
       .hud__unit { font-size: 11px; opacity: 0.6; margin-left: 2px; font-weight: 600; }
@@ -542,11 +545,12 @@
 
         <div class="hud__hint" id="overlay-hint">Press JUMP to roll</div>
         <button class="hud__restart is-hidden" id="overlay-restart" type="button">↺ Restart</button>
+        <button class="hud__restart hud__restart--alt is-hidden" id="overlay-track" type="button">🎵 Song (N)</button>
 
         <!-- Desktop only (this whole line is hidden on touch — the ⚙️ button covers mobile). Players
-             already know asdf / arrows, so just the jump + pause keys. -->
+             already know asdf / arrows, so just the key → action essentials, kept tight. -->
         <div class="hud__controls hud__controls--keys">
-          <kbd>Space</kbd> or <kbd>Shift</kbd> to jump (hold for height) &nbsp;·&nbsp; <kbd>P</kbd> to pause
+          <kbd>Space</kbd> Jump &nbsp;·&nbsp; <kbd>P</kbd> Pause &nbsp;·&nbsp; <kbd>N</kbd> Song &nbsp;·&nbsp; <kbd>M</kbd> Mute
         </div>
         <div class="hud__controls hud__controls--touch">
           <b>Left stick</b> to steer · <b>JUMP</b> button to jump · ⚙️ for settings

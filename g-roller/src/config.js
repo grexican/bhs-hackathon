@@ -133,6 +133,8 @@ export const CONFIG = {
     //                         genSpeed), not transient boosts — otherwise a gap sized for a fading
     //                         boost would be unjumpable by the time you arrived.
     cullBehindDistance: 70, // remove platforms this far behind
+    emergeBand: 80, // metres before the draw horizon over which a piece FADES IN (opacity 0→1) so it
+    //                 materialises OUT of the fog/backdrop instead of popping its silhouette into view.
     // Death: game over only once you fall this far below the LOWEST landable surface
     // still drawn near you. Deep, so a near-miss is a long recoverable plunge.
     fallMargin: 42,
@@ -449,9 +451,9 @@ export const CONFIG = {
     //                 early & on easier tiers (period is a master difficulty knob); 2–4s keeps a
     //                 catch window recurring within an airtime for an auto-roller.
     tiers: [
-      { name: "Easy",   rank: 0, pace: 0.92, hazard: 0.8, danger: 0.85, openness: 0.9, sprawl: 1.0,  density: 1.6,  drama: 0.7, diffFloor: 0.15, diffSpan: 0.35, motionChance: [0.10, 0.20], motionPeriod: [4.0, 3.0] },
-      { name: "Medium", rank: 1, pace: 1.0,  hazard: 1.0, danger: 1.0,  openness: 1.0, sprawl: 1.45, density: 1.0,  drama: 1.0, diffFloor: 0.25, diffSpan: 0.5,  motionChance: [0.13, 0.28], motionPeriod: [3.5, 2.5] },
-      { name: "Hard",   rank: 2, pace: 1.15, hazard: 1.7, danger: 1.6,  openness: 1.2, sprawl: 2.1,  density: 0.45, drama: 1.4, diffFloor: 0.35, diffSpan: 0.6,  motionChance: [0.16, 0.40], motionPeriod: [3.0, 2.0] },
+      { name: "Easy",   rank: 0, pace: 0.92, hazard: 0.8, danger: 0.85, openness: 0.9, sprawl: 1.0,  density: 1.6,  drama: 0.7, diffFloor: 0.15, diffSpan: 0.35, motionChance: [0.10, 0.20], motionPeriod: [5.0, 4.0] },
+      { name: "Medium", rank: 1, pace: 1.0,  hazard: 1.0, danger: 1.0,  openness: 1.0, sprawl: 1.45, density: 1.0,  drama: 1.0, diffFloor: 0.25, diffSpan: 0.5,  motionChance: [0.13, 0.28], motionPeriod: [4.5, 3.5] },
+      { name: "Hard",   rank: 2, pace: 1.15, hazard: 1.7, danger: 1.6,  openness: 1.2, sprawl: 2.1,  density: 0.45, drama: 1.4, diffFloor: 0.35, diffSpan: 0.6,  motionChance: [0.16, 0.40], motionPeriod: [4.0, 3.0] },
     ],
     defaultDifficulty: 1, // index into tiers (Medium)
   },

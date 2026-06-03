@@ -94,14 +94,16 @@ export class Game {
       subtitle: document.getElementById("overlay-subtitle"),
       hint: document.getElementById("overlay-hint"),
       restart: document.getElementById("overlay-restart"),
+      track: document.getElementById("overlay-track"),
       toast: document.getElementById("toast"),
       effects: document.getElementById("effects"),
       biomeCard: document.getElementById("biome-card"),
       biomeCardName: document.getElementById("biome-card-name"),
       biomeCardTag: document.getElementById("biome-card-tag"),
     };
-    // The pause-screen Restart button (promoted out of the ⚙️ panel).
+    // The pause-screen Restart + change-track buttons (promoted out of the ⚙️ panel).
     if (this._hud.restart) this._hud.restart.addEventListener("click", () => this._restartToTitle());
+    if (this._hud.track) this._hud.track.addEventListener("click", () => { this._cycleTrack(); this._updateTrackButton(); });
 
     // Records are kept PER DIFFICULTY now — loaded for the active tier in _loadSettings (after the
     // saved difficulty is restored). Default to zero until then.
@@ -983,8 +985,9 @@ export class Game {
         this.score += CONFIG.scoring.gemScore * value * (this._effMult ?? this.multiplier);
       }
       const cluster = value > 1;
-      this.particles.burst(pos, cluster ? 0xffd34e : 0x66f0ff, cluster ? 30 : 16);
-      if (cluster && !this._zen) this._toast(`+${value} 💎`, "#ffd34e");
+      const gemCol = value >= 10 ? 0xff5fe0 : 0x66f0ff;
+      this.particles.burst(pos, gemCol, cluster ? 30 : 16);
+      if (cluster && !this._zen) this._toast(`+${value} 💎`, value >= 10 ? "#ff7fe6" : "#66f0ff");
     }
     if (grabbed.length) this.sound.gem();
     for (const u of this.field.harvestPowerups(this.player.position, this.player.radius)) {
@@ -1196,6 +1199,7 @@ export class Game {
       this._hud.subtitle.textContent = "⏸ Paused";
       this._hud.hint.textContent = this._isTouch ? "Tap JUMP to resume" : "Esc or JUMP to resume";
       if (this._hud.restart) this._hud.restart.classList.remove("is-hidden"); // offer Restart right here
+      if (this._hud.track) { this._hud.track.classList.remove("is-hidden"); this._updateTrackButton(); } // + change-track
       this._showHomeControls(false); // can't change difficulty mid-run, even paused
       this._hud.overlay.classList.remove("is-hidden");
     } else if (this.state === "paused") {
@@ -1203,9 +1207,15 @@ export class Game {
     }
   }
 
+  // Update the pause-screen change-track button to show the current track + the (N) shortcut.
+  _updateTrackButton() {
+    if (this._hud.track) this._hud.track.textContent = `🎵 ${this._randomTrack ? "Random" : this.sound.trackName()} (N)`;
+  }
+
   _resume() {
     this.state = "playing";
     if (this._hud.restart) this._hud.restart.classList.add("is-hidden");
+    if (this._hud.track) this._hud.track.classList.add("is-hidden");
     this._hud.overlay.classList.add("is-hidden");
     this._seenStart = this.input.startPresses;       // don't treat the resume press as a restart
     this.player._seenPresses = this.input.jumpPresses; // and don't auto-jump on resume
@@ -1223,7 +1233,8 @@ export class Game {
     this._restartLock = 0.3;   // no accidental instant re-launch
     this.canvas.classList.remove("is-tripping", "is-tripping--gentle");
     this._seenStart = this.input.startPresses; // don't let the click/press fall through into a start
-    if (this._hud.restart) this._hud.restart.classList.add("is-hidden"); // hide the pause-screen button
+    if (this._hud.restart) this._hud.restart.classList.add("is-hidden"); // hide the pause-screen buttons
+    if (this._hud.track) this._hud.track.classList.add("is-hidden");
     this._hud.subtitle.textContent = ""; // no tagline
     this._hud.hint.textContent = this._isTouch ? "Tap JUMP to roll" : "Press JUMP to roll";
     this._showHomeControls(true);  // back on the title — difficulty/modes pickable again
