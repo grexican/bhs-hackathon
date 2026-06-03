@@ -801,7 +801,10 @@ export class Game {
     // Difficulty ramp (capped so it stays playable). Frozen in zen — a calm, steady
     // pace, no getting-faster-and-faster.
     if (!this._zen) {
-      this._speedTimer += dt;
+      // DISTANCE-based speed ramp (accumulate metres travelled, not seconds): every speedRampEvery
+      // metres, nudge the base auto-run speed up to its plateau. Was time-based (~11 min to max, so
+      // runs never reached it); distance-based matches the gen's reach model + plateaus by ~800m.
+      this._speedTimer += this._speed * dt;
       if (this._speedTimer >= CONFIG.world.speedRampEvery) {
         this._speedTimer = 0;
         this.baseSpeed = Math.min(CONFIG.player.maxForwardSpeed, this.baseSpeed + CONFIG.world.speedRampAmount);

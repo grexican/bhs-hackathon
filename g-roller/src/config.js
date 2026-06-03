@@ -26,8 +26,10 @@ export const CONFIG = {
   // --- The ball -------------------------------------------------------------
   player: {
     sideSpeed: 20, // left/right strafe (units per second)
-    forwardSpeed: 24, // starting auto-run speed (eases up from here)
-    maxForwardSpeed: 63,
+    forwardSpeed: 26, // starting auto-run speed (eases up from here) — × tier pace
+    maxForwardSpeed: 50, // the auto-run speed PLATEAU (× pace → Easy 46 / Med 50 / Hard ~58). Trimmed
+    //                      from 63: Hard's old 72.5 was "absolutely brutal". Speed maxes out EARLY
+    //                      (see speedRampEvery) and DIFFICULTY then comes from hazards, not raw pace.
     minSpeed: 15, // speed never eases below this (so you can't stall)
     manualSpeed: 8, // Up/Down arrows nudge speed this much (kept small so gaps stay reachable)
 
@@ -142,7 +144,9 @@ export const CONFIG = {
     starterLength: 64,
     starterWidth: 18,
     // Base auto-run speed nudges up slowly with distance (keeps the early game relaxed).
-    speedRampEvery: 20, // metres between nudges
+    speedRampEvery: 40, // METRES between speed nudges (now genuinely distance-based — see game.js).
+    //                     base 26 → max 50 in (50-26)/1.2 = 20 nudges × 40m ≈ 800m, so the speed
+    //                     plateaus EARLY and the rest of the run's difficulty is hazards, not pace.
     speedRampAmount: 1.2,
   },
 
