@@ -624,39 +624,31 @@ export const BIOMES = [
   },
 ];
 
-// Per-RUN zone sequence. Zones no longer sit at fixed distances in a fixed order: the
-// run OPENS on the neutral baseline (zone 0), then crosses the THEMED zones in a
-// RANDOMISED order (so you don't always hit the same one next), each filling one band.
-// Test hooks: `enabled` limits which themed zones can appear (cheat toggles, like the
-// powerup picker); `forced` pins the WHOLE run to one zone so you can study it.
+// Per-RUN zone sequence. Every zone order is a FRESH FULL SHUFFLE each run, so both the STARTING
+// zone and the order that follows are random — no fixed "always opens on Neon City / home every 3"
+// pattern. Each zone fills one band; the shuffled cycle repeats seamlessly if a run outlasts it.
+// Test hooks: `enabled` limits which zones can appear; `forced` pins the WHOLE run to one zone.
 export const ZoneSeq = {
   zoneLen: 1250,  // metres each zone fills — long enough to settle in and vibe
-  homeIndex: 0,   // Neon City — the home/default look: opens the run + recurs as a base
-  homeEvery: 3,   // re-enter home after every N themed zones (the "venture back home" beat)
-  enabled: null,  // Set of THEMED zone indices allowed in the rotation (null = all)
+  homeIndex: 0,   // Neon City — only used as the fallback if `enabled` filters everything out
+  enabled: null,  // Set of zone indices allowed in the rotation (null = all)
   forced: null,   // pin the whole run to this zone index (testing, cheat key C)
   _seq: [],       // this run's zone order
   _cycleLen: 0,
 
-  // Build this run's order: OPEN on home (Neon City), then the themed zones in a random
-  // order, weaving home back every `homeEvery` so you cycle out to colour and back to the
-  // home base. Each entry — including the returns home — is an announced arrival. The
-  // cycle repeats seamlessly. Math.random is fine here (per-run; never on the tested path).
+  // Build this run's order: a fresh Fisher–Yates shuffle of ALL zones. The first entry is therefore
+  // a RANDOM starting zone, and the rest follow in a random order. Math.random is fine here (per-run;
+  // never on the tested generation path).
   build() {
-    let themed = BIOMES.map((_, i) => i).filter((i) => i !== this.homeIndex);
-    if (this.enabled && this.enabled.size) themed = themed.filter((i) => this.enabled.has(i));
-    for (let i = themed.length - 1; i > 0; i--) {
+    let all = BIOMES.map((_, i) => i);
+    if (this.enabled && this.enabled.size) all = all.filter((i) => this.enabled.has(i));
+    if (!all.length) all = [this.homeIndex];
+    for (let i = all.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [themed[i], themed[j]] = [themed[j], themed[i]];
+      [all[i], all[j]] = [all[j], all[i]];
     }
-    const seq = [this.homeIndex];
-    let c = 0;
-    for (const t of themed) {
-      seq.push(t);
-      if (++c % this.homeEvery === 0 && c < themed.length) seq.push(this.homeIndex);
-    }
-    this._seq = seq;
-    this._cycleLen = seq.length * this.zoneLen;
+    this._seq = all;
+    this._cycleLen = this._seq.length * this.zoneLen;
   },
 
   zoneAt(z) {

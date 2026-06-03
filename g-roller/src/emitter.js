@@ -93,7 +93,12 @@ export class Emitter {
     const travel = Math.max(60, ep.z - ctx.playerZ + 30); // from the frontier down to just past the player
     const mouthR = 34 * this._mouth;
     this._scratch.copy(this._tint).offsetHSL(0, -0.15, 0.2);
-    for (const m of this._shards) {
+    // Reduced-motion: stream FEWER particles out of the mouth (calmer). Hide the rest.
+    const shown = ctx.reduced ? 3 : this._shards.length;
+    for (let si = 0; si < this._shards.length; si++) {
+      const m = this._shards[si];
+      if (si >= shown) { m.visible = false; continue; }
+      m.visible = true;
       const d = m.userData;
       d.t += dt * d.speed;
       if (d.t >= 1) { d.t -= 1; d.ang = Math.random() * 6.283; d.rad = Math.random(); }

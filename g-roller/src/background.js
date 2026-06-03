@@ -506,6 +506,7 @@ export class Background {
       mouth: emit ? 0.8 + emit.sprawl * 0.3 + emit.drama * 0.15 : 1,
       beat: this.beat || 0,
       dim: this.dim,
+      reduced: this.reducedMotion, // fewer streaming particles when reduced-motion is on
     });
 
     // Distant city-lights floor far below: huge, lazily rotating. TRACKS the player in

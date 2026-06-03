@@ -752,6 +752,7 @@ export class Game {
     }
 
     this.particles.update(dt);
+    this.background.reducedMotion = this._reducedMotion; // calmer emitter (fewer particles) when on
     this.background.update(this.player.position.z, dt, this.state === "playing", this.player.position.x, this.player.position.y, this.field.emitterTarget);
     // Frozen during (and after) a cinematic fall-death so the camera holds its spot
     // and watches the ball drop away, then stays put on the empty scene.
