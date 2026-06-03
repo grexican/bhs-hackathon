@@ -82,24 +82,29 @@ describe("motion appears EARLY (the floor) but never in the onboarding grace", (
       expect(plan.motion).toBeNull();
     }
   });
-  it("the early-mid game already has moving parts, scaling Easy < Med < Hard ('more, earlier')", () => {
-    // Robust measure of "more moving parts, EARLIER": the FRACTION of path boards that move in the
-    // early-mid band (300–2500m), averaged over seeds. Every tier must clear a floor (alive early);
-    // easier tiers move LESS (the ordering). Less seed-sensitive than the first-occurrence z.
-    const frac = {};
+  it("every tier is alive early, and harder tiers' movers are more INTENSE (faster/bigger)", () => {
+    // The model: motion FREQUENCY is similar across tiers early (an ambient floor keeps the world
+    // alive; frequency ramps slowly on danger so no tier is over-busy early). The tier DIFFERENCE is
+    // the mover INTENSITY — peak velocity (amp·2π/period) — which rides danger, so Hard's danger
+    // ramping faster makes its movers noticeably faster/bigger over a run.
+    const frac = {}, intensity = {};
     for (const profile of TIERS) {
-      let path = 0, moving = 0;
+      let path = 0, moving = 0, velSum = 0, velN = 0;
       for (const seed of [1, 2, 3, 7, 11, 42, 99, 123]) {
         for (const { plan } of walk(profile, seed, 1200)) {
-          if (plan.kind === "path" && plan.z >= 300 && plan.z <= 5000) { path++; if (plan.motion) moving++; }
+          if (plan.kind !== "path" || plan.z < 300 || plan.z > 5000) continue;
+          path++;
+          if (plan.motion) {
+            moving++;
+            if (plan.motion.amp && plan.motion.period) { velSum += plan.motion.amp * 2 * Math.PI / plan.motion.period; velN++; }
+          }
         }
       }
       frac[profile.name] = moving / Math.max(1, path);
+      intensity[profile.name] = velN ? velSum / velN : 0;
     }
-    expect(frac.Easy).toBeGreaterThan(0.04);    // calm but ALIVE — never sleepy
-    expect(frac.Medium).toBeGreaterThan(frac.Easy);
-    expect(frac.Hard).toBeGreaterThan(frac.Medium); // Hard moves the most
-    expect(frac.Hard).toBeGreaterThan(0.15);
+    for (const t of TIERS) expect(frac[t.name]).toBeGreaterThan(0.04); // alive on every tier
+    expect(intensity.Hard).toBeGreaterThan(intensity.Easy);            // harder tier = more intense motion
   });
 });
 
@@ -116,14 +121,25 @@ describe("branch (optional) routes MAY use the richer motions", () => {
   });
 });
 
-describe("motion period is bounded (a catch window recurs within an airtime)", () => {
-  it("every motion period sits inside the configured tier range", () => {
+describe("motion period is bounded AND jittered (not a static, formulaic rate)", () => {
+  it("every period is in a sane catch-window range (1.5–6s)", () => {
     for (const profile of TIERS) {
-      const [a, b] = profile.motionPeriod;
-      const lo = Math.min(a, b) - EPS, hi = Math.max(a, b) + EPS;
       for (const { plan } of walk(profile, 808, 2000)) {
-        if (plan.motion) { expect(plan.motion.period).toBeGreaterThanOrEqual(lo); expect(plan.motion.period).toBeLessThanOrEqual(hi); }
+        if (plan.motion) { expect(plan.motion.period).toBeGreaterThanOrEqual(1.5); expect(plan.motion.period).toBeLessThanOrEqual(6.0); }
       }
     }
+  });
+  it("periods VARY board-to-board at a similar distance (so movers aren't all synced to one rate)", () => {
+    // A static `ramp(period,D)` would make every mover in a band identical (formulaic). The per-board
+    // jitter must produce real spread. Sample a mid-run window across seeds for enough movers.
+    const periods = [];
+    for (const seed of [1, 2, 3, 7, 11, 42]) {
+      for (const { plan } of walk(TIERS[1], seed, 900)) {
+        if (plan.motion && plan.z > 1500 && plan.z < 4000) periods.push(plan.motion.period);
+      }
+    }
+    expect(periods.length).toBeGreaterThan(10);
+    const min = Math.min(...periods), max = Math.max(...periods);
+    expect(max - min).toBeGreaterThan(0.5); // genuine variety, not one repeated value
   });
 });

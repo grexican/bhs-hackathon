@@ -27,12 +27,23 @@ export const MOTION_BASE = { lift: 0.25, spin: 0.35, wag: 0.45, slide: 0.6, orbi
 // Smaller than that reads progressively harder to land on.
 const PAD_REF_AREA = CONFIG.gen.pad.lenHi[0] * CONFIG.gen.pad.widthHi[0];
 
-// motionTerm for a motion descriptor: base-by-type scaled by speed (2.5/period), capped at 1.
+// How hard a motion is to deal with. Eli's model: DISTANCE + TIME = the movement difficulty — i.e.
+// the SPEED the player must react to. For POSITIONAL motions (lift/slide/orbit) that's the peak
+// board velocity ≈ amplitude·2π/period (a wide, fast sweep is much harder than a small slow one).
+// Rotational motions (spin/wag) don't move the landing spot, so only their cycle speed matters.
+// Falls back to the cycle-speed term when amplitude isn't known (bare descriptors / unit tests).
 export function motionDifficulty(motion) {
   if (!motion || !motion.type) return 0;
   const base = MOTION_BASE[motion.type] ?? 0.3;
   const period = Math.max(0.5, motion.period || 3);
-  return Math.min(1, base * (2.5 / period));
+  const positional = motion.type === "lift" || motion.type === "slide" || motion.type === "orbit";
+  let factor;
+  if (positional && motion.amp != null) {
+    factor = 0.4 + Math.min(1.1, (motion.amp * 2 * Math.PI / period) / 30); // peak velocity (~30 u/s = peak)
+  } else {
+    factor = 2.5 / period; // cycle speed only (shorter period = harder)
+  }
+  return Math.min(1, base * factor);
 }
 
 // 0..1 difficulty of one board from its own (generator-decided) properties.

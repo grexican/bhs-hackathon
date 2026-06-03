@@ -255,12 +255,15 @@ export const CONFIG = {
     path: {
       gapFracLo: [0.28, 0.78], // fraction-of-max-gap LOW end (longer early hops; the floaty jump gives the reach)
       gapFracHi: [0.45, 0.92], // HIGH end — kept under 1.0 so even fully open there's jump headroom
-      lateralFrac: [0.35, 0.85], // how much of the reachable strafe a step may use
+      lateralFrac: [0.5, 0.9], // how much of the reachable strafe a step may use. Raised the LOW end
+      //                          (0.35→0.5) so the path SWEEPS left/right SOONER — it was drifting in
+      //                          too gently early and read as "straight on" for the first ~1km.
       riseFrac: [0.35, 0.85], // how much of the reachable rise a step may use
       dropDepth: [-4, -10], // how far a step may drop
       // Spread is wide even at the START (high low-ends) so the field reads as "go
       // anywhere" from the first jump, not a tight cluster that slowly opens up.
-      bandX: [55, 120], // how far the path may wander left/right (× tier sprawl)
+      bandX: [72, 125], // how far the path may wander left/right (× tier sprawl). Low end raised
+      //                   55→72 so the wander TARGET roams wider from early on (spread sooner).
       bandY: [-50, 85], // vertical corridor the wander target stays within (× tier sprawl)
       driftEvery: [2, 12], // steps between picking a new wander target
       driftY: [38, 100], // vertical reach of each wander target (× tier sprawl) — more climb/movement
@@ -331,6 +334,10 @@ export const CONFIG = {
       //                      highest phase stays within jump reach of the previous board — reach-safe).
       slideAmpFrac: 0.6,   // a slide's amplitude = this fraction of the remaining lateral headroom.
       minAmp: 1.0,         // below this a lift/slide is pointless → skip motion (keeps a clean board).
+      maxVel: 16,          // CAP on a board's peak velocity (units/sec). peak ≈ amp·2π/period. Above
+      //                      this a rising lift outruns the down-ray collision (dt caps at 1/30,
+      //                      tolerance ~0.6u) and the ball CLIPS THROUGH the board as it rises into it.
+      //                      16 keeps amp·2π/period·(1/30) < 0.6 with margin. Lift amp is clamped to it.
       spinAmp: [0.5, 1.4], // turntable angular amplitude (radians), on the openness ramp.
       branchAmp: [10, 26], // orbit/wag positional amplitude for BRANCH boards (off-path, unconstrained).
     },
@@ -431,16 +438,17 @@ export const CONFIG = {
     //   STRIPS decoration (obstacle → motion amp → tilt) once a board's rated difficulty hits it —
     //   it NEVER relaxes the reachability budgets (gaps stay solvable). See gen/difficulty.js.
     //   rank        — 0/1/2 (Easy/Med/Hard); indexes the motion type-unlock distances below.
-    //   motionChance— [early, late] chance a non-safe board MOVES, on the OPENNESS ramp (fast, so
-    //                 movement appears EARLY — the "more moving parts, earlier" mandate). Easier
-    //                 tiers move LESS but never zero (see gen.motion.floor).
-    //   motionPeriod— [early, late] seconds per motion cycle on the openness ramp. SLOWER early &
-    //                 on easier tiers (period is the master difficulty knob); 2–4s keeps a catch
-    //                 window recurring within an airtime for an auto-roller.
+    //   motionChance— [early, late] chance a non-safe board MOVES, on the DANGER ramp (slow). Early
+    //                 aliveness comes from gen.motion.floor (a gentle ambient lift on every tier);
+    //                 the extra frequency ramps in slowly so Hard isn't 40%-movers by ~540m. Easier
+    //                 tiers plateau LOWER. (Was on openness → too many movers too early on Hard.)
+    //   motionPeriod— [early, late] seconds per motion cycle (ramped on DANGER in pickMotion). SLOWER
+    //                 early & on easier tiers (period is a master difficulty knob); 2–4s keeps a
+    //                 catch window recurring within an airtime for an auto-roller.
     tiers: [
-      { name: "Easy",   rank: 0, pace: 0.92, hazard: 0.8, danger: 0.85, openness: 0.9, sprawl: 1.0,  density: 1.6,  drama: 0.7, diffFloor: 0.15, diffSpan: 0.35, motionChance: [0.12, 0.18], motionPeriod: [4.0, 3.0] },
-      { name: "Medium", rank: 1, pace: 1.0,  hazard: 1.0, danger: 1.0,  openness: 1.0, sprawl: 1.45, density: 1.0,  drama: 1.0, diffFloor: 0.25, diffSpan: 0.5,  motionChance: [0.18, 0.28], motionPeriod: [3.5, 2.5] },
-      { name: "Hard",   rank: 2, pace: 1.15, hazard: 1.7, danger: 1.6,  openness: 1.2, sprawl: 2.1,  density: 0.45, drama: 1.4, diffFloor: 0.35, diffSpan: 0.6,  motionChance: [0.25, 0.40], motionPeriod: [3.0, 2.0] },
+      { name: "Easy",   rank: 0, pace: 0.92, hazard: 0.8, danger: 0.85, openness: 0.9, sprawl: 1.0,  density: 1.6,  drama: 0.7, diffFloor: 0.15, diffSpan: 0.35, motionChance: [0.10, 0.20], motionPeriod: [4.0, 3.0] },
+      { name: "Medium", rank: 1, pace: 1.0,  hazard: 1.0, danger: 1.0,  openness: 1.0, sprawl: 1.45, density: 1.0,  drama: 1.0, diffFloor: 0.25, diffSpan: 0.5,  motionChance: [0.13, 0.28], motionPeriod: [3.5, 2.5] },
+      { name: "Hard",   rank: 2, pace: 1.15, hazard: 1.7, danger: 1.6,  openness: 1.2, sprawl: 2.1,  density: 0.45, drama: 1.4, diffFloor: 0.35, diffSpan: 0.6,  motionChance: [0.16, 0.40], motionPeriod: [3.0, 2.0] },
     ],
     defaultDifficulty: 1, // index into tiers (Medium)
   },

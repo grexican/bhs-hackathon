@@ -106,27 +106,40 @@ const CRITICAL_MOTIONS = new Set(["lift", "spin", "slide"]);
 // the REMAINING reach headroom; a lift/slide reserves a fraction so its swept top never leaves jump
 // reach. amp for spin/wag is angular; for orbit (branch) positional.
 function pickMotion(ctx, opts) {
-  const { profile, O, rng } = ctx;
+  const { profile, D, rng } = ctx;
   const m = G().motion;
   const { allowed, riseLeft, latLeft, cursorZ } = opts;
   const rank = profile.rank ?? 1;
   const avail = allowed.filter((type) => cursorZ >= m.unlock[type][rank]); // gate by the type's unlock distance
   if (!avail.length) return null;
   const type = weightedMotionPick(avail, rng);           // easy types dominate; hard ones occasional
-  const period = ramp(profile.motionPeriod, O);          // slower early & on easier tiers
+  // The motion's INTENSITY (its sweep DISTANCE + cycle SPEED — Eli: distance+time = the difficulty)
+  // ramps on the DANGER curve, NOT openness. Openness saturates by ~650m, which made motion full-
+  // speed AND full-amplitude by ~500m ("virtually flying at 1000m"). Danger ramps over the whole run
+  // AND drives the difficulty cap, so a fast/wide motion now rates HIGH and is gated to later. Peak
+  // board velocity ≈ amp·2π/period, so amplitude is the dominant lever — it eases in via `intensity`.
+  // Per-board PERIOD jitter (×0.9..1.4) so movers aren't all synced to ONE rate at a given distance —
+  // a static period reads formulaic. The ramp sets the trend (slow early → faster deep, gentler on
+  // easier tiers); the jitter gives each board its own character and biases slightly slower.
+  const period = ramp(profile.motionPeriod, D) * rng.rand(0.9, 1.4);
+  const intensity = 0.35 + 0.65 * D;                     // sweep distance eases in (gentle early, full late)
   const phase = rng.rand(0, Math.PI * 2);
+  const velCap = m.maxVel * period / (2 * Math.PI); // amplitude that keeps peak velocity ≤ maxVel
   if (type === "lift") {
-    const amp = Math.max(0, riseLeft) * m.liftAmpFrac;
+    // CLAMP to velCap so a rising board never outruns the down-ray collision (the ball was clipping
+    // THROUGH fast lifts as they rose into it). Lift is vertical, so this is the critical case.
+    const amp = Math.min(Math.max(0, riseLeft) * m.liftAmpFrac * intensity, velCap);
     return amp < m.minAmp ? null : { type, period, phase, amp, dirX: 0, dirY: 1 };
   }
   if (type === "slide") {
-    const amp = Math.max(0, latLeft) * m.slideAmpFrac;
+    const amp = Math.max(0, latLeft) * m.slideAmpFrac * intensity; // horizontal — no vertical clip risk
     return amp < m.minAmp ? null : { type, period, phase, amp, dirX: 1, dirY: 0 };
   }
-  if (type === "spin") return { type, period, phase, amp: ramp(m.spinAmp, O), dirX: 0, dirY: 0 };
-  if (type === "wag")  return { type, period, phase, amp: ramp(m.spinAmp, O) + 0.4, hinge: 0.5 };
-  // orbit: trace a circle on a plane tilted from flat (0) toward vertical (PI/2) — flat/Ferris/carousel.
-  return { type, period, phase, amp: ramp(m.branchAmp, O), axisTilt: rng.rand(0, Math.PI / 2) };
+  if (type === "spin") return { type, period, phase, amp: ramp(m.spinAmp, D), dirX: 0, dirY: 0 };
+  if (type === "wag")  return { type, period, phase, amp: ramp(m.spinAmp, D) + 0.4, hinge: 0.5 };
+  // orbit (branch): a circle on a plane tilted flat→vertical. Its vertical component can clip too, so
+  // cap its peak velocity (branches may run a touch faster than the critical-path lift).
+  return { type, period, phase, amp: Math.min(ramp(m.branchAmp, D), velCap * 1.5), axisTilt: rng.rand(0, Math.PI / 2) };
 }
 
 // Weighted pick favouring EASIER motion types (weight ∝ 1/(1+base·3)), so harder ones stay rare.
@@ -352,7 +365,8 @@ export function planStep(state, ctx) {
     // NOTE: no outer cap gate here — the AMBIENT lift must fire even on a board already at the cap
     // (that's the "alive" layer). The per-candidate check below gates only the spicier slide/spin.
     if (canMove) {
-      const moveChance = Math.max(ramp(profile.motionChance, o), g.motion.floor);
+      // Frequency ramps on DANGER (slow); the floor keeps the world alive early on every tier.
+      const moveChance = Math.max(ramp(profile.motionChance, d), g.motion.floor);
       if (chance(moveChance)) {
         const riseLeft = budgets.maxRise - Math.max(0, dy) - hy; // headroom a lift may reserve (reach-safe)
         const latLeft = budgets.maxLateral - Math.abs(dx);
@@ -387,9 +401,11 @@ export function planStep(state, ctx) {
       state.boardsSinceFeature = (state.boardsSinceFeature || 0) + 1;
       if (canMove && state.boardsSinceFeature >= g.minSpiceGap) {
         const riseLeft = budgets.maxRise - Math.max(0, dy) - hy;
-        const amp = Math.max(0, riseLeft) * g.motion.liftAmpFrac;
+        const period = ramp(profile.motionPeriod, d) * rng.rand(0.9, 1.4); // jittered, like pickMotion
+        const velCap = g.motion.maxVel * period / (2 * Math.PI);
+        const amp = Math.min(Math.max(0, riseLeft) * g.motion.liftAmpFrac * (0.35 + 0.65 * d), velCap); // gentle + clip-safe
         if (amp >= g.motion.minAmp) {
-          motion = { type: "lift", period: ramp(profile.motionPeriod, o), phase: rng.rand(0, Math.PI * 2), amp, dirX: 0, dirY: 1, round };
+          motion = { type: "lift", period, phase: rng.rand(0, Math.PI * 2), amp, dirX: 0, dirY: 1 };
           state.boardsSinceFeature = 0;
         }
       }
@@ -480,7 +496,7 @@ export function planScatter(pathPlan, state, ctx) {
     let motion = null;
     if (!bouncy) {
       const piece = pieceFor("normal", geo.geoType); // a branch is a plain pad of its geo shape
-      const moveChance = Math.max(ramp(profile.motionChance, O), g.motion.floor) * 1.1;
+      const moveChance = Math.max(ramp(profile.motionChance, ctx.D), g.motion.floor) * 1.1;
       // Branches use the piece's FULL motion set (no critical filter) — wag/orbit included, off-path.
       if (rng.chance(moveChance) && piece.motions.length) motion = pickMotion(ctx, { allowed: piece.motions, riseLeft: 1e4, latLeft: 1e4, cursorZ: z });
     }
