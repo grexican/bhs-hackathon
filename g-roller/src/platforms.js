@@ -6,6 +6,7 @@ import { makeRng } from "./gen/rng.js";
 import { openness, danger, hazardChance } from "./gen/progression.js";
 import { budgets } from "./gen/reach.js";
 import { planStep, planScatter } from "./gen/planPath.js";
+import { OBSTACLE_DEFS } from "./gen/pieces.js";
 
 // Render-side randomness (cosmetic mesh jitter, gem bob phase, obstacle patrol). The
 // GAMEPLAY decisions that need to be deterministic/testable live in src/gen/*; these
@@ -53,6 +54,16 @@ function weightedPick(keys) {
   return keys[keys.length - 1];
 }
 
+// INVERSE-weighted pick: favours the normally-RARE (low spawn-weight) powerups — the "kickass"
+// ones (flight, low-grav). Used for the reward on a spicy risk/reward branch.
+function rareWeightedPick(keys) {
+  let total = 0;
+  const w = keys.map((k) => { const x = 1 / POWERUP_DEFS[k].weight; total += x; return x; });
+  let r = Math.random() * total;
+  for (let i = 0; i < keys.length; i++) { r -= w[i]; if (r <= 0) return keys[i]; }
+  return keys[keys.length - 1];
+}
+
 // One floating board. The root is an unscaled Group at the board's center so we
 // can hang correctly-sized obstacles off it; the visual shape is a scaled child.
 // Stores half-extents (hx/hy/hz) so landing is a simple box test.
@@ -61,8 +72,8 @@ class Platform {
     this.mesh = group; this.hx = hx; this.hy = hy; this.hz = hz;
     this.type = type;            // "normal" | "bouncy" | "boost" | "flipper" | "rune"
     this.obstacles = [];         // {hx,hy,hz, lx,ly,lz, kind}
-    this.mover = null;           // {dirX, dirY, amp, speed, phase, baseX, baseY}
-    this.dx = 0; this.dy = 0;    // movement applied this frame (so riders move too)
+    this.motion = null;          // {type, amp, period, phase, baseX/Y/Z, baseRotY} — see _applyMotion
+    this.dx = 0; this.dy = 0;    // movement applied this frame (so riders move too — Y only is carried)
     this.slopeZ = 0;             // ramp: top rises this much per unit of z
     this.curve = 0;              // curved board: + concave (funnels in), - convex (rolls off)
     this.leanX = 0;              // sideways bank: top rises this much per unit of x (+ raises the +x edge); drags you to the low side
@@ -376,12 +387,10 @@ export class PlatformField {
   // "barrier" = low wall you JUMP; "spikes" = one-side strip you STEER around;
   // "overhead" = a bar you must roll UNDER (don't jump!); "pillars" = a slalom you
   // thread between. Always leaves a way past.
-  _addObstacle(p, kind) {
-    // Decide up front whether this hazard PATROLS. Barriers span the width (no room
-    // to slide sideways) so they patrol FORE/AFT; spikes are narrow so they slide
-    // side-to-side. Chance rides the danger ramp × the tier's hazard knob.
-    const moves = (kind === "barrier" || kind === "spikes") &&
-      chance(hazardChance(CONFIG.gen.hazard.obstacleMoveChance, this._D, this.profile));
+  _addObstacle(p, kind, move = false) {
+    // Whether this hazard PATROLS was decided by the GENERATOR (so the difficulty rating saw it); the
+    // axis comes from the obstacle registry (spikes slide side-to-side, barriers fore/aft).
+    const moves = move && !!OBSTACLE_DEFS[kind].patrol;
     let lx, ly, lz, hx, hy, hz, mesh;
     if (kind === "barrier") {
       hx = p.hx * 0.82; hy = 0.7; hz = 0.4;
@@ -441,8 +450,7 @@ export class PlatformField {
     p.obstacles.push({ hx, hy, hz, lx, ly, lz, kind, mesh });
     if (moves) {
       const o = p.obstacles[p.obstacles.length - 1];
-      // Barriers patrol fore/aft (z); spikes slide left/right, sometimes fore/aft.
-      const axis = kind === "barrier" ? "z" : (chance(0.5) ? "x" : "z");
+      const axis = OBSTACLE_DEFS[kind].patrol; // registry-declared patrol axis (spikes "x", barrier "z")
       const room = (axis === "x" ? p.hx - o.hx : p.hz - o.hz) - 0.5; // stay on the board
       const amp = Math.min(ramp(CONFIG.gen.hazard.obstacleMoveAmp, this._D), Math.max(0, room));
       if (amp > 0.6) {
@@ -454,10 +462,10 @@ export class PlatformField {
     }
   }
 
-  // Apply a generator-decided mover to a freshly-placed board. baseX/baseY are this
-  // board's spawn position (the motion oscillates around it).
-  _applyMover(p, m) {
-    p.mover = { ...m, baseX: p.pos.x, baseY: p.pos.y };
+  // Apply a generator-decided MOTION to a freshly-placed board. base{X,Y,Z} are the spawn position
+  // the motion oscillates/orbits around; baseRotY the rest yaw the spin/wag rotates from.
+  _applyMotion(p, m) {
+    p.motion = { ...m, baseX: p.pos.x, baseY: p.pos.y, baseZ: p.pos.z, baseRotY: p.surfaceMesh ? p.surfaceMesh.rotation.y : 0 };
   }
 
   // A full semi-transparent tube you roll through (kept short so the exit shows
@@ -489,16 +497,18 @@ export class PlatformField {
 
   // Pick a powerup type honoring the good/bad ratio, but only from types enabled in
   // the cheat test menu. Falls back to the other pool's enabled types; null if none.
-  _pickPowerupType(d) {
-    const good = chance(ramp(CONFIG.gen.items.goodChance, d));
+  _pickPowerupType(d, rare = false) {
+    // A spicy risk/reward branch (rare=true) always pays a GOOD powerup, biased to the rare/kickass pool.
+    const good = rare ? true : chance(ramp(CONFIG.gen.items.goodChance, d));
     const inPool = (list) => list.filter((k) => this.enabledPowerups.has(k));
     const first = inPool(good ? GOOD_POWERUPS : BAD_POWERUPS);
     const pool = first.length ? first : inPool(good ? BAD_POWERUPS : GOOD_POWERUPS);
-    return pool.length ? weightedPick(pool) : null;
+    if (!pool.length) return null;
+    return rare ? rareWeightedPick(pool) : weightedPick(pool);
   }
 
-  _addPowerup(x, top, z, d = 0) {
-    const type = this._pickPowerupType(d);
+  _addPowerup(x, top, z, d = 0, rare = false) {
+    const type = this._pickPowerupType(d, rare);
     if (!type) return; // every type disabled in the cheat test menu → nothing spawns
     const def = POWERUP_DEFS[type];
     const good = def.good;
@@ -586,7 +596,7 @@ export class PlatformField {
   // ignored — they're allowed to slide over things.
   _overlaps(x, y, z, hx, hy, hz) {
     for (const p of this.platforms) {
-      if (p.mover) continue;
+      if (p.motion) continue; // moving boards are allowed to slide over things
       if (Math.abs(p.pos.z - z) > p.hz + hz + 40) continue;
       if (Math.abs(p.pos.x - x) <= p.hx + hx + 1 &&
           Math.abs(p.pos.y - y) <= p.hy + hy + 1.5 &&
@@ -600,7 +610,7 @@ export class PlatformField {
   _clearOverlapping(keep) {
     for (let i = this.platforms.length - 1; i >= 0; i--) {
       const p = this.platforms[i];
-      if (p === keep || p.mover) continue;
+      if (p === keep || p.motion) continue;
       if (Math.abs(p.pos.z - keep.pos.z) <= p.hz + keep.hz &&
           Math.abs(p.pos.x - keep.pos.x) <= p.hx + keep.hx &&
           Math.abs(p.pos.y - keep.pos.y) <= p.hy + keep.hy + 1) {
@@ -619,6 +629,7 @@ export class PlatformField {
       O: this._O,
       D: this._D,
       budgets: budgets(forwardSpeed),
+      genSpeed: forwardSpeed, // the SUSTAINABLE auto-run speed — used to size the flipper runway
       rng: this._rng,
       itemMultiplier: this.itemMultiplier,
       bias: this._biomeGenBias, // per-biome drama weighting (signature run-shape)
@@ -667,8 +678,8 @@ export class PlatformField {
     }
     if (plan.tunnel) this._addTunnelTube(p, plan.len);
     if (plan.kind === "path") this._clearOverlapping(p); // critical path takes priority over decor
-    if (plan.mover) this._applyMover(p, plan.mover);
-    if (plan.obstacle) this._addObstacle(p, plan.obstacle.kind);
+    if (plan.motion) this._applyMotion(p, plan.motion);
+    if (plan.obstacle) this._addObstacle(p, plan.obstacle.kind, plan.obstacle.move);
 
     for (const g of plan.gems) this._addGem(g.x, g.top, g.z);
     for (const u of plan.powerups) this._addPowerup(u.x, u.top, u.z, this._D);
@@ -682,12 +693,13 @@ export class PlatformField {
   // the wide spread, overlaps are rare, so skipping just thins the odd collision.)
   _renderScatterPlan(b) {
     if (this._overlaps(b.x, b.y, b.z, b.w / 2, b.hy, b.len / 2)) return;
-    this._addBoard({
+    const p = this._addBoard({
       x: b.x, y: b.y, z: b.z, w: b.w, len: b.len, hy: b.hy,
       geoType: b.geoType, type: b.type, texName: this._texForRole(b.texRole),
     });
+    if (b.motion) this._applyMotion(p, b.motion); // branches may move (wag/orbit too — off-path)
     for (const g of b.gems) this._addGem(g.x, g.top, g.z);
-    for (const u of b.powerups) this._addPowerup(u.x, u.top, u.z, this._D);
+    for (const u of b.powerups) this._addPowerup(u.x, u.top, u.z, this._D, u.rare); // spicy branch → rare-pool bias
   }
 
   _disposePlatform(p) {
@@ -722,16 +734,33 @@ export class PlatformField {
 
     while (this._state.cursor.z < playerZ + CONFIG.world.keepAheadDistance) this._step(forwardSpeed);
 
-    // Move the sliding platforms and record their per-frame delta so riders (the
-    // player) can be carried along.
+    // Drive the MOVING platforms by type, recording the per-frame delta. Only dy is CARRIED to the
+    // rider (player.js) — so lift carries you up/down, while slide/orbit slide out from under (you
+    // steer to track them). Critical movers are lift/slide/spin only; wag/orbit are branch decor.
     for (const p of this.platforms) {
-      if (!p.mover) { p.dx = 0; p.dy = 0; continue; }
-      const m = p.mover;
-      const o = Math.sin(this._time * m.speed + m.phase) * m.amp;
-      const nx = m.baseX + o * m.dirX;
-      const ny = m.baseY + o * m.dirY;
-      p.dx = nx - p.pos.x; p.dy = ny - p.pos.y;
-      p.pos.x = nx; p.pos.y = ny;
+      if (!p.motion) { p.dx = 0; p.dy = 0; continue; }
+      const mo = p.motion;
+      const w = (Math.PI * 2) / Math.max(0.1, mo.period);
+      const ph = this._time * w + mo.phase;
+      if (mo.type === "lift") {
+        const ny = mo.baseY + Math.sin(ph) * mo.amp;
+        p.dx = 0; p.dy = ny - p.pos.y; p.pos.y = ny;
+      } else if (mo.type === "slide") {
+        const nx = mo.baseX + Math.sin(ph) * mo.amp;
+        p.dx = nx - p.pos.x; p.dy = 0; p.pos.x = nx;
+      } else if (mo.type === "spin") {
+        p.dx = 0; p.dy = 0;
+        if (p.surfaceMesh) p.surfaceMesh.rotation.y = mo.baseRotY + ph; // continuous turntable (round top → landing spot fixed)
+      } else if (mo.type === "wag") {
+        p.dx = 0; p.dy = 0;
+        if (p.surfaceMesh) p.surfaceMesh.rotation.y = mo.baseRotY + Math.sin(ph) * mo.amp; // metronome wag
+      } else if (mo.type === "orbit") {
+        // Trace a circle on a plane tilted from flat (axisTilt 0 = ground plane) toward vertical
+        // (PI/2 = Ferris wheel), coupling up/down with toward/away. Branch-only.
+        const c = Math.cos(ph) * mo.amp, s = Math.sin(ph) * mo.amp, tilt = mo.axisTilt || 0;
+        const nx = mo.baseX + c, ny = mo.baseY + s * Math.sin(tilt), nz = mo.baseZ + s * Math.cos(tilt);
+        p.dx = nx - p.pos.x; p.dy = ny - p.pos.y; p.pos.x = nx; p.pos.y = ny; p.pos.z = nz;
+      }
     }
 
     // Flipper plates: animate the hinge kick while _flipT counts down. Pure visual

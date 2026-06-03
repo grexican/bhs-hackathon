@@ -44,7 +44,7 @@ function runTier(profile) {
       if (plan.kind === "spline") m.splines++;
       if (plan.kind === "tunnel") m.tunnels++;
       if (plan.obstacle) m.obstacles++;
-      if (plan.mover) m.movers++;
+      if (plan.motion) m.movers++;
       if (plan.yaw) m.yaws++;
       if (plan.slopeZ) m.ramps++;
       if (b.maxGap > 0) m.gapRatios.push(plan.gap / b.maxGap);

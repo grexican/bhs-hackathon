@@ -62,9 +62,16 @@ export const CONFIG = {
     bounce: { boost: 1.7 }, // launch velocity = player.jumpSpeed * this
     // Flipper plate (orange): a hinged springboard that sends you up AND forward.
     flipper: {
-      vertical: 1.75, // launch v.y = player.jumpSpeed * this (big air — it's a CANNON)
-      forward: 95, // forward speed BLAST injected on launch
-      maxSpeed: 150, // the flipper launch can fling you this fast (vs the normal ~111 ceiling)
+      vertical: 1.45, // launch v.y = player.jumpSpeed * this (big air — it's a CANNON). Trimmed only
+      //                modestly from 1.75 so the ~81u launch keeps its spectacle (a normal jump peaks
+      //                ~38u); the shorter airtime (~4.7s vs ~5.6s) is what trims the landing runway.
+      forward: 60, // forward speed BLAST injected on launch (was 95). This is the SINGLE source for
+      //              both the launch fling (game._onLanded) AND the runway sizing (planPath
+      //              flipperFlightDistance) — they used to diverge (runway off maxSpeed, launch off
+      //              this), which sized a ~900m straight strip for a ~350m flight. Trimmed so the
+      //              cannon stays a big-air launch without sailing the player half a kilometre.
+      maxSpeed: 150, // PER-FRAME velocity clamp only — the ball can momentarily reach this. NEVER
+      //               use this to size the runway: it's a cap the ball never SUSTAINS.
       flipTime: 0.4, // seconds the hinge-kick animation lasts
     },
     // Board-tilt responses — how the ball reacts to a board's slope/curve/bank.
@@ -212,6 +219,23 @@ export const CONFIG = {
     hazardCeil: 0.92, // global cap on any hazard chance after the tier's `hazard` mult (so Hard stays < 100%)
     safeStraight: 2, // the first N steps run straight ahead (ease-in) before anything opens up
 
+    // Difficulty BUDGET knobs (see gen/difficulty.js). DESIGN NOTE — why these are CONSTANTS, not
+    // per-tier: the budget MAGNITUDE is already per-tier via each tier's diffFloor/diffSpan (that's
+    // where Easy/Hard diverge). These are the SHARED-RULESET pacing + risk/reward STRUCTURE that
+    // operates ON that per-tier budget — making them per-tier too would be the special-casing this
+    // config exists to avoid. Each one is tier-appropriate WITHOUT a per-tier knob:
+    restBeatEvery: 6,   // sawtooth cadence: every Nth non-safe board, dip the cap for a breather. A
+    //                    constant cadence already gives tier-right RELIEF because it dips the per-tier
+    //                    cap (big relief on Hard's high cap, gentle on Easy's low one).
+    restBeatScale: 0.35, // dip depth — a fraction, so it auto-scales to whatever the tier's cap is.
+    branchLicensePerRoute: 0.25, // risk/reward: each extra route lets an optional branch be this much
+    //                    harder. Universal rule; the tier modulates it via `density` (how many routes
+    //                    appear) and the per-tier cap it multiplies — no per-tier knob needed.
+    branchLicenseMaxRoutes: 3,   // …capped here (branchCap tops out at cap × 1.75).
+    minSpiceGap: 4,     // anti-starvation safety net: if the budget went unspent this many boards,
+    //                    force one floor-level feature so calm tiers never go DEAD. The calm-vs-busy
+    //                    baseline is already per-tier (motionChance/hazard), so this stays constant.
+
     // Reachability safety — fraction of the ball's true jump reach a step may use.
     // The contract that keeps every tier solvable. Lower = more headroom.
     reach: {
@@ -279,12 +303,44 @@ export const CONFIG = {
       widthHi: [23, 10],
     },
 
+    // MOTION — moving boards. The big "more moving parts, earlier" system. A board gets at most ONE
+    // motion (mutually exclusive). CRITICAL-PATH motion is restricted to types that keep the LANDING
+    // SPOT reachable at every phase — lift (Y, the player is auto-carried), turntable-spin (round
+    // pads: rotation only, landing spot fixed), and a bounded steerable slide (X, the player steers to
+    // track it). The richer/uncatchable types (wag arc, full orbit) are BRANCH-ONLY, where falling
+    // off costs an optional reward, not the run — because the engine carries riders on Y only (no
+    // horizontal carry), so a horizontally-moving MANDATORY board would slide out from under a
+    // statically-landed player. (Council-of-7 verdict, code-verified in player.js.)
+    motion: {
+      floor: 0.18,          // ambient floor — even at openness 0 (after the intro) this fraction of
+      //                       boards MOVE (a gentle lift), so the world is ALIVE early on every tier
+      //                       (Easy included — "calm but never sleepy"). NOT on safe/runway boards.
+      firstNonSafeQuiet: 3, // no MOVING critical board in the first N non-safe steps (onboarding grace)
+      // Type unlock by GENERATION distance (cursor.z, not playerZ — the generator runs ~800m ahead),
+      // indexed by tier rank [Easy, Med, Hard]. Harder types unlock later; on Easy they're far out
+      // (but not impossible deep in a run). lift/spin/slide can ride the CRITICAL path; wag/orbit are
+      // BRANCH-only regardless of unlock.
+      unlock: {
+        lift:  [0, 0, 0],
+        spin:  [400, 250, 0],
+        slide: [350, 200, 0],
+        wag:   [700, 450, 250],
+        orbit: [1200, 700, 400],
+      },
+      liftAmpFrac: 0.6,    // a lift's amplitude = this fraction of the REMAINING rise headroom (so its
+      //                      highest phase stays within jump reach of the previous board — reach-safe).
+      slideAmpFrac: 0.6,   // a slide's amplitude = this fraction of the remaining lateral headroom.
+      minAmp: 1.0,         // below this a lift/slide is pointless → skip motion (keeps a clean board).
+      spinAmp: [0.5, 1.4], // turntable angular amplitude (radians), on the openness ramp.
+      branchAmp: [10, 26], // orbit/wag positional amplitude for BRANCH boards (off-path, unconstrained).
+    },
+
     // Hazards — frequency rides the DANGER ramp, output scaled by tier `hazard`
     // (and capped by hazardCeil).
     hazard: {
       obstacleChance: [0.18, 0.7], // barrier / spikes / pillars / overhead
-      movingChance: [0.2, 0.7], // boards that slide/lift
-      moveAmp: [4, 12], // how far movers travel
+      // (board MOTION moved to its own system — see gen.motion + each tier's motionChance/motionPeriod.
+      //  It rides the OPENNESS ramp now, not danger, so movement appears EARLY.)
       sharpTurnChance: [0.08, 0.38], // the path takes a hard lateral jog
       obstacleMoveChance: [0.0, 0.55], // chance a barrier/spike PATROLS along its board
       obstacleMoveAmp: [2, 6.5], // patrol half-range (clamped to fit the board)
@@ -344,7 +400,11 @@ export const CONFIG = {
 
     // Item spawn chances not covered above.
     items: {
-      flipperChance: 0.08, // chance a non-safe main-path board is a flipper (rare, not gated by tier)
+      flipperChance: 0.03, // chance a non-safe main-path board is a flipper. RARE on purpose: each
+      //                      flipper forces a straight+flat landing runway (~300m) so the long arc
+      //                      always lands — at 0.08 they fired every ~12 boards and the runways
+      //                      TILED the whole run into straight corridors. 0.03 makes the cannon a
+      //                      genuine event, not the texture of the level.
       boostChance: 0.1, // chance a non-safe main-path board is an accel plate
       goodChance: [0.6, 0.25], // chance a pickup is GOOD — powerdowns are the majority (dodgeable obstacles), more so deeper in (rides danger)
       gemChance: 0.4, // chance a main-path board carries a gem
@@ -365,10 +425,22 @@ export const CONFIG = {
     //             just busier at the plateau).  openness — how fast the field opens.
     //   sprawl  — how WIDE the route/decor roam.  density — how MANY branches (forgiveness).
     //   drama   — spectacle (splines/ramps/curves/yaw/tunnels).
+    // diffFloor / diffSpan — the per-board DIFFICULTY BUDGET cap on the CRITICAL path:
+    //   criticalCap(z) = diffFloor + danger(z) * diffSpan  (a 0..~1 ceiling boardDifficulty() must
+    //   stay under). Easy starts low & rises gently; Hard starts higher & climbs further. The cap
+    //   STRIPS decoration (obstacle → motion amp → tilt) once a board's rated difficulty hits it —
+    //   it NEVER relaxes the reachability budgets (gaps stay solvable). See gen/difficulty.js.
+    //   rank        — 0/1/2 (Easy/Med/Hard); indexes the motion type-unlock distances below.
+    //   motionChance— [early, late] chance a non-safe board MOVES, on the OPENNESS ramp (fast, so
+    //                 movement appears EARLY — the "more moving parts, earlier" mandate). Easier
+    //                 tiers move LESS but never zero (see gen.motion.floor).
+    //   motionPeriod— [early, late] seconds per motion cycle on the openness ramp. SLOWER early &
+    //                 on easier tiers (period is the master difficulty knob); 2–4s keeps a catch
+    //                 window recurring within an airtime for an auto-roller.
     tiers: [
-      { name: "Easy", pace: 0.92, hazard: 0.8, danger: 0.85, openness: 0.9, sprawl: 1.0, density: 1.6, drama: 0.7 },
-      { name: "Medium", pace: 1.0, hazard: 1.0, danger: 1.0, openness: 1.0, sprawl: 1.45, density: 1.0, drama: 1.0 },
-      { name: "Hard", pace: 1.15, hazard: 1.7, danger: 1.6, openness: 1.2, sprawl: 2.1, density: 0.45, drama: 1.4 },
+      { name: "Easy",   rank: 0, pace: 0.92, hazard: 0.8, danger: 0.85, openness: 0.9, sprawl: 1.0,  density: 1.6,  drama: 0.7, diffFloor: 0.15, diffSpan: 0.35, motionChance: [0.12, 0.18], motionPeriod: [4.0, 3.0] },
+      { name: "Medium", rank: 1, pace: 1.0,  hazard: 1.0, danger: 1.0,  openness: 1.0, sprawl: 1.45, density: 1.0,  drama: 1.0, diffFloor: 0.25, diffSpan: 0.5,  motionChance: [0.18, 0.28], motionPeriod: [3.5, 2.5] },
+      { name: "Hard",   rank: 2, pace: 1.15, hazard: 1.7, danger: 1.6,  openness: 1.2, sprawl: 2.1,  density: 0.45, drama: 1.4, diffFloor: 0.35, diffSpan: 0.6,  motionChance: [0.25, 0.40], motionPeriod: [3.0, 2.0] },
     ],
     defaultDifficulty: 1, // index into tiers (Medium)
   },

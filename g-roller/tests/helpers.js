@@ -20,6 +20,7 @@ export function makeCtx(profile, z, forwardSpeed, rng, itemMultiplier = 1, bias 
     O: openness(z, profile),
     D: danger(z, profile),
     budgets: budgets(forwardSpeed),
+    genSpeed: forwardSpeed, // sustainable auto-run speed — sizes the flipper runway
     rng,
     itemMultiplier,
     bias, // per-biome drama weighting; undefined → generator uses its neutral default

@@ -40,6 +40,8 @@
 import { CONFIG, ramp } from "../config.js";
 import { hazardChance, dramaChance } from "./progression.js";
 import { makeSplineSampler } from "./spline.js";
+import { boardDifficulty, criticalCap, branchLicense, MOTION_BASE } from "./difficulty.js";
+import { pieceFor, OBSTACLE_DEFS } from "./pieces.js";
 
 const G = () => CONFIG.gen; // shorthand; re-read each call so config edits take effect
 
@@ -47,16 +49,23 @@ const G = () => CONFIG.gen; // shorthand; re-read each call so config edits take
 // the reachability tests, which exercise the pure tier system without a biome.
 const EMPTY_BIAS = { tunnel: 1, ramp: 1, curve: 1, yaw: 1 };
 
-// How far the flipper "cannon" throws you (units of z). It launches you UP at
-// jumpSpeed*vertical and FORWARD up to maxSpeed, so the airborne arc covers a long
-// stretch — the straight landing runway must span at least this far or you fly off
-// the end of it into a gap. Generous on purpose (a too-short runway = impossible jump;
-// a too-long one is just a harmless flat strip you sail over).
-function flipperFlightDistance() {
-  const P = CONFIG.player, fp = CONFIG.plates.flipper;
+// How far the flipper "cannon" throws you (units of z), so the straight landing runway can
+// span at least that far (fly off the end = fall into a gap = unfair death). The forward blast
+// (launchSpeed) decays back toward the SUSTAINABLE auto-run speed (genSpeed) over the airtime,
+// so the realistic average is ~their mean — NOT maxSpeed (a per-frame velocity CAP the ball
+// never holds; sizing off it gave a ~900m strip that didn't even fit the 800m gen horizon, the
+// root cause of "I run straight for 1000m"). `scripts/eyes-flipper.mjs` measures the true
+// landing distance against the real speed-decay model; this formula tracks it with a safety
+// margin (the +80 covers a surge/down-ramp speed-up applied AFTER launch).
+function flipperFlightDistance(genSpeed) {
+  const P = CONFIG.player, fp = CONFIG.plates.flipper, ac = CONFIG.plates.accel;
   const vy = P.jumpSpeed * fp.vertical;
   const airtime = vy / P.riseGravity + vy / Math.sqrt(P.riseGravity * P.gravity); // rise + fall
-  return fp.maxSpeed * airtime + 60; // full-blast distance + a margin
+  // Mean speed over the flight = sustainable genSpeed + the accel-bonus the launch injects, which
+  // holds then decays over the airtime (mean ≈ 0.75 of its capped peak — measured against the real
+  // game model in scripts/eyes-flipper.mjs). +50 covers the launch overshoot + a partial surge.
+  const avgBoost = Math.min(ac.max, fp.forward) * 0.75;
+  return (genSpeed + avgBoost) * airtime + 60; // +60 covers the launch overshoot AND a surge held the whole flight
 }
 
 // --- small pure pickers ------------------------------------------------------
@@ -75,29 +84,58 @@ function randGeo(roundChance, rng) {
   return { geoType: "box", hy: 0.28 }; // thin slab
 }
 
-// Which obstacle to hang on a board. Overhead bars need a long grounded runway to
-// be fair, so they only appear on long boards.
+// Which obstacle to hang on a board. The size gate (overhead needs a long grounded runway) comes
+// from the obstacle registry's minBoardLen, so the rule lives with the obstacle, not here.
 function pickObstacleKind(len, rng) {
   const r = rng.next();
   if (r < 0.34) return "spikes";
   if (r < 0.6) return "barrier";
   if (r < 0.8) return "pillars";
-  return len > 22 ? "overhead" : "barrier";
+  return len >= OBSTACLE_DEFS.overhead.minBoardLen ? "overhead" : "barrier";
 }
 
-// A sliding/lifting board's motion. Mostly pure horizontal or vertical, sometimes a
-// diagonal. Slide distance grows with danger. baseX/baseY are filled in by the
-// renderer (they're the board's spawn position).
-function makeMover(ctx, big) {
-  const { D, rng } = ctx;
-  const base = ramp(G().hazard.moveAmp, D);
-  const amp = big ? base * 1.3 : rng.rand(base * 0.6, base);
-  const roll = rng.next();
-  let dirX, dirY;
-  if (roll < 0.42) { dirX = 1; dirY = 0; }
-  else if (roll < 0.74) { dirX = 0; dirY = 1; }
-  else { dirX = 0.707 * (rng.chance(0.5) ? 1 : -1); dirY = 0.707 * (rng.chance(0.5) ? 1 : -1); }
-  return { dirX, dirY, amp, speed: rng.rand(0.7, 1.5), phase: rng.rand(0, Math.PI * 2) };
+// Which motion types may ride the CRITICAL (mandatory) path — the ones that keep the LANDING SPOT
+// reachable at every phase (Y-lift is auto-carried; turntable-spin doesn't move the landing point;
+// a bounded slide is steerable). wag/orbit move the landing spot in ways the engine can't carry a
+// rider through, so they're BRANCH-only. See config.gen.motion.
+const CRITICAL_MOTIONS = new Set(["lift", "spin", "slide"]);
+
+// Pick at most ONE motion descriptor for a board, or null. `allowed` is the piece's supported motion
+// list (from PIECE_DEFS), already filtered by the caller for the critical-safe set + flat/round. This
+// fn applies the per-distance type UNLOCK and computes the reach-safe amplitude. riseLeft/latLeft are
+// the REMAINING reach headroom; a lift/slide reserves a fraction so its swept top never leaves jump
+// reach. amp for spin/wag is angular; for orbit (branch) positional.
+function pickMotion(ctx, opts) {
+  const { profile, O, rng } = ctx;
+  const m = G().motion;
+  const { allowed, riseLeft, latLeft, cursorZ } = opts;
+  const rank = profile.rank ?? 1;
+  const avail = allowed.filter((type) => cursorZ >= m.unlock[type][rank]); // gate by the type's unlock distance
+  if (!avail.length) return null;
+  const type = weightedMotionPick(avail, rng);           // easy types dominate; hard ones occasional
+  const period = ramp(profile.motionPeriod, O);          // slower early & on easier tiers
+  const phase = rng.rand(0, Math.PI * 2);
+  if (type === "lift") {
+    const amp = Math.max(0, riseLeft) * m.liftAmpFrac;
+    return amp < m.minAmp ? null : { type, period, phase, amp, dirX: 0, dirY: 1 };
+  }
+  if (type === "slide") {
+    const amp = Math.max(0, latLeft) * m.slideAmpFrac;
+    return amp < m.minAmp ? null : { type, period, phase, amp, dirX: 1, dirY: 0 };
+  }
+  if (type === "spin") return { type, period, phase, amp: ramp(m.spinAmp, O), dirX: 0, dirY: 0 };
+  if (type === "wag")  return { type, period, phase, amp: ramp(m.spinAmp, O) + 0.4, hinge: 0.5 };
+  // orbit: trace a circle on a plane tilted from flat (0) toward vertical (PI/2) — flat/Ferris/carousel.
+  return { type, period, phase, amp: ramp(m.branchAmp, O), axisTilt: rng.rand(0, Math.PI / 2) };
+}
+
+// Weighted pick favouring EASIER motion types (weight ∝ 1/(1+base·3)), so harder ones stay rare.
+function weightedMotionPick(types, rng) {
+  let total = 0;
+  const w = types.map((t) => { const x = 1 / (1 + (MOTION_BASE[t] ?? 0.3) * 3); total += x; return x; });
+  let r = rng.next() * total;
+  for (let i = 0; i < types.length; i++) { r -= w[i]; if (r <= 0) return types[i]; }
+  return types[types.length - 1];
 }
 
 // --- the three "structure" pieces (return early, no scatter cloud) -----------
@@ -239,9 +277,11 @@ export function planStep(state, ctx) {
     dy = toY * 0.6 + rand(dyDown, dyUp) * 0.4;
   }
 
-  // Plate type: rare flipper or accel plate.
+  // Plate type: rare flipper or accel plate. NEVER on a runway — a second flipper would CHAIN
+  // its runway onto this one (stacking to 1000m+ straight again), and a boost would speed the ball
+  // past the landing zone. The runway must stay clean normal boards so the launch arc lands.
   let type = "normal";
-  if (!safe) {
+  if (!safe && !onRunway) {
     if (chance(g.items.flipperChance)) type = "flipper";
     else if (chance(g.items.boostChance)) type = "boost";
   }
@@ -287,16 +327,70 @@ export function planStep(state, ctx) {
   const hy = type === "boost" || type === "flipper" || slopeZ ? 0.5 : geo.hy;
   const exitY = slopeZ ? yCenter + slopeZ * (len / 2) : yCenter;
 
-  // Decorations: movers, obstacles, gems, powerups. None on safe boards, yawed
-  // runways (too chaotic), or tilted/curved boards (a hazard you can't dodge mid-
-  // climb is unfair).
-  let mover = null, obstacle = null;
+  // Decorations: MOTION, obstacle, gems, powerups — gated by the difficulty BUDGET (criticalCap).
+  // Precedence: geometry is already reach-clamped (safety); the cap only STRIPS decoration (balance).
+  // Tilt (rolled above) and motion are mutually exclusive — a board is tilted-static OR flat-moving.
+  const tilted = slopeZ || curve || leanX || yaw;
+  let motion = null, obstacle = null;
   const gems = [], powerups = [];
+  const piece = pieceFor(type, geoType); // self-describing capabilities (motions, canObstacle, base)
   if (!safe) {
-    if (!yaw && chance(hazardChance(g.hazard.movingChance, d, profile))) mover = makeMover(ctx, false);
-    if (type === "normal" && !slopeZ && !curve && !yaw && len > 12 && chance(hazardChance(g.hazard.obstacleChance, d, profile))) {
-      obstacle = { kind: pickObstacleKind(len, rng) };
+    const cap = criticalCap(profile, nearZ, state.stepIndex);
+    const partial = { w, len, type, geoType, slopeZ, curve, leanX, yaw, spline: null, obstacle: null, motion: null };
+
+    // MOTION — only the motions the PIECE supports (registry), filtered to the critical-safe set;
+    // spin needs a flat round top. A lifting/sliding RAMP is fine (down-ray tracks the tilt, dy still
+    // carries the rider). Frequency rides the OPENNESS ramp (movement EARLY) with an ambient floor.
+    const canMove = !onRunway && piece.motions.length > 0 &&
+      state.stepIndex >= g.safeStraight + g.motion.firstNonSafeQuiet;
+    // NOTE: no outer cap gate here — the AMBIENT lift must fire even on a board already at the cap
+    // (that's the "alive" layer). The per-candidate check below gates only the spicier slide/spin.
+    if (canMove) {
+      const moveChance = Math.max(ramp(profile.motionChance, o), g.motion.floor);
+      if (chance(moveChance)) {
+        const riseLeft = budgets.maxRise - Math.max(0, dy) - hy; // headroom a lift may reserve (reach-safe)
+        const latLeft = budgets.maxLateral - Math.abs(dx);
+        let allowed = piece.motions.filter((t) => CRITICAL_MOTIONS.has(t));
+        if (tilted) allowed = allowed.filter((t) => t !== "spin"); // spin needs a flat top
+        let cand = pickMotion(ctx, { allowed, riseLeft, latLeft, cursorZ: nearZ });
+        // LIFT is the AMBIENT "alive" layer — gentle + reach-safe, allowed even under a low cap (keeps
+        // Easy/early calm-but-NOT-sleepy). A spicier slide/spin must fit the budget; if it DOESN'T,
+        // fall back to a lift rather than leaving the board static — the ambient layer always delivers.
+        if (cand && cand.type !== "lift" && boardDifficulty({ ...partial, motion: cand }) > cap + 1e-9) {
+          cand = allowed.includes("lift") ? pickMotion(ctx, { allowed: ["lift"], riseLeft, latLeft, cursorZ: nearZ }) : null;
+        }
+        if (cand) motion = cand;
+      }
     }
+    partial.motion = motion;
+
+    // OBSTACLE — only if the PIECE can host one (registry), flat, not moving, long enough. The PATROL
+    // is rolled HERE in the pure layer (not the renderer) so boardDifficulty sees the moving hazard.
+    if (piece.canObstacle && !tilted && !motion && len > 12 &&
+        boardDifficulty(partial) < cap && chance(hazardChance(g.hazard.obstacleChance, d, profile))) {
+      const kind = pickObstacleKind(len, rng);
+      const move = !!OBSTACLE_DEFS[kind].patrol && chance(hazardChance(g.hazard.obstacleMoveChance, d, profile));
+      const ob = { kind, move };
+      if (boardDifficulty({ ...partial, obstacle: ob }) <= cap + 1e-6) obstacle = ob;
+    }
+
+    // ANTI-STARVATION: a calm tier can leave the budget unspent for a run of bare boards (the "Easy
+    // went DEAD" risk). If that happens, force one floor-level feature (a slow lift) so the world
+    // stays alive. Tracked on `state` (lazy init so no freshState churn).
+    if (!tilted && !motion && !obstacle && type === "normal" && !onRunway) {
+      state.boardsSinceFeature = (state.boardsSinceFeature || 0) + 1;
+      if (canMove && state.boardsSinceFeature >= g.minSpiceGap) {
+        const riseLeft = budgets.maxRise - Math.max(0, dy) - hy;
+        const amp = Math.max(0, riseLeft) * g.motion.liftAmpFrac;
+        if (amp >= g.motion.minAmp) {
+          motion = { type: "lift", period: ramp(profile.motionPeriod, o), phase: rng.rand(0, Math.PI * 2), amp, dirX: 0, dirY: 1, round };
+          state.boardsSinceFeature = 0;
+        }
+      }
+    } else {
+      state.boardsSinceFeature = 0;
+    }
+
     const im = ctx.itemMultiplier || 1;
     for (let k = 0; k < im; k++) {
       const ox = (k - (im - 1) / 2) * 3;
@@ -307,14 +401,19 @@ export function planStep(state, ctx) {
 
   // Advance the cursor to the board's far end (along its heading) for the next step.
   state.cursor = { x: clamp(nearX + fdx * len, -band - 4, band + 4), y: exitY, z: nearZ + fdz * len };
-  // After a flipper, hold a straight + flat runway out to the cannon's full landing zone
-  // (distance-based, set from the just-advanced far edge) so the long arc always lands.
-  if (type === "flipper") state.launchRunwayUntilZ = state.cursor.z + flipperFlightDistance();
+  // After a flipper, hold a straight + flat runway out to the cannon's landing zone (distance-
+  // based, from the just-advanced far edge) so the long arc always lands. Sized off the REALISTIC
+  // flight (genSpeed-based, see flipperFlightDistance) and clamped so neither a degenerate slow
+  // launch under-runs the landing nor a fast one re-creates a level-tiling straight corridor.
+  if (type === "flipper") {
+    const flight = flipperFlightDistance(ctx.genSpeed ?? budgets.maxGap / Math.max(1, budgets.airTime * g.reach.gap));
+    state.launchRunwayUntilZ = state.cursor.z + clamp(flight, 150, 540);
+  }
   state.stepIndex++;
 
   return board("path", {
-    safe, x, y: yCenter, z, w, len, hy, geoType, type, texRole,
-    slopeZ, curve, leanX, yaw, mover, obstacle, gems, powerups, exitY, band,
+    safe, onRunway, x, y: yCenter, z, w, len, hy, geoType, type, texRole,
+    slopeZ, curve, leanX, yaw, motion, obstacle, gems, powerups, exitY, band,
     gap, rise: dy, lateral: dx,
   });
 }
@@ -363,17 +462,35 @@ export function planScatter(pathPlan, state, ctx) {
       w = Math.max(7, w * shrink);
       len = Math.max(8, len * shrink);
     }
+    // Branch MOTION — optional routes may move RICHER than the critical path (wag/orbit included),
+    // gated only by the type-unlock distance. Off-path, so positional motion is unconstrained:
+    // falling off costs the optional reward, not the run. Frequency rides openness.
+    let motion = null;
+    if (!bouncy) {
+      const piece = pieceFor("normal", geo.geoType); // a branch is a plain pad of its geo shape
+      const moveChance = Math.max(ramp(profile.motionChance, O), g.motion.floor) * 1.1;
+      // Branches use the piece's FULL motion set (no critical filter) — wag/orbit included, off-path.
+      if (rng.chance(moveChance) && piece.motions.length) motion = pickMotion(ctx, { allowed: piece.motions, riseLeft: 1e4, latLeft: 1e4, cursorZ: z });
+    }
+    // Risk/reward (M6): the more alternate routes exist (count), the harder an individual branch is
+    // ALLOWED to be — and a branch harder than the critical cap pays out a better powerup more often
+    // (a "dare" piece with a kickass reward). branchLicense scales the allowance with route count.
+    const baseCap = criticalCap(profile, z, state.stepIndex);
+    const bdiff = boardDifficulty({ w, len, slopeZ: 0, curve: 0, leanX: 0, yaw: 0, spline: null, obstacle: null, motion });
+    const spicy = bdiff > baseCap * 1.3 && bdiff <= baseCap * branchLicense(count) + 1e-9;
+    const puChance = spicy ? g.scatter.powerupChance * 1.8 : g.scatter.powerupChance;
+
     // Items carry their FINAL surface height (top = board center y + hy), the same
     // convention as path gems, so the renderer never has to special-case scatter.
     const gems = [], powerups = [];
     const im = ctx.itemMultiplier || 1;
-    for (let m = 0; m < im; m++) {
-      const ox = (m - (im - 1) / 2) * 2.5;
+    for (let k = 0; k < im; k++) {
+      const ox = (k - (im - 1) / 2) * 2.5;
       if (rng.chance(g.scatter.gemChance)) gems.push({ x: x + ox, top: y + hy, z });
-      if (rng.chance(g.scatter.powerupChance)) powerups.push({ x: x + ox, top: y + hy, z });
+      if (rng.chance(puChance)) powerups.push({ x: x + ox, top: y + hy, z, rare: spicy }); // spicy branch → bias the rare/good pool
     }
     out.push(board("scatter", {
-      x, y, z, w, len, hy,
+      x, y, z, w, len, hy, motion,
       geoType: bouncy ? "box" : geo.geoType,
       type: bouncy ? "bouncy" : "normal",
       texRole: bouncy ? "rubber" : "ground",
@@ -388,10 +505,11 @@ function board(kind, fields) {
   return {
     kind,
     safe: false,
+    onRunway: false, // true on the straight+flat boards held after a flipper launch (the landing strip)
     x: 0, y: 0, z: 0, w: 0, len: 0, hy: 0.5,
     geoType: "box", type: "normal", texRole: "ground",
     slopeZ: 0, curve: 0, leanX: 0, yaw: 0,
-    spline: null, mover: null, obstacle: null,
+    spline: null, motion: null, obstacle: null,
     gems: [], powerups: [],
     exitY: fields.y ?? 0, band: 0, gap: 0, rise: 0, lateral: 0, tunnel: false,
     ...fields,

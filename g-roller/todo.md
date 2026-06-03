@@ -3,6 +3,84 @@
 Ideas we've decided to do later (parked here on purpose so the current pass stays
 focused on the moment-to-moment experience). Pull any of these forward anytime.
 
+## Redesign session — Eli's running list (capture so we don't lose the train of thought)
+
+### Portal piece (NEW — greenlit, not yet built)
+A new board/piece type: a **portal**, look & feel like the game's own portal/emitter (the glowing
+mouth aesthetic in emitter.js — soft glow + hot core + rim + streaming glints). You roll INTO one
+side and POP OUT the other side. CRITICAL: you pop out **on the floor at ground speed** — NOT flung
+out flying (that's unplayable). So it's a short teleport that deposits you grounded onto a landing
+board at normal forward speed. Pairs an entry portal with an exit portal; exit must sit on a
+reachable, flat landing board. Reuse the emitter's glow material language for the look.
+
+### Springboard (bouncy pad) animation + remove the coil spring (NEW — small, do during platforms pass)
+The FLIPPER animates (hinge-kick forward flip). The SPRINGBOARD (red bouncy/trampoline pad) does
+NOT animate — fix that: make it **compress then spring UPWARD** to launch you (a squash→extend pop
+on the deck, timed to the bounce). AND **remove the coil-spring rings under the board**
+(`_decorateLaunchPad` in platforms.js) — the coil look doesn't fit the game's aesthetic. The pad's
+own glow + the new spring-pop animation should sell the bounce instead.
+
+### Flipper → AIM-BASED launch (agreed redesign, do after scripts/eyes-fly.mjs exists)
+Eli: "a flipper shouldn't auto-land you on anything — you aim toward the next landing; chaining is
+fine." Correct, WITH one constraint: in the air the player controls X (steer) but barely Z (flight
+distance = airtime×speed; the drop-chop doesn't apply to auto-launches; throttle only nudges ±~38m).
+So a pure launch can fling you onto a z-slice that's entirely a gap = un-aimable death. The runway
+exists only to prevent THAT. Redesign:
+  - Trim the forward blast so the flipper is more VERTICAL/aim-able (lands closer, fewer path steps
+    crossed → less cumulative wander to steer across).
+  - Replace the dead-straight FLAT runway with a "landing reachable by aiming" guarantee: the path
+    during the flight window may WANDER and vary height, but stays within X-steer-reach of the
+    launch line and has no un-aimable void — so landing is a skill (aim X), not an auto-land.
+  - RE-ENABLE chaining (flipper→flipper): with a wandering (not straight) landing field, stacked
+    launches are a fun aim sequence, not a 1000m straight line.
+  - VERIFY with eyes-fly: an auto-player that only steers X must always find a reachable landing.
+CURRENT STATE (interim, safe): bounded straight runway (clamp ≤540m < 800m horizon, chaining
+suppressed) — this already fixes the reported "straight 1000m" bug; the aim-based version is the
+follow-up once eyes-fly can prove aim-ability.
+
+### Self-describing pieces + per-piece renderers (ARCHITECTURE — registry started, renderer pending)
+DONE: `src/gen/pieces.js` is the self-describing registry — each piece declares its capabilities
+(motions it supports, canTilt, canObstacle, size, baseDifficulty, plate/structure identity). The
+generator (planPath) reads it for motion/obstacle eligibility.
+NEXT (the bigger half): give each piece its OWN RENDER FUNCTION so platforms.js stops branching on
+`type`. Architecture decision (agreed): NOT a naive vertical slice (one file with def+renderer+physics
+together) — that would break the pure-gen/render HORIZONTAL SEAM that makes the generator unit-
+testable headless (THREE/canvas can't import in Node). Instead: keep the seam, and per piece have
+(a) DATA in pieces.js, (b) a pure gen contribution, (c) a render fn `renderPiece[type](plan, ctx,
+helpers)` in a render module dispatched from platforms.js. COMPOSITION over inheritance — no base-class
+tree (diamond problem: ramp + moving + round). The orthogonal-property model already composes.
+
+### Generator as an explicit PIPELINE (ARCHITECTURE north-star)
+The generator should read as a PIPELINE of stages — what to generate, where, when — instead of one
+monolithic planStep(). The ROUTE skeleton comes from the emitter's traced path (the drift/wander
+target + the reach-clamped steps); the DETAIL emerges from the pieces themselves and their obstacles
+(their self-describing registry capabilities). Sketch of the stages:
+  1. ROUTE — advance the cursor toward the roaming drift target, clamped to jump reach (solvable by
+     construction). Decide gap/rise/lateral. [exists: planStep top half]
+  2. PIECE — pick the piece TYPE from PIECE_DEFS by what fits here (size, round?, plate?) + the
+     difficulty budget. [exists: randGeo + type rolls — move behind a pickPiece(registry) stage]
+  3. SHAPE — apply orthogonal properties the piece ALLOWS (tilt/curve/lean/yaw/motion) within the cap.
+  4. HAZARD — the piece's obstacles emerge from OBSTACLE_DEFS (what it can host, patrol, difficulty).
+  5. DECOR — gems/powerups/scatter branches (with the risk/reward reward-coupling).
+Each stage is pure + testable in isolation; the registries (PIECE_DEFS/OBSTACLE_DEFS) are the data the
+stages consume. Refactor planStep into named stage functions once the feature set settles — the
+registries added this session (pieces.js) are the first concrete step toward it.
+
+### Composable pieces (NEW idea — greenlit later)
+Pieces that COMPOSE, not just obstacles-on-a-board: e.g. a long runway with a SPRINGBOARD attached at
+the end or middle, so mid-roll you hit a launch section. We already attach obstacles to a board; extend
+that to attaching PLATES/launchers/sub-pieces. Foundation: the registry + orthogonal model make this a
+`board.attachments = [{ piece, atLocalZ, ... }]` list (like `obstacles`), rendered by each attachment's
+render fn. Needs: collision/landing handling for the attached plate's local zone, and reachability
+accounting (a mid-runway springboard changes the arc). Pairs naturally with the per-piece renderer.
+
+### From the player on gameplay feel (notes, not yet actioned)
+- Player MAYBE moves too slowly through space — consider a modest forwardSpeed bump (verify with
+  scripts/eyes-fly.mjs that reachability still holds — gen sizes gaps to speed, so it should).
+- Principle: fix the GEN to match the player, not the player to match the gen (jump/float/drop feel
+  is good — don't nerf it). The flipper cannon was trimmed only modestly (1.75→1.45) to shrink its
+  runway; core jump physics untouched.
+
 ## Fixed
 
 ### Ramp collision (FIXED properly — raycast)
