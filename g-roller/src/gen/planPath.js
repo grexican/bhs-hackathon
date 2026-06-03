@@ -335,7 +335,13 @@ export function planStep(state, ctx) {
   const gems = [], powerups = [];
   const piece = pieceFor(type, geoType); // self-describing capabilities (motions, canObstacle, base)
   if (!safe) {
-    const cap = criticalCap(profile, nearZ, state.stepIndex);
+    // AGGREGATE-PATH-DIFFICULTY (M6, the inverse of the branch license): when FEW alternate routes
+    // exist here, the critical path is COMMITTED (you can't dodge) → cap its per-board difficulty
+    // LOWER so it stays fair. Many routes → the branches carry the spice (branchLicense), so the
+    // mandatory path can sit a touch higher. expectedBranches ≈ the scatter count about to spawn.
+    const expectedBranches = ramp(g.scatter.count, o) * profile.density;
+    const commitFactor = expectedBranches < 2 ? 0.75 + 0.125 * expectedBranches : 1; // 0.75 (forced) .. 1 (lots of options)
+    const cap = criticalCap(profile, nearZ, state.stepIndex) * commitFactor;
     const partial = { w, len, type, geoType, slopeZ, curve, leanX, yaw, spline: null, obstacle: null, motion: null };
 
     // MOTION — only the motions the PIECE supports (registry), filtered to the critical-safe set;
