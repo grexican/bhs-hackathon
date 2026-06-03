@@ -111,6 +111,8 @@ export const CONFIG = {
   scoring: {
     scorePerMeter: 1,
     gemScore: 25,
+    clusterGem: 5,       // an off-path "side-quest" CLUSTER gem is worth this many gems (5×)
+    clusterGemSpicy: 10, // …or this many on a SPICY (hard-to-reach) branch — the big dare (10×)
     nearMissBonus: 50,
     nearMissMargin: 1.2, // grazing an obstacle within this extra distance = near-miss
     multiplierMax: 12,
@@ -414,7 +416,8 @@ export const CONFIG = {
       //                      genuine event, not the texture of the level.
       boostChance: 0.1, // chance a non-safe main-path board is an accel plate
       goodChance: [0.6, 0.25], // chance a pickup is GOOD — powerdowns are the majority (dodgeable obstacles), more so deeper in (rides danger)
-      gemChance: 0.4, // chance a main-path board carries a gem
+      gemChance: 0.85, // chance a main-path board carries a gem. HIGH on purpose: a near-continuous
+      //                  trail of coins traces the reachable route — an extra "go this way" hint.
     },
 
     // Rune plates — DISABLED (the aura-cloud floating pickups cover powerups now).

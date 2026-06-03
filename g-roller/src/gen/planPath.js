@@ -510,11 +510,14 @@ export function planScatter(pathPlan, state, ctx) {
 
     // Items carry their FINAL surface height (top = board center y + hy), the same
     // convention as path gems, so the renderer never has to special-case scatter.
+    // Off-path (side-quest) gems are CLUSTERS worth multiples — 5×, or 10× on a spicy hard-to-reach
+    // branch (risk/reward). One cluster per branch (not a sprinkle), so reaching it is a real payoff.
+    const clusterValue = spicy ? CONFIG.scoring.clusterGemSpicy : CONFIG.scoring.clusterGem;
     const gems = [], powerups = [];
     const im = ctx.itemMultiplier || 1;
     for (let k = 0; k < im; k++) {
       const ox = (k - (im - 1) / 2) * 2.5;
-      if (rng.chance(g.scatter.gemChance)) gems.push({ x: x + ox, top: y + hy, z });
+      if (rng.chance(g.scatter.gemChance)) gems.push({ x: x + ox, top: y + hy, z, value: clusterValue });
       if (rng.chance(puChance)) powerups.push({ x: x + ox, top: y + hy, z, rare: spicy }); // spicy branch → bias the rare/good pool
     }
     out.push(board("scatter", {

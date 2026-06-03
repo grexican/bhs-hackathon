@@ -975,13 +975,16 @@ export class Game {
     // Magnet pull happens inside field.update (so it doesn't fight the gem bob);
     // here we just harvest whatever's now in range.
     const grabbed = this.field.harvestGems(this.player.position, this.player.radius);
-    for (const pos of grabbed) {
-      // Zen mode doesn't count gems or score them — but they still sparkle on pickup.
+    for (const { pos, value } of grabbed) {
+      // Zen mode doesn't count gems or score them — but they still sparkle on pickup. A CLUSTER gem
+      // (off-path side quest) counts for `value` gems (5× / 10×) and scores accordingly.
       if (!this._zen) {
-        this.gems += 1;
-        this.score += CONFIG.scoring.gemScore * (this._effMult ?? this.multiplier);
+        this.gems += value;
+        this.score += CONFIG.scoring.gemScore * value * (this._effMult ?? this.multiplier);
       }
-      this.particles.burst(pos, 0x66f0ff, 16);
+      const cluster = value > 1;
+      this.particles.burst(pos, cluster ? 0xffd34e : 0x66f0ff, cluster ? 30 : 16);
+      if (cluster && !this._zen) this._toast(`+${value} 💎`, "#ffd34e");
     }
     if (grabbed.length) this.sound.gem();
     for (const u of this.field.harvestPowerups(this.player.position, this.player.radius)) {

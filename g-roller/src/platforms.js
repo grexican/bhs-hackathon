@@ -28,7 +28,7 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export const POWERUP_DEFS = {
   shield:     { color: 0x9fe0ff, shape: "ring",  icon: "🛡️", good: true,  weight: 5,   label: "SHIELD" },
   slow:       { color: 0x2fd9c0, shape: "ico",   icon: "🐢", good: true,  weight: 5,   dur: 10, label: "SLOW-MO" },
-  magnet:     { color: 0x4a78ff, shape: "ring",  icon: "🧲", good: true,  weight: 4,   dur: 15, label: "MAGNET" },
+  magnet:     { color: 0x4a78ff, shape: "ring",  icon: "🧲", good: true,  weight: 4,   dur: 28, label: "MAGNET" },
   doublejump: { color: 0x6effc0, shape: "knot",  icon: "🦘", good: true,  weight: 3,   dur: 16, label: "DOUBLE JUMP" },
   lowgrav:    { color: 0x9affd6, shape: "octa",  icon: "🌕", good: true,  weight: 2.5, dur: 20, label: "LOW GRAVITY" },
   flight:     { color: 0x7fdfff, shape: "octa",  icon: "🪽", good: true,  weight: 1.3, dur: 12, label: "FLIGHT — hold jump!" },
@@ -486,14 +486,40 @@ export class PlatformField {
     p._geo = geo; // dispose this geometry when the platform is culled
   }
 
-  _addGem(x, top, z) {
-    const mesh = new THREE.Mesh(this._gemGeo, new THREE.MeshStandardMaterial({
-      color: 0x66f0ff, emissive: 0x33d0ff, emissiveIntensity: 0.9, roughness: 0.2, metalness: 0.3,
-    }));
-    const y = top + 0.8; // grounded on the platform — pickups don't float anymore
+  _addGem(x, top, z, value = 1) {
+    const cluster = value > 1;
+    let mesh;
+    if (cluster) {
+      // A side-quest CLUSTER: a bigger GOLD gem with a "×N" label so the payoff reads at a glance.
+      mesh = new THREE.Group();
+      const core = new THREE.Mesh(this._gemGeo, new THREE.MeshStandardMaterial({
+        color: 0xffd34e, emissive: 0xff9a1c, emissiveIntensity: 1.0, roughness: 0.2, metalness: 0.4,
+      }));
+      core.scale.setScalar(value >= 10 ? 1.9 : 1.5);
+      mesh.add(core, this._gemLabel(value));
+    } else {
+      mesh = new THREE.Mesh(this._gemGeo, new THREE.MeshStandardMaterial({
+        color: 0x66f0ff, emissive: 0x33d0ff, emissiveIntensity: 0.9, roughness: 0.2, metalness: 0.3,
+      }));
+    }
+    const y = top + (cluster ? 1.2 : 0.8); // grounded on the platform — pickups don't float anymore
     mesh.position.set(x, y, z);
     this.scene.add(mesh);
-    this.gems.push({ mesh, baseY: y, phase: rand(0, Math.PI * 2), collected: false });
+    this.gems.push({ mesh, baseY: y, phase: rand(0, Math.PI * 2), collected: false, value });
+  }
+
+  // A camera-facing "×N" label sprite for a cluster gem.
+  _gemLabel(value) {
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const ctx = c.getContext("2d");
+    ctx.font = "bold 36px 'Trebuchet MS', system-ui, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(10,8,2,0.85)"; ctx.strokeText("×" + value, 32, 34);
+    ctx.fillStyle = "#fff"; ctx.shadowColor = "#ff9a1c"; ctx.shadowBlur = 10;
+    ctx.fillText("×" + value, 32, 34);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false }));
+    s.scale.set(2.4, 2.4, 1); s.position.set(0, 1.5, 0);
+    return s;
   }
 
   // Pick a powerup type honoring the good/bad ratio, but only from types enabled in
@@ -664,7 +690,7 @@ export class PlatformField {
     if (plan.motion) this._applyMotion(p, plan.motion);
     if (plan.obstacle) this._addObstacle(p, plan.obstacle.kind, plan.obstacle.move);
 
-    for (const g of plan.gems) this._addGem(g.x, g.top, g.z);
+    for (const g of plan.gems) this._addGem(g.x, g.top, g.z, g.value);
     for (const u of plan.powerups) this._addPowerup(u.x, u.top, u.z, this._D);
     return p;
   }
@@ -681,7 +707,7 @@ export class PlatformField {
       geoType: b.geoType, type: b.type, texName: this._texForRole(b.texRole),
     });
     if (b.motion) this._applyMotion(p, b.motion); // branches may move (wag/orbit too — off-path)
-    for (const g of b.gems) this._addGem(g.x, g.top, g.z);
+    for (const g of b.gems) this._addGem(g.x, g.top, g.z, g.value);
     for (const u of b.powerups) this._addPowerup(u.x, u.top, u.z, this._D, u.rare); // spicy branch → rare-pool bias
   }
 
@@ -804,7 +830,8 @@ export class PlatformField {
 
     for (const g of this.gems) {
       if (g.collected) continue;
-      g.mesh.rotation.y += dt * 2.2; g.mesh.rotation.x += dt * 1.1;
+      if (g.value > 1) g.mesh.rotation.y += dt * 1.5; // cluster spins on Y only so the ×N label stays upright
+      else { g.mesh.rotation.y += dt * 2.2; g.mesh.rotation.x += dt * 1.1; }
       // While the magnet is pulling a gem, fly it STRAIGHT to the player on all axes —
       // don't bob, or the bob fights the pull and the gem hovers near you forever.
       if (magnetPos && g.mesh.position.distanceTo(magnetPos) < CONFIG.effects.magnetRadius) {
@@ -872,7 +899,8 @@ export class PlatformField {
     for (const g of this.gems) {
       if (g.collected) continue;
       if (this._reach(g.mesh.position, playerPos, radius + 2, radius + 2)) {
-        g.collected = true; g.mesh.visible = false; grabbed.push(g.mesh.position.clone());
+        g.collected = true; g.mesh.visible = false;
+        grabbed.push({ pos: g.mesh.position.clone(), value: g.value || 1 });
       }
     }
     return grabbed;
