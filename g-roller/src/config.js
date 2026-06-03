@@ -195,8 +195,9 @@ export const CONFIG = {
   //   pace      — base auto-run speed multiplier.
   //   hazard    — scales hazard CHANCES (the danger ramp's output) + how fast pads
   //               shrink. Higher = busier & a higher danger plateau.
-  //   danger    — scales how FAST the danger ramp climbs with distance (Hard gets
-  //               dangerous in fewer metres). `danger` sets WHEN, `hazard` sets HOW MUCH.
+  //   danger    — the RAMP-UP RATE: the danger ramp peaks at dangerDistance / danger, so this is the
+  //               PRIMARY tier lever — Hard (1.0) ~10km, Med (0.5) ~20km, Easy (0.333) ~30km. Same
+  //               curve + ceiling, stretched per tier. `danger` sets WHEN, `hazard` sets HOW MUCH.
   //   openness  — scales how FAST the world opens (the openness ramp's input distance).
   //               NOTE: this only differentiates tiers during the RAMP — it saturates
   //               at 1.0 by ~opennessDistance, after which all tiers are "fully open".
@@ -226,11 +227,11 @@ export const CONFIG = {
   gen: {
     // Progression ramps
     opennessDistance: 650, // metres for the field to fully open (scaled per-tier by `openness`)
-    dangerDistance: 10000, // metres for the DANGER ramp to peak — the SAME for EVERY tier (like the
-    //                        speed ramp, all tiers arrive at max at one distance, not Hard-at-5km).
-    //                        The tier's `danger` knob instead shapes the CURVE over this distance
-    //                        (steeper = more dangerous at every point), NOT when it arrives. See
-    //                        gen/progression.js danger().
+    dangerDistance: 10000, // base distance for the DANGER ramp to peak, at tier `danger` = 1 (Hard).
+    //                        The per-tier `danger` knob is the RAMP-UP RATE: peak distance =
+    //                        dangerDistance / danger → Hard (1.0) ~10km, Med (0.5) ~20km, Easy
+    //                        (0.333) ~30km. Same curve + ceiling, just stretched per tier — so Easy
+    //                        rarely maxes out and Hard's ~10km peak is the one true "max". See danger().
     hazardCeil: 0.92, // global cap on any hazard chance after the tier's `hazard` mult (so Hard stays < 100%)
     safeStraight: 2, // the first N steps run straight ahead (ease-in) before anything opens up
 
@@ -462,9 +463,9 @@ export const CONFIG = {
     //                 early & on easier tiers (period is a master difficulty knob); 2–4s keeps a
     //                 catch window recurring within an airtime for an auto-roller.
     tiers: [
-      { name: "Easy",   rank: 0, pace: 0.875, hazard: 0.8, danger: 0.85, openness: 0.9, sprawl: 1.0,  density: 1.6,  drama: 0.7, diffFloor: 0.15, diffSpan: 0.35, motionChance: [0.10, 0.20], motionPeriod: [5.0, 4.0] },
-      { name: "Medium", rank: 1, pace: 1.0,  hazard: 1.0, danger: 1.0,  openness: 1.0, sprawl: 1.45, density: 1.0,  drama: 1.0, diffFloor: 0.25, diffSpan: 0.5,  motionChance: [0.13, 0.28], motionPeriod: [4.5, 3.5] },
-      { name: "Hard",   rank: 2, pace: 1.15, hazard: 1.7, danger: 1.6,  openness: 1.2, sprawl: 2.1,  density: 0.45, drama: 1.4, diffFloor: 0.35, diffSpan: 0.6,  motionChance: [0.16, 0.40], motionPeriod: [4.0, 3.0] },
+      { name: "Easy",   rank: 0, pace: 0.875, hazard: 0.8, danger: 0.333, openness: 0.9, sprawl: 1.0,  density: 1.6,  drama: 0.7, diffFloor: 0.15, diffSpan: 0.35, motionChance: [0.10, 0.20], motionPeriod: [5.0, 4.0] },
+      { name: "Medium", rank: 1, pace: 1.0,  hazard: 1.0, danger: 0.5,   openness: 1.0, sprawl: 1.45, density: 1.0,  drama: 1.0, diffFloor: 0.25, diffSpan: 0.5,  motionChance: [0.13, 0.28], motionPeriod: [4.5, 3.5] },
+      { name: "Hard",   rank: 2, pace: 1.15, hazard: 1.7, danger: 1.0,   openness: 1.2, sprawl: 2.1,  density: 0.45, drama: 1.4, diffFloor: 0.35, diffSpan: 0.6,  motionChance: [0.16, 0.40], motionPeriod: [4.0, 3.0] },
     ],
     defaultDifficulty: 1, // index into tiers (Medium)
   },

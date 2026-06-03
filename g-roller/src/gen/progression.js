@@ -20,12 +20,13 @@ export function openness(z, profile) {
 }
 
 export function danger(z, profile) {
-  // EVERY tier reaches max danger at dangerDistance (the same distance — not Hard sooner). The tier's
-  // `danger` knob shapes the CURVE over that distance via an exponent: higher danger = steeper, so the
-  // tier is more dangerous at every point ALONG the way, but they all still arrive at 1.0 together.
-  //   danger 1.6 (Hard) → exp 0.625 → curve bulges HIGH early;  0.85 (Easy) → exp 1.18 → gentler.
+  // The tier difference is the RAMP-UP RATE: every tier climbs the SAME danger curve to the SAME
+  // ceiling, but reaches max at a different distance. The `danger` knob is how fast it ramps —
+  // Hard (1.0) maxes at dangerDistance; Med (0.5) at 2×; Easy (0.333) at 3×. So a normal Easy run
+  // lives in the gentle early ramp and rarely maxes out; Hard's peak (at ~dangerDistance) is the one
+  // true "max", which the other knobs keep playable.
   const dScale = profile && profile.danger != null ? profile.danger : 1;
-  return Math.pow(smoothstep(z / CONFIG.gen.dangerDistance), 1 / dScale);
+  return smoothstep((z * dScale) / CONFIG.gen.dangerDistance);
 }
 
 // A hazard's spawn chance: ramp the pair by the danger value, scale by the tier's
