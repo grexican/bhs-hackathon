@@ -253,10 +253,18 @@
         text-shadow: 0 0 14px rgba(255, 211, 78, 0.6);
       }
       .hud__dist { margin-top: 6px; font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1; opacity: 0.92; }
-      .hud__dist span:last-child { font-size: 13px; opacity: 0.7; font-weight: 600; }
+      .hud__dist .hud__unit { font-size: 13px; opacity: 0.7; font-weight: 600; } /* the "m" unit (note: hud__unit also styled above for the air stat) */
+      .hud__difftag {
+        font-size: 12px; font-weight: 800; padding: 1px 8px; border-radius: 999px; margin-left: 4px;
+        background: rgba(255, 211, 78, 0.18); color: var(--accent); letter-spacing: 0.5px;
+      }
       .hud__stats { margin-top: 8px; display: flex; gap: 14px; font-size: 15px; }
       .hud__stats b { color: #fff; }
       .hud__best { margin-top: 8px; font-size: 12px; opacity: 0.55; line-height: 1.5; }
+
+      /* Touch devices: scale the HUD panels down a bit so they don't dominate a small screen. */
+      body.is-touch .hud__panel { transform: scale(0.8); transform-origin: top left; }
+      body.is-touch .hud__effects { transform: scale(0.85); transform-origin: top right; }
 
       /* Active powerup chips, top-right */
       .hud__effects {
@@ -475,7 +483,7 @@
     <div class="hud">
       <div class="hud__panel">
         <div class="hud__score"><span id="score">0</span> <span class="hud__mult" id="mult">×1</span></div>
-        <div class="hud__dist"><span id="distance">0</span> <span>m</span></div>
+        <div class="hud__dist"><span id="distance">0</span> <span class="hud__unit">m</span> <span class="hud__difftag" id="hud-diff"></span></div>
         <div class="hud__stats">
           <div>⏩ <b id="speed">0</b></div>
           <div>🦘 <b id="jumps">0</b></div>

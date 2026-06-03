@@ -85,6 +85,7 @@ export class Game {
       distance: document.getElementById("distance"),
       speed: document.getElementById("speed"),
       airborne: document.getElementById("airborne"),
+      diff: document.getElementById("hud-diff"),
       jumps: document.getElementById("jumps"),
       gems: document.getElementById("gems"),
       bestScore: document.getElementById("best-score"),
@@ -1368,6 +1369,7 @@ export class Game {
     this._hud.distance.textContent = Math.max(0, Math.floor(this.player.position.z));
     this._hud.speed.textContent = Math.round(this._speed); // smoothed actual speed — spikes when you ride an accel plate
     if (this._hud.airborne) this._hud.airborne.textContent = Math.floor(this._airborne);
+    if (this._hud.diff) this._hud.diff.textContent = this._zen ? "Zen" : CONFIG.gen.tiers[this._diffLevel].name;
     this._hud.jumps.textContent = Math.max(0, this.player.jumpCount);
     this._hud.gems.textContent = this.gems;
     this._hud.bestScore.textContent = this.bestScore.toLocaleString();
