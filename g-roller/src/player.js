@@ -628,8 +628,8 @@ export class Player {
     return this._skinIndex;
   }
 
-  reset() {
-    this.mesh.position.set(0, this.radius, 0);
+  reset(startZ = 0) {
+    this.mesh.position.set(0, this.radius, startZ); // startZ > 0: a cheat "jump to distance" context
     this._ball.rotation.set(0, 0, 0);
     this._ball.scale.set(1, 1, 1);
     this._wings.visible = false;

@@ -181,7 +181,7 @@ export class PlatformField {
     };
   }
 
-  reset() {
+  reset(startZ = 0) {
     for (const p of this.platforms) this._disposePlatform(p);
     for (const g of this.gems) this.scene.remove(g.mesh);
     for (const u of this.powerups) this.scene.remove(u.mesh);
@@ -191,8 +191,10 @@ export class PlatformField {
     this._time = 0;
     this._state = this._freshState();
 
+    // startZ > 0 (cheat "jump to distance"): place the starter board + generation frontier out at
+    // that z, so the whole world — difficulty ramps, zones, gaps — reads as that distance from board 1.
     const starter = this._addBoard({
-      x: 0, y: -0.5, z: CONFIG.world.starterLength / 2 - 4,
+      x: 0, y: -0.5, z: startZ + CONFIG.world.starterLength / 2 - 4,
       w: CONFIG.world.starterWidth, len: CONFIG.world.starterLength, hy: 0.5,
       geoType: "box", type: "normal", texName: "concrete",
     });

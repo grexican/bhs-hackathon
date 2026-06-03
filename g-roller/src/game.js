@@ -38,6 +38,7 @@ export class Game {
     this._accelHold = 0;   // seconds left coasting at top speed after leaving a plate
     this._seenStart = 0;   // tracks Input.startPresses for the start gate
     this._cheat = false;
+    this._startDistance = 0; // cheat-only: begin a run at this distance (jump into late-game contexts)
     this._konami = [];
     this._firstPerson = false;
     this._diffLevel = CONFIG.gen.defaultDifficulty; // index into CONFIG.gen.tiers
@@ -252,8 +253,8 @@ export class Game {
     this._airborne = 0;
     this.multiplier = 1;
     this._comboTimer = 0;
-    ZoneSeq.build(); // reshuffle the themed-zone order for this run (forced/enabled persist)
-    this._biome = biomeAt(0); // opening zone (baseline, or a forced zone when testing)
+    ZoneSeq.build(); // reshuffle the zone order for this run (forced/enabled persist)
+    this._biome = biomeAt(this._startDistance); // opening zone (at the cheat start-distance, if any)
     this._throttleSmooth = 0;
     this._invuln = 0;
     this._effects = { shield: false, magnet: 0, slow: 0, reverse: 0, surge: 0, doublejump: 0, flight: 0, morph: 0, trip: 0, lowgrav: 0, flubber: 0, blackout: 0, fog: 0, rain: 0, splat: 0 };
@@ -275,8 +276,14 @@ export class Game {
     this._biomeBloom = startBiome.bloom || 0;
     this._biomeFlash = 0;
     this.background.setBiome(startBiome);
-    this.field.reset();
-    this.player.reset();
+    this.field.reset(this._startDistance);
+    this.player.reset(this._startDistance);
+    // A "jump to distance" cheat start should also begin at the SPEED that context would have reached
+    // (speed plateaus by ~650m), so gaps/reach match the difficulty.
+    if (this._startDistance > 0) {
+      this.baseSpeed = CONFIG.player.maxForwardSpeed;
+      this._speed = this.baseSpeed * this._diffSpeedMult;
+    }
     this._cameraFrozen = false; // un-freeze after a cinematic fall-death
     this._dyingT = 0;
     this.player.mesh.visible = !this._firstPerson; // the ball is back (it vanished on a fall death)
@@ -529,6 +536,8 @@ export class Game {
     }
     $("set-pu-all").addEventListener("click", () => this._setAllPowerups(true));
     $("set-pu-none").addEventListener("click", () => this._setAllPowerups(false));
+    const sd = $("set-startdist"); // cheat: begin the next run at this distance (0 = normal)
+    if (sd) sd.addEventListener("change", () => { this._startDistance = Math.max(0, Math.round(Number(sd.value) || 0)); });
     const panel = $("settings-panel");
     const open = (v) => panel.classList.toggle("open", v);
     $("settings-btn").addEventListener("click", () => { this._syncSettings(); open(true); });
@@ -684,7 +693,11 @@ export class Game {
   _toggleCheat() {
     this._cheat = !this._cheat;
     this.field.itemMultiplier = this._cheat ? CONFIG.cheat.itemMultiplier : 1;
-    if (!this._cheat) this._setAllPowerups(true); // leaving cheat restores the full spawn pool
+    if (!this._cheat) {
+      this._setAllPowerups(true); // leaving cheat restores the full spawn pool
+      this._startDistance = 0;    // …and a normal start distance
+      const sd = document.getElementById("set-startdist"); if (sd) sd.value = "0";
+    }
     this._toast(
       this._cheat ? "🎮 CHEAT ON · pick your spawn pool in ⚙️" : "CHEAT OFF",
       "#ffd34e"
@@ -1298,9 +1311,10 @@ export class Game {
     const score = Math.floor(this.score);
     const jumps = Math.max(0, this.player.jumpCount);
     const air = Math.floor(this._airborne);
-    // Records are PER-DIFFICULTY (zen runs don't score, so they don't set records).
+    // Records are PER-DIFFICULTY (zen runs don't score; a cheat "jump to distance" run is artificial,
+    // so it doesn't set records either).
     let isBest = false;
-    if (!this._zen) {
+    if (!this._zen && !this._startDistance) {
       if (score > this.bestScore) { this.bestScore = score; isBest = true; }
       if (dist > this.bestDistance) this.bestDistance = dist;
       if (jumps > this.bestJumps) this.bestJumps = jumps;
