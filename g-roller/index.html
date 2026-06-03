@@ -543,9 +543,10 @@
         <div class="hud__hint" id="overlay-hint">Press JUMP to roll</div>
         <button class="hud__restart is-hidden" id="overlay-restart" type="button">↺ Restart</button>
 
-        <!-- Jump keys only, desktop only — players already know asdf / arrows. -->
+        <!-- Desktop only (this whole line is hidden on touch — the ⚙️ button covers mobile). Players
+             already know asdf / arrows, so just the jump + pause keys. -->
         <div class="hud__controls hud__controls--keys">
-          <kbd>Space</kbd> or <kbd>Shift</kbd> to jump — hold for height, release to drop fast
+          <kbd>Space</kbd> or <kbd>Shift</kbd> to jump (hold for height) &nbsp;·&nbsp; <kbd>P</kbd> to pause
         </div>
         <div class="hud__controls hud__controls--touch">
           <b>Left stick</b> to steer · <b>JUMP</b> button to jump · ⚙️ for settings
