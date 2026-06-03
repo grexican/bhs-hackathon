@@ -54,7 +54,7 @@ function mulberry32(seed) {
 //                between flames/stripes/dots actually vanish into the glass.
 //   "emissive" — for the galaxy: the same dark star art, used as emissiveMap so
 //                only the stars/nebula glow from within the marble.
-function ballTexture(skin = BALL_SKINS[0], mode = "color") {
+function ballCanvas(skin = BALL_SKINS[0], mode = "color") {
   const S = 256;
   const c = document.createElement("canvas");
   c.width = c.height = S;
@@ -405,7 +405,41 @@ function ballTexture(skin = BALL_SKINS[0], mode = "color") {
     }
   }
 
-  return new THREE.CanvasTexture(c);
+  return c;
+}
+
+// Wrap the drawn skin canvas as a THREE texture (the in-game material map).
+function ballTexture(skin = BALL_SKINS[0], mode = "color") {
+  return new THREE.CanvasTexture(ballCanvas(skin, mode));
+}
+
+// A small SPHERICAL preview swatch of a ball skin (data-URL) for the menu picker — the skin's
+// own texture clipped to a circle with a top-left highlight + dark rim so it reads as a ball, not
+// a flat tile. Cached per skin index.
+const _swatchCache = {};
+export function ballSwatchURL(index = 0) {
+  if (_swatchCache[index]) return _swatchCache[index];
+  const skin = BALL_SKINS[((index % BALL_SKINS.length) + BALL_SKINS.length) % BALL_SKINS.length];
+  const src = ballCanvas(skin, "color");
+  const S = 48, r = S / 2 - 1;
+  const c = document.createElement("canvas"); c.width = c.height = S;
+  const ctx = c.getContext("2d");
+  ctx.save();
+  ctx.beginPath(); ctx.arc(S / 2, S / 2, r, 0, Math.PI * 2); ctx.clip();
+  // Draw a centre crop of the 256² texture so the swatch shows the pattern, not the wrap seam.
+  ctx.drawImage(src, src.width * 0.2, src.height * 0.2, src.width * 0.6, src.height * 0.6, 0, 0, S, S);
+  // Spherical shading: top-left highlight → transparent → dark rim.
+  const g = ctx.createRadialGradient(S * 0.36, S * 0.32, S * 0.08, S * 0.5, S * 0.5, r);
+  g.addColorStop(0, "rgba(255,255,255,0.40)");
+  g.addColorStop(0.5, "rgba(255,255,255,0)");
+  g.addColorStop(1, "rgba(0,0,0,0.5)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(S / 2, S / 2, r, 0, Math.PI * 2);
+  ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.stroke();
+  const url = c.toDataURL();
+  _swatchCache[index] = url;
+  return url;
 }
 
 // The rolling ball. Owns its own kinematic physics: we move it by hand each

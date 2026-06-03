@@ -4,7 +4,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { CONFIG, BIOMES, biomeAt, ZoneSeq } from "./config.js";
 import { Input } from "./input.js";
-import { Player, BALL_SKINS } from "./player.js";
+import { Player, BALL_SKINS, ballSwatchURL } from "./player.js";
 import { PlatformField, POWERUP_DEFS } from "./platforms.js";
 import { Particles } from "./effects.js";
 import { Background } from "./background.js";
@@ -565,7 +565,11 @@ export class Game {
     if (this._home) {
       if (this._home.zen) this._home.zen.classList.toggle("is-on", this._zen);
       if (this._home.audiosurf) this._home.audiosurf.classList.toggle("is-on", this._audiosurf);
-      if (this._home.skin) this._home.skin.textContent = `🎨 ${BALL_SKINS[this._skinIndex ?? 0].name}`;
+      if (this._home.skin) {
+        const i = this._skinIndex ?? 0;
+        // Preview the actual ball (a spherical swatch) instead of a paint-splash emoji.
+        this._home.skin.innerHTML = `<img class="ball-swatch" src="${ballSwatchURL(i)}" alt="" /> ${BALL_SKINS[i].name}`;
+      }
     }
   }
 
@@ -1217,7 +1221,7 @@ export class Game {
     this.canvas.classList.remove("is-tripping", "is-tripping--gentle");
     this._seenStart = this.input.startPresses; // don't let the click/press fall through into a start
     if (this._hud.restart) this._hud.restart.classList.add("is-hidden"); // hide the pause-screen button
-    this._hud.subtitle.textContent = "Roll the gauntlet of floating blocks";
+    this._hud.subtitle.textContent = ""; // no tagline
     this._hud.hint.textContent = this._isTouch ? "Tap JUMP to roll" : "Press JUMP to roll";
     this._showHomeControls(true);  // back on the title — difficulty/modes pickable again
     this._syncHomeControls();

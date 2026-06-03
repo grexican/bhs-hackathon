@@ -325,6 +325,7 @@
       @keyframes float { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-10px) rotate(1deg); } }
 
       .hud__subtitle { font-size: clamp(16px, 3.5vw, 22px); opacity: 0.95; }
+      .hud__subtitle:empty { display: none; } /* no tagline on the start screen — collapse the empty slot */
       .hud__hint {
         font-size: 17px; font-weight: 700; color: var(--accent);
         padding: 10px 18px; border: 2px solid rgba(255,211,78,0.5); border-radius: 999px;
@@ -372,6 +373,8 @@
       }
       .home-mode:hover { border-color: var(--cyan); }
       .home-mode.is-on { border-color: var(--cyan); color: var(--cyan); background: rgba(43, 214, 255, 0.14); }
+      /* The actual-ball preview swatch on the change-Ball button. */
+      .ball-swatch { width: 22px; height: 22px; vertical-align: middle; margin-right: 3px; border-radius: 50%; }
 
       .hud__controls { font-size: 14px; opacity: 0.75; line-height: 1.7; max-width: 460px; }
       .hud__controls kbd {
@@ -520,7 +523,7 @@
         <!-- Title floats FREE above the glass panel (not framed by it). -->
         <div class="hud__title" id="overlay-title">G&#8209;ROLLER</div>
        <div class="overlay-card">
-        <div class="hud__subtitle" id="overlay-subtitle">Roll the gauntlet of floating blocks</div>
+        <div class="hud__subtitle" id="overlay-subtitle"></div>
 
         <!-- Home controls — the run-DEFINING choices, set before you roll (NOT mid-run): which
              difficulty, and the run modes. Hidden while playing/paused (see game.js). -->
