@@ -20,9 +20,12 @@ export function openness(z, profile) {
 }
 
 export function danger(z, profile) {
-  // profile.danger defaults to 1 (Medium) if a tier omits it.
+  // EVERY tier reaches max danger at dangerDistance (the same distance — not Hard sooner). The tier's
+  // `danger` knob shapes the CURVE over that distance via an exponent: higher danger = steeper, so the
+  // tier is more dangerous at every point ALONG the way, but they all still arrive at 1.0 together.
+  //   danger 1.6 (Hard) → exp 0.625 → curve bulges HIGH early;  0.85 (Easy) → exp 1.18 → gentler.
   const dScale = profile && profile.danger != null ? profile.danger : 1;
-  return smoothstep((z * dScale) / CONFIG.gen.dangerDistance);
+  return Math.pow(smoothstep(z / CONFIG.gen.dangerDistance), 1 / dScale);
 }
 
 // A hazard's spawn chance: ramp the pair by the danger value, scale by the tier's

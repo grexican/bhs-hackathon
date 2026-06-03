@@ -223,9 +223,11 @@ export const CONFIG = {
   gen: {
     // Progression ramps
     opennessDistance: 650, // metres for the field to fully open (scaled per-tier by `openness`)
-    dangerDistance: 8000, // metres for the DANGER ramp to peak (before the tier `danger` mult) — long
-    //                       & gentle so a run is a "mood", not a panic. Per-tier peak = this /
-    //                       tier.danger → Hard ~5km, Med 8km, Easy ~9.4km.
+    dangerDistance: 10000, // metres for the DANGER ramp to peak — the SAME for EVERY tier (like the
+    //                        speed ramp, all tiers arrive at max at one distance, not Hard-at-5km).
+    //                        The tier's `danger` knob instead shapes the CURVE over this distance
+    //                        (steeper = more dangerous at every point), NOT when it arrives. See
+    //                        gen/progression.js danger().
     hazardCeil: 0.92, // global cap on any hazard chance after the tier's `hazard` mult (so Hard stays < 100%)
     safeStraight: 2, // the first N steps run straight ahead (ease-in) before anything opens up
 
